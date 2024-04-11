@@ -1,0 +1,6 @@
+---
+upgrade:
+  - |
+    The keyword argument ``include_slice_barriers`` of
+    :func:`~qiskit_addon_utils.slicing.combine_slices` has been renamed to
+    ``include_barriers``.
