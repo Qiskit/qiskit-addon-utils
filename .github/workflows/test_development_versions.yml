@@ -14,7 +14,7 @@ on:
 
 jobs:
   tests:
-    name: development version tests (${{ matrix.os }}, ${{ matrix.python-version }})
+    name: dev version tests (${{ matrix.os }}, ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
