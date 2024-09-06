@@ -7,7 +7,7 @@
   [![Qiskit](https://img.shields.io/badge/Qiskit%20-%20%3E%3D1.2%20-%20%236133BD?logo=Qiskit)](https://github.com/Qiskit/qiskit)
 <br />
   [![Docs (stable)](https://img.shields.io/badge/%F0%9F%93%84%20Docs-stable-blue.svg)](https://qiskit.github.io/qiskit-addon-utils/)
-  <!--[![DOI](https://zenodo.org/badge/TODO.svg)](https://zenodo.org/badge/latestdoi/TODO)-->
+  [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13711854.svg)](https://zenodo.org/doi/10.5281/zenodo.13711854)
   [![License](https://img.shields.io/github/license/Qiskit/qiskit-addon-utils?label=License)](LICENSE.txt)
   [![Downloads](https://img.shields.io/pypi/dm/qiskit-addon-utils.svg?label=Downloads)](https://pypi.org/project/qiskit-addon-utils/)
   [![Tests](https://github.com/Qiskit/qiskit-addon-utils/actions/workflows/test_latest_versions.yml/badge.svg)](https://github.com/Qiskit/qiskit-addon-utils/actions/workflows/test_latest_versions.yml)
@@ -22,6 +22,7 @@
 * [Installation](#installation)
 * [Deprecation Policy](#deprecation-policy)
 * [Contributing](#contributing)
+* [Citation](#citation)
 * [License](#license)
 
 ----------------------------------------------------------------------------------------------------
@@ -70,11 +71,17 @@ Each substantial improvement, breaking change, or deprecation will be documented
 
 The source code is available [on GitHub](https://github.com/Qiskit/qiskit-addon-utils).
 
-The developer guide is located at [CONTRIBUTING.md](https://github.com/Qiskit/qiskit-addon-utils/blob/main/CONTRIBUTING.md>)
+The developer guide is located at [CONTRIBUTING.md](https://github.com/Qiskit/qiskit-addon-utils/blob/main/CONTRIBUTING.md)
 in the root of this project's repository.
 By participating, you are expected to uphold Qiskit's [code of conduct](https://github.com/Qiskit/qiskit/blob/main/CODE_OF_CONDUCT.md).
 
 We use [GitHub issues](https://github.com/Qiskit/qiskit-addon-utils/issues/new/choose) for tracking requests and bugs.
+
+----------------------------------------------------------------------------------------------------
+
+### Citation
+
+If you use this package in your research, please cite it according to the [CITATION.bib](https://github.com/Qiskit/qiskit-addon-utils/blob/main/CITATION.bib) file.
 
 ----------------------------------------------------------------------------------------------------
 
