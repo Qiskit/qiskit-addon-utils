@@ -1,4 +1,4 @@
-name: Latest version tests
+name: Tests
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
 
 jobs:
   tests:
-    name: tests (${{ matrix.os }}, ${{ matrix.python-version }})
+    name: latest version tests (${{ matrix.os }}, ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
