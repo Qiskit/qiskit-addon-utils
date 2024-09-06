@@ -124,7 +124,6 @@ enable = [
 ]
 
 [tool.pytest.ini_options]
-filterwarnings = ["ignore:::.*qiskit.opflow*"]
 testpaths = ["./qiskit_addon_utils/", "./test/"]
 
 [tool.ruff]
