@@ -1,4 +1,4 @@
-name: Sphinx docs
+name: Sphinx
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ on:
 
 jobs:
   build:
-    name: Build docs
+    name: build docs
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -47,7 +47,7 @@ jobs:
           path: docs/_build/html
 
   deploy:
-    name: Deploy docs
+    name: deploy docs
     if: ${{ github.ref == 'refs/heads/stable/0.1' }}
     needs: build
     permissions:
