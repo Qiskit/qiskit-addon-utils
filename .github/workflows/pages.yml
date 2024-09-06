@@ -1,4 +1,4 @@
-name: Publish Sphinx docs to Github Pages
+name: Publish Sphinx docs to GitHub Pages
 
 on:
   workflow_dispatch:
