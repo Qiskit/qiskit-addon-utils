@@ -44,7 +44,6 @@ jobs:
         if: always()
         uses: actions/upload-pages-artifact@v3
         with:
-          name: qiskit-addon-utils-htmldocs
           path: docs/_build/html
 
   deploy:
