@@ -1,4 +1,4 @@
-name: Build Sphinx docs
+name: Sphinx docs
 
 on:
   workflow_dispatch:

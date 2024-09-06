@@ -1,4 +1,4 @@
-name: Minimum version tests
+name: Tests
 
 on:
   push:
@@ -12,6 +12,7 @@ on:
 
 jobs:
   tests:
+    name: Minimum version tests (${{ matrix.os }}, ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
