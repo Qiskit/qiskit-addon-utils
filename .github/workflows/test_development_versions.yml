@@ -14,12 +14,13 @@ on:
 
 jobs:
   tests:
-    name: development version tests (${{ matrix.python-version }})
+    name: development version tests (${{ matrix.os }}, ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       max-parallel: 4
       matrix:
+        os: [ubuntu-latest]
         python-version: [3.9, 3.12]
     steps:
       - uses: actions/checkout@v4
