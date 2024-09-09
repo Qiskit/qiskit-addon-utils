@@ -3,7 +3,7 @@ name: Publish release
 on:
   push:
     tags:
-      - "[0-9]+.[0-9]+.[0-9]+*"
+      - "[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
 
@@ -19,6 +19,7 @@ jobs:
         uses: ghalactic/github-release-from-tag@v5
         if: github.ref_type == 'tag'
         with:
+          prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: "true"
 
