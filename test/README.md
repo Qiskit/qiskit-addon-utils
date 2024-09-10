@@ -1,6 +1,6 @@
 # Test environments
 
-This repository's tests and development automation tasks are organized using [tox], a command-line CI frontend for Python projects.  tox is typically used during local development and is also invoked from this repository's GitHub Actions [workflows](../.github/workflows/).
+This repository's tests and development automation tasks are organized using [tox], a command-line CI frontend for Python projects.  [tox] is typically used during local development and is also invoked from this repository's GitHub Actions [workflows](../.github/workflows/).
 
 tox can be installed by running `pip install tox`.
 
@@ -59,6 +59,14 @@ The `doctest` environment uses [doctest] to execute the code snippets that are e
 
 ```sh
 $ tox -e doctest
+```
+
+## Test "all" environments
+
+To improve the speed of the GitHub Actions [workflows](../.github/workflows/), this environment runs all the Python unittests, Jupyter notebooks, and doctests in one go using [pytest]. It is essentially equivalent to running the three previous tox environments but instead of using isolated installations for each, all the tests run in the same environment, reducing the setup overhead.
+
+```sh
+$ tox -e py310-all
 ```
 
 ## Coverage environment
