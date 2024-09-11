@@ -53,12 +53,12 @@ The `notebook` and `py##-notebook` environments invoke [nbmake] to ensure that a
 $ tox -e py310-notebook
 ```
 
-## Doctest environment
+## Doctest environments
 
-The `doctest` environment uses [doctest] to execute the code snippets that are embedded into the documentation strings. The tests get run using [pytest].
+The `doctest` environments use [doctest] to execute the code snippets that are embedded into the documentation strings. The tests get run using [pytest].
 
 ```sh
-$ tox -e doctest
+$ tox -e py310-doctest
 ```
 
 ## Coverage environment
