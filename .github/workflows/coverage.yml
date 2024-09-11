@@ -29,7 +29,7 @@ jobs:
       - name: Install tox
         run: |
           python -m pip install --upgrade pip
-          pip install tox coverage
+          pip install tox tox-uv coverage
       - name: Run coverage
         run: |
           tox -e coverage
