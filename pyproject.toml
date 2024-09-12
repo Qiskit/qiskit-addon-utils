@@ -27,7 +27,7 @@ requires-python = ">=3.9"
 
 dependencies = [
     "numpy>=1.23",
-    "rustworkx>=0.15",
+    "rustworkx[graphviz]>=0.15",
     "qiskit>=1.2, <2",
 ]
 
@@ -68,6 +68,7 @@ lint = [
 notebook-dependencies = [
     "qiskit-addon-utils",
     "qiskit-ibm-runtime",
+    "rustworkx[graphviz]>=0.15",
     "matplotlib",
     "ipywidgets",
     "pylatexenc",
