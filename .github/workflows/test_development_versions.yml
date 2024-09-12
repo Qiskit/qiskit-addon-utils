@@ -47,10 +47,9 @@ jobs:
       - name: Pin development versions
         shell: bash
         run: >-
-          extremal-python-dependencies pin-dependencies
-              "qiskit @ qiskit/dist/*.whl"
-              "qiskit-ibm-runtime @ qiskit-ibm-runtime/dist/*.whl"
-              --inplace
+          extremal-python-dependencies pin-dependencies --inplace
+          "qiskit @ qiskit/dist/*.whl"
+          "qiskit-ibm-runtime @ qiskit-ibm-runtime/dist/*.whl"
       - name: Test using tox environment
         shell: bash
         run: |
