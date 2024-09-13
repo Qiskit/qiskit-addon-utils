@@ -67,6 +67,8 @@ lint = [
 ]
 notebook-dependencies = [
     "qiskit-addon-utils",
+    "qiskit-ibm-runtime",
+    "rustworkx[graphviz]>=0.15",
     "matplotlib",
     "ipywidgets",
     "pylatexenc",
