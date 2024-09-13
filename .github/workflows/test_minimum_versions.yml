@@ -34,6 +34,5 @@ jobs:
           pip install "tox==$(extremal-python-dependencies get-tox-minversion)"
           extremal-python-dependencies pin-dependencies-to-minimum --inplace
       - name: Test using tox environment
-        shell: bash
         run: |
           tox -e py,notebook,doctest --parallel --parallel-no-spinner
