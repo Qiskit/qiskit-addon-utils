@@ -29,4 +29,4 @@ jobs:
           pip install tox
       - name: Run lint check
         run: |
-          tox -elint
+          tox -e lint
