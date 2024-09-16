@@ -2,7 +2,7 @@
 Qiskit addon utilities
 ######################
 
-`Qiskit addons <git@github.com:Qiskit/qiskit-addon-cutting.git>`_ are a collection of modular tools for building utility-scale workloads powered by Qiskit.
+`Qiskit addons <https://docs.quantum.ibm.com/guides/addons>`_ are a collection of modular tools for building utility-scale workloads powered by Qiskit.
 
 This package contains functionality which is meant to supplement workflows involving one or more Qiskit addons.
 For example, this package contains functions for creating Hamiltonians, generating Trotter time evolution
