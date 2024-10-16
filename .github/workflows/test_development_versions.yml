@@ -15,7 +15,7 @@ on:
 jobs:
   tests:
     name: development version tests (${{ matrix.os }}, ${{ matrix.python-version }})
-    runs-on: {{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       max-parallel: 4
