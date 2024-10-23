@@ -22,8 +22,7 @@ from qiskit import QuantumCircuit
 def combine_slices(
     slices: Sequence[QuantumCircuit], include_barriers: bool = False
 ) -> QuantumCircuit | None:
-    """
-    Combine N-qubit slices of a circuit into a single circuit.
+    """Combine N-qubit slices of a circuit into a single circuit.
 
     Args:
         slices: The N-qubit circuit slices.

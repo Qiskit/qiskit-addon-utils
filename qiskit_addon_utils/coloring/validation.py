@@ -18,8 +18,7 @@ from collections import defaultdict
 
 
 def is_valid_edge_coloring(coloring: dict[tuple[int, int], int]) -> bool:
-    """
-    Check whether an edge coloring scheme is valid.
+    """Check whether an edge coloring scheme is valid.
 
     An edge coloring is valid if no two edges of the same color share a node.
 

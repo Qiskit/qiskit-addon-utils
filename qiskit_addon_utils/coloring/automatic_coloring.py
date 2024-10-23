@@ -20,8 +20,7 @@ import rustworkx as rx
 
 
 def auto_color_edges(edges: Sequence[tuple[int, int]]) -> dict[tuple[int, int], int]:
-    """
-    Color the input edges of an undirected graph such that no two incident edges share a color.
+    """Color the input edges of an undirected graph such that no two incident edges share a color.
 
     Args:
         edges: The edges describing an undirected graph.
