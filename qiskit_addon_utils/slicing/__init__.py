@@ -12,7 +12,7 @@
 
 """Utility methods for circuit slicing.
 
-For more information, check out the `how-to guide <../how_tos/create_circuit_slices.html>`_ which
+For more information, check out the `how-to guide <https://qiskit.github.io/qiskit-addon-utils/how_tos/create_circuit_slices.html>`__ which
 discusses this submodule.
 
 .. currentmodule:: qiskit_addon_utils.slicing
