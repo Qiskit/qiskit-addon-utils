@@ -19,8 +19,7 @@ from qiskit.converters import circuit_to_dag, dag_to_circuit
 
 
 def slice_by_depth(circuit: QuantumCircuit, max_slice_depth: int) -> list[QuantumCircuit]:
-    """
-    Split a ``QuantumCircuit`` into slices based on depth.
+    """Split a ``QuantumCircuit`` into slices based on depth.
 
     This function transforms the input circuit into a :class:`~qiskit.dagcircuit.DAGCircuit` and
     batches the sequence of depth-1 layers output from :meth:`~qiskit.dagcircuit.DAGCircuit.layers`

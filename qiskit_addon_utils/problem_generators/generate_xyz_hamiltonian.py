@@ -61,8 +61,7 @@ def generate_xyz_hamiltonian(
     pauli_order_strategy: PauliOrderStrategy = PauliOrderStrategy.ColorThenInteraction,
     coloring: dict[tuple[int, int], int] | None = None,
 ) -> SparsePauliOp:
-    r"""
-    Generate a connectivity-aware qubit operator representing a quantum XYZ-type model.
+    r"""Generate a connectivity-aware qubit operator representing a quantum XYZ-type model.
 
     This function implements the following Hamiltonian:
 
