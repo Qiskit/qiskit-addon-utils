@@ -62,7 +62,6 @@ lint = [
     "mypy==1.11.2",
     "pylint==3.3.1",
     "reno>=4.1",
-    "toml>=0.9.6",
 ]
 notebook-dependencies = [
     "qiskit-addon-utils",
@@ -156,9 +155,9 @@ max-args = 6
 "test/**.py" = [
     "D",    # pydocstyle
 ]
-"docs/**/*" = [
+"docs/**" = [
     "E402", # module level import not at top of file
-    "D",    # pydocstyle
+    "D100", # missing docstring in public module
 ]
 
 [tool.ruff.lint.flake8-copyright]
