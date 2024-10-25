@@ -10,15 +10,4 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""A submodule with transpiler utilities for slicing.
-
-.. currentmodule:: qiskit_addon_utils.slicing.transpiler
-
-Submodules
-==========
-
-.. autosummary::
-   :toctree:
-
-   passes
-"""
+"""A submodule with transpiler utilities for slicing."""

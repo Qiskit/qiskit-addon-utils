@@ -64,6 +64,6 @@ License
    Documentation Home <self>
    Installation Instructions <install>
    How-To Guides <how_tos/index>
-   API Reference <apidocs/qiskit_addon_utils>
+   API Reference <apidocs/index>
    GitHub <https://github.com/qiskit/qiskit-addon-utils>
    Release Notes <release-notes>
