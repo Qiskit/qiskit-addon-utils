@@ -1,6 +1,6 @@
-********************************
-qiskit-addon-utils API reference
-********************************
+************************************
+``qiskit-addon-utils`` API reference
+************************************
 
 This package contains functionality which is meant to supplement workflows involving one or more Qiskit addons. For example, this package contains functions for creating Hamiltonians, generating Trotter time evolution circuits, and slicing and combining quantum circuits in time-wise partitions.
 
