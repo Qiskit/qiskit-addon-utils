@@ -10,17 +10,8 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""Utility methods for coloring.
-
-.. currentmodule:: qiskit_addon_utils.coloring
-
-.. autosummary::
-   :toctree: ../stubs/
-   :nosignatures:
-
-   auto_color_edges
-   is_valid_edge_coloring
-"""
+# Reminder: update the RST file in docs/apidocs when adding new interfaces.
+"""Utility methods for coloring."""
 
 from .automatic_coloring import auto_color_edges
 from .validation import is_valid_edge_coloring

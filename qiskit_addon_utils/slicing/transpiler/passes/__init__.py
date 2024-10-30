@@ -10,18 +10,8 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""A submodule with transpilation passes for slicing.
-
-.. currentmodule:: qiskit_addon_utils.slicing.transpiler.passes
-
-.. autosummary::
-   :toctree: ../stubs/
-   :nosignatures:
-
-   CollectOpColor
-   CollectOpSize
-   CollectOpType
-"""
+# Reminder: update the RST file in docs/apidocs when adding new interfaces.
+"""A submodule with transpilation passes for slicing."""
 
 from .collect_op_color import CollectOpColor
 from .collect_op_size import CollectOpSize

@@ -58,6 +58,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "matplotlib.sphinxext.plot_directive",
     "sphinx_copybutton",
+    "sphinx_reredirects",
     "reno.sphinxext",
     "nbsphinx",
     "qiskit_sphinx_theme",
@@ -106,6 +107,33 @@ intersphinx_mapping = {
 
 plot_working_directory = "."
 plot_html_show_source_link = False
+
+# ----------------------------------------------------------------------------------
+# Redirects
+# ----------------------------------------------------------------------------------
+
+_inlined_apis = [
+    ("qiskit_addon_utils.coloring", "auto_color_edges"),
+    ("qiskit_addon_utils.coloring", "is_valid_edge_coloring"),
+    ("qiskit_addon_utils.problem_generators", "generate_xyz_hamiltonian"),
+    ("qiskit_addon_utils.problem_generators", "generate_time_evolution_circuit"),
+    ("qiskit_addon_utils.problem_generators", "PauliOrderStrategy"),
+    ("qiskit_addon_utils.slicing", "combine_slices"),
+    ("qiskit_addon_utils.slicing", "combine_slices"),
+    ("qiskit_addon_utils.slicing", "slice_by_barriers"),
+    ("qiskit_addon_utils.slicing", "slice_by_coloring"),
+    ("qiskit_addon_utils.slicing", "slice_by_depth"),
+    ("qiskit_addon_utils.slicing", "slice_by_gate_types"),
+]
+
+redirects = {
+    "apidocs/qiskit_addon_utils": "./index.html",
+    "apidocs/qiskit_addon_utils.transpiler": "./index.html",
+    **{
+        f"stubs/{module}.{name}": f"../apidocs/{module}.html#{module}.{name}"
+        for module, name in _inlined_apis
+    },
+}
 
 # ----------------------------------------------------------------------------------
 # Source code links
