@@ -29,6 +29,7 @@ def generate_time_evolution_circuit(
     """Model the time evolution of an operator.
 
     .. plot::
+        :alt: Output from the previous code.
         :include-source:
 
         >>> from qiskit.quantum_info import SparsePauliOp
