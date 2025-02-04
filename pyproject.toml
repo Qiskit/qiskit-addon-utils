@@ -109,6 +109,9 @@ ignore_missing_imports = true
 
 [tool.pylint.main]
 py-version = "3.9"
+load-plugins = [
+    "pylint.extensions.no_self_use",
+]
 
 [tool.pylint."messages control"]
 disable = ["all"]
