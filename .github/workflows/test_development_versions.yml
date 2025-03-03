@@ -38,11 +38,13 @@ jobs:
         run: |
           git clone https://github.com/Qiskit/qiskit
           cd qiskit
+          git rev-parse HEAD
           python -m build --wheel
       - name: Build qiskit-ibm-runtime development wheel
         run: |
           git clone https://github.com/Qiskit/qiskit-ibm-runtime
           cd qiskit-ibm-runtime
+          git rev-parse HEAD
           python -m build --wheel
       - name: Pin development versions
         shell: bash
