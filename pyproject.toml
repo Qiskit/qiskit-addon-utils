@@ -60,8 +60,13 @@ style = [
 ]
 lint = [
     "qiskit-addon-utils[style]",
+<<<<<<< HEAD
     "mypy==1.11.2",
     "pylint==3.2.7",
+=======
+    "mypy==1.15.0",
+    "pylint==3.3.6",
+>>>>>>> dcc50be (build(deps): bump pylint from 3.3.4 to 3.3.6 (#82))
     "reno>=4.1",
 ]
 notebook-dependencies = [
