@@ -54,7 +54,11 @@ nbtest = [
     "nbmake>=1.5.0",
 ]
 style = [
+<<<<<<< HEAD
     "ruff==0.6.4",
+=======
+    "ruff==0.11.8",
+>>>>>>> 0573b7d (build(deps): bump ruff from 0.11.2 to 0.11.8 (#86))
     "nbqa>=1.8.5",
     "typos>=1.20.0",
 ]
