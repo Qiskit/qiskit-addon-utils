@@ -17,7 +17,7 @@ from .generate_time_evolution_circuit import generate_time_evolution_circuit
 from .generate_xyz_hamiltonian import PauliOrderStrategy, generate_xyz_hamiltonian
 
 __all__ = [
-    "generate_xyz_hamiltonian",
     "PauliOrderStrategy",
     "generate_time_evolution_circuit",
+    "generate_xyz_hamiltonian",
 ]
