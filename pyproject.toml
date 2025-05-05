@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,7 +7,8 @@ name = "qiskit-addon-utils"
 version = "0.1.0"
 readme = "README.md"
 description = "Utilities to support workflows leveraging Qiskit addons"
-license = {file = "LICENSE.txt"}
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
