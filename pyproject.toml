@@ -61,7 +61,11 @@ style = [
 ]
 lint = [
     "qiskit-addon-utils[style]",
+<<<<<<< HEAD
     "mypy==1.11.2",
+=======
+    "mypy==1.16.1",
+>>>>>>> 94c00d1 (build(deps): bump mypy from 1.15.0 to 1.16.1 (#94))
     "pylint==3.3.6",
     "reno>=4.1",
 ]
