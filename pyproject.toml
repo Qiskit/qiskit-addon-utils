@@ -62,7 +62,7 @@ style = [
 lint = [
     "qiskit-addon-utils[style]",
     "mypy==1.16.1",
-    "pylint==3.3.6",
+    "pylint==3.3.7",
     "reno>=4.1",
 ]
 notebook-dependencies = [
