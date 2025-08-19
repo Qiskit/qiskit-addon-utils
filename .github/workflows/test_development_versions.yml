@@ -48,13 +48,6 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-<<<<<<< HEAD
-          python -m pip install tox extremal-python-dependencies==0.0.3
-          extremal-python-dependencies pin-dependencies \
-              "qiskit @ git+https://github.com/Qiskit/qiskit.git@$QISKIT_SHA" \
-              "qiskit-ibm-runtime @ git+https://github.com/Qiskit/qiskit-ibm-runtime.git@$QISKIT_IBM_RUNTIME_SHA" \
-              --inplace
-=======
       - name: Install tools from pypi
         run: |
           python -m pip install tox build extremal-python-dependencies==0.0.3
@@ -76,7 +69,6 @@ jobs:
           extremal-python-dependencies pin-dependencies --inplace
           "qiskit @ file:$(realpath qiskit/dist/*.whl)"
           "qiskit-ibm-runtime @ file:$(realpath qiskit-ibm-runtime/dist/*.whl)"
->>>>>>> 1074c0d (Use `realpath` for absolute `file:` urls (#102))
       - name: Test using tox environment
         shell: bash
         run: |
