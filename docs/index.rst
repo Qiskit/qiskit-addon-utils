@@ -2,7 +2,7 @@
 Qiskit addon utilities
 ######################
 
-Qiskit addons are a collection of modular tools for building utility-scale workloads powered by Qiskit.
+`Qiskit addons <https://quantum.cloud.ibm.com/docs/guides/addons>`_ are a collection of modular tools for building utility-scale workloads powered by Qiskit.
 
 This package contains functionality which is meant to supplement workflows involving one or more Qiskit addons.
 For example, this package contains functions for creating Hamiltonians, generating Trotter time evolution
@@ -64,6 +64,6 @@ License
    Documentation Home <self>
    Installation Instructions <install>
    How-To Guides <how_tos/index>
-   API Reference <apidocs/qiskit_addon_utils>
+   API Reference <apidocs/index>
    GitHub <https://github.com/qiskit/qiskit-addon-utils>
    Release Notes <release-notes>

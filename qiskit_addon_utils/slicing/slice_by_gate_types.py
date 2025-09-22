@@ -22,8 +22,7 @@ from .transpiler.passes import CollectOpType
 
 
 def slice_by_gate_types(circuit: QuantumCircuit) -> list[QuantumCircuit]:
-    """
-    Split a ``QuantumCircuit`` into depth-1 slices of operations of the same type.
+    """Split a ``QuantumCircuit`` into depth-1 slices of operations of the same type.
 
     .. warning::
        Note: Adjacent slices sharing no qubits in common may be ordered arbitrarily.

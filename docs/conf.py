@@ -58,6 +58,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "matplotlib.sphinxext.plot_directive",
     "sphinx_copybutton",
+    "sphinx_reredirects",
     "reno.sphinxext",
     "nbsphinx",
     "qiskit_sphinx_theme",
@@ -73,16 +74,17 @@ rst_prolog = f"""
 .. |version| replace:: {release}
 """
 
-# Options for autodoc. These reflect the values from Terra.
+# Options for autodoc. These reflect the values from Qiskit SDK and Runtime.
 autosummary_generate = True
 autosummary_generate_overwrite = False
 autoclass_content = "both"
 autodoc_typehints = "description"
-autodoc_typehints_description_target = "documented_params"
-autodoc_member_order = "bysource"
 autodoc_default_options = {
     "inherited-members": None,
+    "show-inheritance": True,
 }
+napoleon_google_docstring = True
+napoleon_numpy_docstring = False
 
 
 # This adds numbers to the captions for figures, tables,
@@ -100,12 +102,39 @@ modindex_common_prefix = ["qiskit_addon_utils."]
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "qiskit": ("https://docs.quantum.ibm.com/api/qiskit/", None),
+    "qiskit": ("https://quantum.cloud.ibm.com/docs/api/qiskit/", None),
     "rustworkx": ("https://www.rustworkx.org/", None),
 }
 
 plot_working_directory = "."
 plot_html_show_source_link = False
+
+# ----------------------------------------------------------------------------------
+# Redirects
+# ----------------------------------------------------------------------------------
+
+_inlined_apis = [
+    ("qiskit_addon_utils.coloring", "auto_color_edges"),
+    ("qiskit_addon_utils.coloring", "is_valid_edge_coloring"),
+    ("qiskit_addon_utils.problem_generators", "generate_xyz_hamiltonian"),
+    ("qiskit_addon_utils.problem_generators", "generate_time_evolution_circuit"),
+    ("qiskit_addon_utils.problem_generators", "PauliOrderStrategy"),
+    ("qiskit_addon_utils.slicing", "combine_slices"),
+    ("qiskit_addon_utils.slicing", "combine_slices"),
+    ("qiskit_addon_utils.slicing", "slice_by_barriers"),
+    ("qiskit_addon_utils.slicing", "slice_by_coloring"),
+    ("qiskit_addon_utils.slicing", "slice_by_depth"),
+    ("qiskit_addon_utils.slicing", "slice_by_gate_types"),
+]
+
+redirects = {
+    "apidocs/qiskit_addon_utils": "./index.html",
+    "apidocs/qiskit_addon_utils.transpiler": "./index.html",
+    **{
+        f"stubs/{module}.{name}": f"../apidocs/{module}.html#{module}.{name}"
+        for module, name in _inlined_apis
+    },
+}
 
 # ----------------------------------------------------------------------------------
 # Source code links
@@ -139,6 +168,7 @@ GITHUB_BRANCH = determine_github_branch()
 
 
 def linkcode_resolve(domain, info):
+    """Add links to GitHub source code."""
     if domain != "py":
         return None
 
@@ -147,17 +177,24 @@ def linkcode_resolve(domain, info):
     if module is None or "qiskit_addon_utils" not in module_name:
         return None
 
+    def is_valid_code_object(obj):
+        return inspect.isclass(obj) or inspect.ismethod(obj) or inspect.isfunction(obj)
+
     obj = module
     for part in info["fullname"].split("."):
         try:
             obj = getattr(obj, part)
         except AttributeError:
             return None
-        is_valid_code_object = (
-            inspect.isclass(obj) or inspect.ismethod(obj) or inspect.isfunction(obj)
-        )
-        if not is_valid_code_object:
+        if not is_valid_code_object(obj):
             return None
+
+    # Unwrap decorators. This requires they used `functools.wrap()`.
+    while hasattr(obj, "__wrapped__"):
+        obj = obj.__wrapped__
+        if not is_valid_code_object(obj):
+            return None
+
     try:
         full_file_name = inspect.getsourcefile(obj)
     except TypeError:

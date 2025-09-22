@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,7 +7,8 @@ name = "qiskit-addon-utils"
 version = "0.1.0"
 readme = "README.md"
 description = "Utilities to support workflows leveraging Qiskit addons"
-license = {file = "LICENSE.txt"}
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
@@ -20,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
@@ -28,7 +30,7 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.23",
     "rustworkx>=0.15",
-    "qiskit>=1.2, <2",
+    "qiskit>=1.2, <3",
 ]
 
 [project.optional-dependencies]
@@ -53,20 +55,20 @@ nbtest = [
     "nbmake>=1.5.0",
 ]
 style = [
-    "ruff==0.6.4",
+    "ruff==0.12.11",
     "nbqa>=1.8.5",
     "typos>=1.20.0",
 ]
 lint = [
     "qiskit-addon-utils[style]",
-    "pydocstyle==6.3.0",
-    "mypy==1.11.2",
-    "pylint==3.2.7",
+    "mypy==1.16.1",
+    "pylint==3.3.8",
     "reno>=4.1",
-    "toml>=0.9.6",
 ]
 notebook-dependencies = [
     "qiskit-addon-utils",
+    "qiskit-ibm-runtime",
+    "rustworkx[graphviz]>=0.15",
     "matplotlib",
     "ipywidgets",
     "pylatexenc",
@@ -78,6 +80,7 @@ docs = [
     "sphinx-design",
     "sphinx-autodoc-typehints",
     "sphinx-copybutton",
+    "sphinx_reredirects",
     "nbsphinx>=0.9.4",
     "reno>=4.1",
 ]
@@ -107,6 +110,9 @@ ignore_missing_imports = true
 
 [tool.pylint.main]
 py-version = "3.9"
+load-plugins = [
+    "pylint.extensions.no_self_use",
+]
 
 [tool.pylint."messages control"]
 disable = ["all"]
@@ -136,6 +142,7 @@ select = [
     "I",   # isort
     "E",   # pycodestyle
     "W",   # pycodestyle
+    "D",   # pydocstyle
     "F",   # pyflakes
     "RUF", # ruff
     "UP",  # pyupgrade
@@ -151,15 +158,19 @@ ignore = [
 max-args = 6
 
 [tool.ruff.lint.extend-per-file-ignores]
-"docs/**/*" = [
+"test/**.py" = [
+    "D",    # pydocstyle
+]
+"docs/**" = [
     "E402", # module level import not at top of file
+    "D100", # missing docstring in public module
 ]
 
 [tool.ruff.lint.flake8-copyright]
 notice-rgx = """
 # This code is a Qiskit project.
 #
-# \\(C\\) Copyright IBM 2024\\.
+# \\(C\\) Copyright IBM \\d{4}((,\\s)\\d{4})*\\.
 #
 # This code is licensed under the Apache License, Version 2\\.0\\. You may
 # obtain a copy of this license in the LICENSE\\.txt file in the root directory
@@ -169,5 +180,8 @@ notice-rgx = """
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals\\.
 """
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.typos.default.extend-words]

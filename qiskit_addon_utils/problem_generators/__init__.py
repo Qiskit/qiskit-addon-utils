@@ -10,24 +10,14 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""Utility methods for problem generation.
-
-.. currentmodule:: qiskit_addon_utils.problem_generators
-
-.. autosummary::
-   :toctree: ../stubs/
-   :nosignatures:
-
-   generate_xyz_hamiltonian
-   PauliOrderStrategy
-   generate_time_evolution_circuit
-"""
+# Reminder: update the RST file in docs/apidocs when adding new interfaces.
+"""Utility methods for problem generation."""
 
 from .generate_time_evolution_circuit import generate_time_evolution_circuit
 from .generate_xyz_hamiltonian import PauliOrderStrategy, generate_xyz_hamiltonian
 
 __all__ = [
-    "generate_xyz_hamiltonian",
     "PauliOrderStrategy",
     "generate_time_evolution_circuit",
+    "generate_xyz_hamiltonian",
 ]

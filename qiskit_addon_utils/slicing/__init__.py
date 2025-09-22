@@ -10,30 +10,11 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
+# Reminder: update the RST file in docs/apidocs when adding new interfaces.
 """Utility methods for circuit slicing.
 
-For more information, check out the `how-to guide <../how_tos/create_circuit_slices.html>`_ which
+For more information, check out the `how-to guide <https://qiskit.github.io/qiskit-addon-utils/how_tos/create_circuit_slices.html>`__ which
 discusses this submodule.
-
-.. currentmodule:: qiskit_addon_utils.slicing
-
-.. autosummary::
-   :toctree: ../stubs/
-   :nosignatures:
-
-   combine_slices
-   slice_by_barriers
-   slice_by_coloring
-   slice_by_depth
-   slice_by_gate_types
-
-Submodules
-==========
-
-.. autosummary::
-   :toctree:
-
-   transpiler
 """
 
 from .combine_slices import combine_slices
