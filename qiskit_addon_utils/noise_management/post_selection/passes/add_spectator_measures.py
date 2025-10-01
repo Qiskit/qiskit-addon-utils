@@ -92,15 +92,15 @@ class AddSpectatorMeasures(TransformationPass):
 
         if (num_spectators := len(spectator_qubits)) != 0:
             # sort the spectator qubits, so that qubit `i` writes to clbit `i`
-            spectator_qubits = list(spectator_qubits)
-            spectator_qubits.sort(key=lambda qubit: qubit_map[qubit])
+            spectator_qubits_ls = list(spectator_qubits)
+            spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
 
             if self.add_barrier:
-                qubits = active_qubits.union(spectator_qubits)
+                qubits = active_qubits.union(spectator_qubits_ls)
                 dag.apply_operation_back(Barrier(len(qubits)), qubits)
 
             dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
-            for qubit, clbit in zip(spectator_qubits, new_reg):
+            for qubit, clbit in zip(spectator_qubits_ls, new_reg):
                 dag.apply_operation_back(Measure(), [qubit], [clbit])
 
         return dag

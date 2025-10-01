@@ -13,7 +13,7 @@
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
 """Post selection summary."""
 
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, Union  # type: ignore[attr-defined]
 
 from qiskit.circuit import ClassicalRegister, QuantumCircuit
 from qiskit.converters import circuit_to_dag
@@ -34,7 +34,7 @@ class PostSelectionSummary:
         self,
         primary_cregs: set[CregName],
         measure_map: dict[QubitIdx, tuple[CregName, ClbitIdx]],
-        edges: set[frozenset[QubitIdx, QubitIdx]],
+        edges: set[frozenset[QubitIdx]],
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ):
         """Initialize a ``PostSelectionSummary`` object.
@@ -58,7 +58,7 @@ class PostSelectionSummary:
         return self._measure_map
 
     @property
-    def edges(self) -> set[frozenset[QubitIdx, QubitIdx]]:
+    def edges(self) -> set[frozenset[QubitIdx]]:
         """A set of edges to consider for edge-based post selection."""
         return self._edges
 
@@ -68,7 +68,7 @@ class PostSelectionSummary:
         return self._primary_cregs
 
     @property
-    def post_selection_suffix(self) -> set[CregName]:
+    def post_selection_suffix(self) -> str:
         """The suffix of the post selection registers."""
         return self._post_selection_suffix
 
@@ -76,7 +76,7 @@ class PostSelectionSummary:
     def from_circuit(
         cls,
         circuit: QuantumCircuit,
-        coupling_map: CouplingMap | list[tuple[int, int]],
+        coupling_map: Union[CouplingMap, list[tuple[int, int]]],
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ):
         """Initialize from quantum circuits.
@@ -143,7 +143,7 @@ def _validate_cregs(
 ):
     """Validate primary and post selection registers.
 
-    This function checks that every primary register has a correspoding post selection register with
+    This function checks that every primary register has a corresponding post selection register with
     matching names (expect for the suffix at the end of the posts election register's name) and the same
     number of clbits.
 
@@ -265,7 +265,7 @@ def _validate_measure_maps(
 def _get_edges(
     coupling_map: CouplingMap,
     measure_map: dict[QubitIdx, tuple[CregName, ClbitIdx]],
-) -> set[frozenset[QubitIdx, QubitIdx]]:
+) -> set[frozenset[QubitIdx]]:
     """Get the set of edges that are relevant for edge-based post selection."""
     return {
         frozenset(edge)

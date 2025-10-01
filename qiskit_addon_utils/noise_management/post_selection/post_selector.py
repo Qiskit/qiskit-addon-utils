@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import numpy as np
+from numpy.typing import NDArray
 from qiskit import QuantumCircuit
 from qiskit.transpiler import CouplingMap
 
@@ -70,8 +71,8 @@ class PostSelector:
         return PostSelector(summary)
 
     def compute_mask(
-        self, result: dict[str, np.ndarray[bool]], strategy: Literal["node", "edge"] = "node"
-    ) -> np.ndarray[bool]:
+        self, result: dict[str, NDArray[np.bool]], strategy: Literal["node", "edge"] = "node"
+    ) -> NDArray[np.bool]:
         """Compute boolean masks indicating what shots should be kept or discarded for the given result.
 
         This function compares the bits returned by every pair of measurement and post selection measurement,
@@ -94,81 +95,73 @@ class PostSelector:
             strategy: The post selection strategy used to process the result.
         """
         if strategy == "node":
-            _compute_mask = self._compute_mask_by_node
+            _compute_mask = _compute_mask_by_node
         elif strategy == "edge":
-            _compute_mask = self._compute_mask_by_edge
+            _compute_mask = _compute_mask_by_edge
         else:
             raise ValueError(f"Strategy '{strategy}' is not supported.")
 
-        if isinstance(result, dict):
-            result = [result]
-
         return _compute_mask(result, self.summary)
 
-    def _compute_mask_by_node(
-        self, result: dict[str, np.ndarray[bool]], summary: PostSelectionSummary
-    ):
-        """Compute the mask using a node-based post selection strategy.
 
-        Mark as ``False`` every shot where one or more results failed to flip, and as ``True``
-        every other shot.
-        """
-        self._validate_result(result, summary)
-        datum = result[0]
+def _compute_mask_by_node(result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary):
+    """Compute the mask using a node-based post selection strategy.
 
-        shape = datum[next(iter(summary.primary_cregs))].shape[:-1]
-        mask = np.ones(shape, dtype=bool)
-        for name, clbit_idx in summary.measure_map.values():
-            name_ps = name + summary.post_selection_suffix
-            mask &= datum[name][..., clbit_idx] != datum[name_ps][..., clbit_idx]
-        return mask
+    Mark as ``False`` every shot where one or more results failed to flip, and as ``True``
+    every other shot.
+    """
+    _validate_result(result, summary)
 
-    def _compute_mask_by_edge(self, result: dict[str, Any], summary: PostSelectionSummary):
-        """Compute the mask using an edge-based post selection strategy.
+    shape = result[next(iter(summary.primary_cregs))].shape[:-1]
+    mask = np.ones(shape, dtype=bool)
+    for name, clbit_idx in summary.measure_map.values():
+        name_ps = name + summary.post_selection_suffix
+        mask &= result[name][..., clbit_idx] != result[name_ps][..., clbit_idx]
+    return mask
 
-        Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
-        both of the results failed to flip, and as ``True`` every other shot.
-        """
-        self._validate_result(result, summary)
-        datum = result[0]
 
-        shape = datum[next(iter(summary.primary_cregs))].shape[:-1]
-        mask = np.ones(shape, dtype=bool)
-        for qubit0_idx, qubit1_idx in summary.edges:
-            name0, clbit0_idx = summary.measure_map[qubit0_idx]
-            name0_ps = name0 + summary.post_selection_suffix
+def _compute_mask_by_edge(result: dict[str, Any], summary: PostSelectionSummary):
+    """Compute the mask using an edge-based post selection strategy.
 
-            name1, clbit1_idx = summary.measure_map[qubit1_idx]
-            name1_ps = name1 + summary.post_selection_suffix
+    Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
+    both of the results failed to flip, and as ``True`` every other shot.
+    """
+    _validate_result(result, summary)
 
-            mask &= (datum[name0][..., clbit0_idx] != datum[name0_ps][..., clbit0_idx]) | (
-                datum[name1][..., clbit1_idx] != datum[name1_ps][..., clbit1_idx]
-            )
-        return mask
+    shape = result[next(iter(summary.primary_cregs))].shape[:-1]
+    mask = np.ones(shape, dtype=bool)
+    for qubit0_idx, qubit1_idx in summary.edges:
+        name0, clbit0_idx = summary.measure_map[qubit0_idx]
+        name0_ps = name0 + summary.post_selection_suffix
 
-    def _validate_result(self, result: dict[str, np.ndarray[bool]], summary: PostSelectionSummary):
-        """Validate a result against a summary.
+        name1, clbit1_idx = summary.measure_map[qubit1_idx]
+        name1_ps = name1 + summary.post_selection_suffix
 
-        Args:
-            result: A result to post-process.
-            summary: A summary to validate the given result.
+        mask &= (result[name0][..., clbit0_idx] != result[name0_ps][..., clbit0_idx]) | (
+            result[name1][..., clbit1_idx] != result[name1_ps][..., clbit1_idx]
+        )
+    return mask
 
-        Raise:
-            ValueError: If ``result`` contains more than one datum.
-            ValueError: If ``result`` does not contain all of the required registers.
-            ValueError: If ``result`` contains arrays of inconsistent shapes.
-        """
-        if len(result) != 1:
-            raise ValueError(f"'result' must contain a single datum, not {len(result)}.")
 
-        datum = result[0]
-        primary_cregs = summary.primary_cregs
-        post_selection_suffix = summary.post_selection_suffix
-        cregs = summary.primary_cregs.union(name + post_selection_suffix for name in primary_cregs)
+def _validate_result(result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary):
+    """Validate a result against a summary.
 
-        for name in cregs:
-            if datum.get(name) is None:
-                raise ValueError(f"Result does not contain creg '{name}'.")
+    Args:
+        result: A result to post-process.
+        summary: A summary to validate the given result.
 
-        if len(set(datum[name].shape[:-1] for name in cregs)) > 1:
-            raise ValueError("Result contains arrays of inconsistent shapes.")
+    Raise:
+        ValueError: If ``result`` contains more than one datum.
+        ValueError: If ``result`` does not contain all of the required registers.
+        ValueError: If ``result`` contains arrays of inconsistent shapes.
+    """
+    primary_cregs = summary.primary_cregs
+    post_selection_suffix = summary.post_selection_suffix
+    cregs = summary.primary_cregs.union(name + post_selection_suffix for name in primary_cregs)
+
+    for name in cregs:
+        if result.get(name) is None:
+            raise ValueError(f"Result does not contain creg '{name}'.")
+
+    if len(set(result[name].shape[:-1] for name in cregs)) > 1:
+        raise ValueError("Result contains arrays of inconsistent shapes.")
