@@ -66,9 +66,7 @@ class PostSelector:
             else CouplingMap(couplinglist=coupling_map)
         )
 
-        summary = PostSelectionSummary.from_circuit(
-            circuit, coupling_map, post_selection_suffix
-        )
+        summary = PostSelectionSummary.from_circuit(circuit, coupling_map, post_selection_suffix)
         return PostSelector(summary)
 
     def compute_mask(
@@ -125,9 +123,7 @@ class PostSelector:
             mask &= datum[name][..., clbit_idx] != datum[name_ps][..., clbit_idx]
         return mask
 
-    def _compute_mask_by_edge(
-        self, result: dict[str, Any], summary: PostSelectionSummary
-    ):
+    def _compute_mask_by_edge(self, result: dict[str, Any], summary: PostSelectionSummary):
         """Compute the mask using an edge-based post selection strategy.
 
         Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
@@ -145,14 +141,12 @@ class PostSelector:
             name1, clbit1_idx = summary.measure_map[qubit1_idx]
             name1_ps = name1 + summary.post_selection_suffix
 
-            mask &= (
-                datum[name0][..., clbit0_idx] != datum[name0_ps][..., clbit0_idx]
-            ) | (datum[name1][..., clbit1_idx] != datum[name1_ps][..., clbit1_idx])
+            mask &= (datum[name0][..., clbit0_idx] != datum[name0_ps][..., clbit0_idx]) | (
+                datum[name1][..., clbit1_idx] != datum[name1_ps][..., clbit1_idx]
+            )
         return mask
 
-    def _validate_result(
-        self, result: dict[str, np.ndarray[bool]], summary: PostSelectionSummary
-    ):
+    def _validate_result(self, result: dict[str, np.ndarray[bool]], summary: PostSelectionSummary):
         """Validate a result against a summary.
 
         Args:

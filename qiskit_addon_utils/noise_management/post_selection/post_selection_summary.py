@@ -94,9 +94,7 @@ class PostSelectionSummary:
         )
 
         cregs = (dag := circuit_to_dag(circuit)).cregs
-        primary_cregs, ps_cregs = _get_primary_and_ps_cregs(
-            cregs, post_selection_suffix
-        )
+        primary_cregs, ps_cregs = _get_primary_and_ps_cregs(cregs, post_selection_suffix)
         _validate_cregs(primary_cregs, ps_cregs, post_selection_suffix)
 
         measure_map, measure_map_ps = _get_measure_maps(dag, primary_cregs, ps_cregs)
@@ -130,16 +128,10 @@ def _get_primary_and_ps_cregs(
         post_selection_suffix: The suffix of the post selection registers.
     """
     primary_cregs = {
-        name: creg
-        for name, creg in cregs.items()
-        if not name.endswith(post_selection_suffix)
+        name: creg for name, creg in cregs.items() if not name.endswith(post_selection_suffix)
     }
 
-    ps_cregs = {
-        name: creg
-        for name, creg in cregs.items()
-        if name.endswith(post_selection_suffix)
-    }
+    ps_cregs = {name: creg for name, creg in cregs.items() if name.endswith(post_selection_suffix)}
 
     return primary_cregs, ps_cregs
 
@@ -186,9 +178,7 @@ def _get_measure_maps(
     dag: DAGCircuit,
     primary_cregs: dict[CregName, ClassicalRegister],
     ps_cregs: dict[CregName, ClassicalRegister],
-) -> tuple[
-    dict[QubitIdx, tuple[CregName, ClbitIdx]], dict[QubitIdx, tuple[CregName, ClbitIdx]]
-]:
+) -> tuple[dict[QubitIdx, tuple[CregName, ClbitIdx]], dict[QubitIdx, tuple[CregName, ClbitIdx]]]:
     """Map the qubits in ``dag`` to the registers and clbits used to measure them.
 
     Args:
@@ -224,9 +214,7 @@ def _get_measure_maps(
             elif clbit_ps := clbit_map_ps.get(node.cargs[0], None):
                 measure_map_ps[qubit_map[node.qargs[0]]] = clbit_ps
             else:
-                raise ValueError(
-                    f"Clbit {node.cargs[0]} does not belong to any valid register."
-                )
+                raise ValueError(f"Clbit {node.cargs[0]} does not belong to any valid register.")
 
     return measure_map, measure_map_ps
 
@@ -266,10 +254,7 @@ def _validate_measure_maps(
                 f"Missing post selection measurement on qubit {qubit_idx}."
             ) from key_err
 
-        if (
-            name_ps != (expected_name := name + post_selection_suffix)
-            or clbit_idx != clbit_idx_ps
-        ):
+        if name_ps != (expected_name := name + post_selection_suffix) or clbit_idx != clbit_idx_ps:
             raise ValueError(
                 f"Expected measurement on qubit {qubit_idx} writing to bit {clbit_idx} of creg "
                 f"{expected_name}, found measurement writing to bit {clbit_idx_ps} of creg "
