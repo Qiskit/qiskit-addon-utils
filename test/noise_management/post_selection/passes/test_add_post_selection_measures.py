@@ -11,7 +11,6 @@
 # that they have been altered from the originals.
 """Test the `AddPostSelectionMeasures` pass."""
 
-import unittest
 
 import numpy as np
 import pytest
@@ -25,231 +24,228 @@ from qiskit_addon_utils.noise_management.post_selection.passes import (
 )
 
 
-class TestAddPostSelectionMeasures(unittest.TestCase):
-    """Tests the AddPostSelectionMeasures pass."""
+def test_empty_circuit():
+    """Test the pass on an empty circuit."""
+    circuit = QuantumCircuit(1)
+    assert circuit == PassManager([AddPostSelectionMeasures()]).run(circuit)
 
-    def setUp(self):
-        """Setup."""
-        super().setUp()
 
-        self.pm = PassManager([AddPostSelectionMeasures()])
+def test_circuit_with_final_layer_of_measurements():
+    """Test the pass on a circuit with a final layer of measurements."""
+    qreg = QuantumRegister(4, "q")
+    creg = ClassicalRegister(3, "c")
+    creg_ps = ClassicalRegister(3, "c_ps")
 
-    def test_empty_circuit(self):
-        """Test the pass on an empty circuit."""
-        circuit = QuantumCircuit(1)
-        self.assertEqual(circuit, self.pm.run(circuit))
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.h(0)
+    circuit.cz(0, 1)
+    circuit.cz(1, 2)
+    circuit.cz(2, 3)
+    circuit.measure(1, creg[0])
+    circuit.measure(2, creg[1])
+    circuit.measure(3, creg[2])
 
-    def test_circuit_with_final_layer_of_measurements(self):
-        """Test the pass on a circuit with a final layer of measurements."""
-        qreg = QuantumRegister(4, "q")
-        creg = ClassicalRegister(3, "c")
-        creg_ps = ClassicalRegister(3, "c_ps")
+    expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
+    expected_circuit.h(0)
+    expected_circuit.cz(0, 1)
+    expected_circuit.cz(1, 2)
+    expected_circuit.cz(2, 3)
+    expected_circuit.measure(1, creg[0])
+    expected_circuit.measure(2, creg[1])
+    expected_circuit.measure(3, creg[2])
+    expected_circuit.barrier([1, 2, 3])
+    expected_circuit.append(XSlowGate(), [1])
+    expected_circuit.append(XSlowGate(), [2])
+    expected_circuit.append(XSlowGate(), [3])
+    expected_circuit.measure(1, creg_ps[0])
+    expected_circuit.measure(2, creg_ps[1])
+    expected_circuit.measure(3, creg_ps[2])
 
-        circuit = QuantumCircuit(qreg, creg)
-        circuit.h(0)
-        circuit.cz(0, 1)
-        circuit.cz(1, 2)
-        circuit.cz(2, 3)
-        circuit.measure(1, creg[0])
+    assert expected_circuit == PassManager([AddPostSelectionMeasures()]).run(circuit)
+
+
+def test_circuit_with_measurements_in_a_box():
+    """Test the pass on a circuit with measurements inside a box."""
+    qreg = QuantumRegister(4, "q")
+    creg = ClassicalRegister(3, "c")
+    creg_ps = ClassicalRegister(3, "c_ps")
+
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.h(0)
+    circuit.cz(0, 1)
+    circuit.cz(1, 2)
+    circuit.cz(2, 3)
+    circuit.measure(1, creg[0])
+    with circuit.box():
         circuit.measure(2, creg[1])
-        circuit.measure(3, creg[2])
+    circuit.measure(3, creg[2])
 
-        expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
-        expected_circuit.h(0)
-        expected_circuit.cz(0, 1)
-        expected_circuit.cz(1, 2)
-        expected_circuit.cz(2, 3)
-        expected_circuit.measure(1, creg[0])
+    expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
+    expected_circuit.h(0)
+    expected_circuit.cz(0, 1)
+    expected_circuit.cz(1, 2)
+    expected_circuit.cz(2, 3)
+    expected_circuit.measure(1, creg[0])
+    with expected_circuit.box():
         expected_circuit.measure(2, creg[1])
-        expected_circuit.measure(3, creg[2])
-        expected_circuit.barrier([1, 2, 3])
-        expected_circuit.append(XSlowGate(), [1])
-        expected_circuit.append(XSlowGate(), [2])
-        expected_circuit.append(XSlowGate(), [3])
-        expected_circuit.measure(1, creg_ps[0])
-        expected_circuit.measure(2, creg_ps[1])
-        expected_circuit.measure(3, creg_ps[2])
+    expected_circuit.measure(3, creg[2])
+    expected_circuit.barrier([1, 2, 3])
+    expected_circuit.append(XSlowGate(), [1])
+    expected_circuit.append(XSlowGate(), [2])
+    expected_circuit.append(XSlowGate(), [3])
+    expected_circuit.measure(1, creg_ps[0])
+    expected_circuit.measure(2, creg_ps[1])
+    expected_circuit.measure(3, creg_ps[2])
 
-        self.assertEqual(expected_circuit, self.pm.run(circuit))
+    assert expected_circuit == PassManager([AddPostSelectionMeasures()]).run(circuit)
 
-    def test_circuit_with_measurements_in_a_box(self):
-        """Test the pass on a circuit with measurements inside a box."""
-        qreg = QuantumRegister(4, "q")
-        creg = ClassicalRegister(3, "c")
-        creg_ps = ClassicalRegister(3, "c_ps")
 
-        circuit = QuantumCircuit(qreg, creg)
-        circuit.h(0)
-        circuit.cz(0, 1)
-        circuit.cz(1, 2)
-        circuit.cz(2, 3)
-        circuit.measure(1, creg[0])
-        with circuit.box():
-            circuit.measure(2, creg[1])
-        circuit.measure(3, creg[2])
+def test_if_else():
+    """Test the pass for circuits with if/else statements."""
+    qreg = QuantumRegister(5, "q")
+    creg = ClassicalRegister(2, "c")
+    creg_ps = ClassicalRegister(2, "c_ps")
 
-        expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
-        expected_circuit.h(0)
-        expected_circuit.cz(0, 1)
-        expected_circuit.cz(1, 2)
-        expected_circuit.cz(2, 3)
-        expected_circuit.measure(1, creg[0])
-        with expected_circuit.box():
-            expected_circuit.measure(2, creg[1])
-        expected_circuit.measure(3, creg[2])
-        expected_circuit.barrier([1, 2, 3])
-        expected_circuit.append(XSlowGate(), [1])
-        expected_circuit.append(XSlowGate(), [2])
-        expected_circuit.append(XSlowGate(), [3])
-        expected_circuit.measure(1, creg_ps[0])
-        expected_circuit.measure(2, creg_ps[1])
-        expected_circuit.measure(3, creg_ps[2])
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.barrier(0)
+    circuit.measure(0, creg[0])
+    with circuit.if_test((creg[0], 0)) as else_:
+        circuit.measure(1, creg[1])
+    with else_:
+        circuit.measure(2, creg[1])
+    with circuit.if_test((creg[0], 0)) as else_:
+        circuit.measure(3, creg[1])
+    with else_:
+        circuit.x(1)
+        circuit.measure(3, creg[1])
 
-        self.assertEqual(expected_circuit, self.pm.run(circuit))
-
-    def test_if_else(self):
-        """Test the pass for circuits with if/else statements."""
-        qreg = QuantumRegister(5, "q")
-        creg = ClassicalRegister(2, "c")
-        creg_ps = ClassicalRegister(2, "c_ps")
-
-        circuit = QuantumCircuit(qreg, creg)
-        circuit.barrier(0)
-        circuit.measure(0, creg[0])
-        with circuit.if_test((creg[0], 0)) as else_:
-            circuit.measure(1, creg[1])
-        with else_:
-            circuit.measure(2, creg[1])
-        with circuit.if_test((creg[0], 0)) as else_:
-            circuit.measure(3, creg[1])
-        with else_:
-            circuit.x(1)
-            circuit.measure(3, creg[1])
-
-        expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
-        expected_circuit.barrier(0)
-        expected_circuit.measure(0, creg[0])
-        with expected_circuit.if_test((creg[0], 0)) as else_:
-            expected_circuit.measure(1, creg[1])
-        with else_:
-            expected_circuit.measure(2, creg[1])
-        with expected_circuit.if_test((creg[0], 0)) as else_:
-            expected_circuit.measure(3, creg[1])
-        with else_:
-            expected_circuit.x(1)
-            expected_circuit.measure(3, creg[1])
-        expected_circuit.barrier([0, 3])
-        expected_circuit.append(XSlowGate(), [0])
-        expected_circuit.append(XSlowGate(), [3])
-        expected_circuit.measure(0, creg_ps[0])
-        expected_circuit.measure(3, creg_ps[1])
-
-        pm = PassManager([AddPostSelectionMeasures()])
-
-        self.assertEqual(expected_circuit, pm.run(circuit))
-
-    def test_circuit_with_mid_circuit_measurements(self):
-        """Test the pass on a circuit with mid-circuit measurements."""
-        qreg = QuantumRegister(3, "q")
-        creg = ClassicalRegister(2, "c")
-        creg_ps = ClassicalRegister(2, "c_ps")
-
-        circuit = QuantumCircuit(qreg, creg)
-        circuit.measure(1, 0)
-        circuit.measure(2, 1)
-        with circuit.box():
-            circuit.x(1)
-
-        expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
-        expected_circuit.measure(1, creg[0])
+    expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
+    expected_circuit.barrier(0)
+    expected_circuit.measure(0, creg[0])
+    with expected_circuit.if_test((creg[0], 0)) as else_:
+        expected_circuit.measure(1, creg[1])
+    with else_:
         expected_circuit.measure(2, creg[1])
-        with expected_circuit.box():
-            expected_circuit.x(1)
-        expected_circuit.barrier([2])
-        expected_circuit.append(XSlowGate(), [2])
-        expected_circuit.measure(2, creg_ps[1])
+    with expected_circuit.if_test((creg[0], 0)) as else_:
+        expected_circuit.measure(3, creg[1])
+    with else_:
+        expected_circuit.x(1)
+        expected_circuit.measure(3, creg[1])
+    expected_circuit.barrier([0, 3])
+    expected_circuit.append(XSlowGate(), [0])
+    expected_circuit.append(XSlowGate(), [3])
+    expected_circuit.measure(0, creg_ps[0])
+    expected_circuit.measure(3, creg_ps[1])
 
-        self.assertEqual(expected_circuit, self.pm.run(circuit))
+    assert expected_circuit == PassManager([AddPostSelectionMeasures()]).run(circuit)
 
-    def test_circuit_with_multiple_cregs(self):
-        """Test for a circuit with multiple cregs."""
-        qreg = QuantumRegister(4, "q")
-        creg1 = ClassicalRegister(1, "c1")
-        creg2 = ClassicalRegister(2, "c2")
-        creg1_ps = ClassicalRegister(1, "c1_ps")
-        creg2_ps = ClassicalRegister(2, "c2_ps")
 
-        circuit = QuantumCircuit(qreg, creg1, creg2)
-        circuit.h(0)
-        circuit.cz(0, 1)
-        circuit.cz(1, 2)
-        circuit.cz(2, 3)
-        circuit.measure(1, creg1[0])
-        circuit.measure(2, creg2[0])
-        circuit.measure(3, creg2[1])
+def test_circuit_with_mid_circuit_measurements():
+    """Test the pass on a circuit with mid-circuit measurements."""
+    qreg = QuantumRegister(3, "q")
+    creg = ClassicalRegister(2, "c")
+    creg_ps = ClassicalRegister(2, "c_ps")
 
-        expected_circuit = QuantumCircuit(qreg, creg1, creg2, creg1_ps, creg2_ps)
-        expected_circuit.h(0)
-        expected_circuit.cz(0, 1)
-        expected_circuit.cz(1, 2)
-        expected_circuit.cz(2, 3)
-        expected_circuit.measure(1, creg1[0])
-        expected_circuit.measure(2, creg2[0])
-        expected_circuit.measure(3, creg2[1])
-        expected_circuit.barrier([1, 2, 3])
-        expected_circuit.append(XSlowGate(), [1])
-        expected_circuit.append(XSlowGate(), [2])
-        expected_circuit.append(XSlowGate(), [3])
-        expected_circuit.measure(1, creg1_ps[0])
-        expected_circuit.measure(2, creg2_ps[0])
-        expected_circuit.measure(3, creg2_ps[1])
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.measure(1, 0)
+    circuit.measure(2, 1)
+    with circuit.box():
+        circuit.x(1)
 
-        self.assertEqual(expected_circuit, self.pm.run(circuit))
+    expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
+    expected_circuit.measure(1, creg[0])
+    expected_circuit.measure(2, creg[1])
+    with expected_circuit.box():
+        expected_circuit.x(1)
+    expected_circuit.barrier([2])
+    expected_circuit.append(XSlowGate(), [2])
+    expected_circuit.measure(2, creg_ps[1])
 
-    def test_custom_post_selection_suffix(self):
-        """Test the pass for a custom register suffix."""
-        qreg = QuantumRegister(1, "q")
-        creg = ClassicalRegister(1, "c")
-        creg_ps = ClassicalRegister(1, "c_ciao")
+    assert expected_circuit == PassManager([AddPostSelectionMeasures()]).run(circuit)
 
-        circuit = QuantumCircuit(qreg, creg)
-        circuit.measure(0, 0)
 
-        expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
-        expected_circuit.measure(0, [creg[0]])
-        expected_circuit.barrier([0])
-        expected_circuit.append(XSlowGate(), [0])
-        expected_circuit.measure(0, creg_ps[0])
+def test_circuit_with_multiple_cregs():
+    """Test for a circuit with multiple cregs."""
+    qreg = QuantumRegister(4, "q")
+    creg1 = ClassicalRegister(1, "c1")
+    creg2 = ClassicalRegister(2, "c2")
+    creg1_ps = ClassicalRegister(1, "c1_ps")
+    creg2_ps = ClassicalRegister(2, "c2_ps")
 
-        pm = PassManager([AddPostSelectionMeasures(post_selection_suffix="_ciao")])
-        self.assertEqual(expected_circuit, pm.run(circuit))
+    circuit = QuantumCircuit(qreg, creg1, creg2)
+    circuit.h(0)
+    circuit.cz(0, 1)
+    circuit.cz(1, 2)
+    circuit.cz(2, 3)
+    circuit.measure(1, creg1[0])
+    circuit.measure(2, creg2[0])
+    circuit.measure(3, creg2[1])
 
-    def test_x_pulse_type(self):
-        """Test the pass for non-default X-pulse types."""
-        qreg = QuantumRegister(1, "q")
-        creg = ClassicalRegister(1, "c")
-        creg_ps = ClassicalRegister(1, "c_ps")
+    expected_circuit = QuantumCircuit(qreg, creg1, creg2, creg1_ps, creg2_ps)
+    expected_circuit.h(0)
+    expected_circuit.cz(0, 1)
+    expected_circuit.cz(1, 2)
+    expected_circuit.cz(2, 3)
+    expected_circuit.measure(1, creg1[0])
+    expected_circuit.measure(2, creg2[0])
+    expected_circuit.measure(3, creg2[1])
+    expected_circuit.barrier([1, 2, 3])
+    expected_circuit.append(XSlowGate(), [1])
+    expected_circuit.append(XSlowGate(), [2])
+    expected_circuit.append(XSlowGate(), [3])
+    expected_circuit.measure(1, creg1_ps[0])
+    expected_circuit.measure(2, creg2_ps[0])
+    expected_circuit.measure(3, creg2_ps[1])
 
-        circuit = QuantumCircuit(qreg, creg)
-        circuit.measure(0, 0)
+    assert expected_circuit == PassManager([AddPostSelectionMeasures()]).run(circuit)
 
-        expected_circuit_rx = QuantumCircuit(qreg, creg, creg_ps)
-        expected_circuit_rx.measure(0, [creg[0]])
-        expected_circuit_rx.barrier([0])
-        for _ in range(20):
-            expected_circuit_rx.append(RXGate(np.pi / 20), [0])
-        expected_circuit_rx.measure(0, creg_ps[0])
 
-        pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
-        self.assertEqual(expected_circuit_rx, pm.run(circuit))
+def test_custom_post_selection_suffix():
+    """Test the pass for a custom register suffix."""
+    qreg = QuantumRegister(1, "q")
+    creg = ClassicalRegister(1, "c")
+    creg_ps = ClassicalRegister(1, "c_ciao")
 
-    def test_raises(self):
-        """Test that the pass raises."""
-        with pytest.raises(ValueError, match="not a valid input"):
-            AddPostSelectionMeasures(x_pulse_type="rz")
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.measure(0, 0)
 
-        pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
-        circuit = QuantumCircuit(1)
-        circuit.reset(0)
-        with pytest.raises(TranspilerError, match="``'reset'`` is not supported"):
-            pm.run(circuit)
+    expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
+    expected_circuit.measure(0, [creg[0]])
+    expected_circuit.barrier([0])
+    expected_circuit.append(XSlowGate(), [0])
+    expected_circuit.measure(0, creg_ps[0])
+
+    pm = PassManager([AddPostSelectionMeasures(post_selection_suffix="_ciao")])
+    assert expected_circuit == pm.run(circuit)
+
+
+def test_x_pulse_type():
+    """Test the pass for non-default X-pulse types."""
+    qreg = QuantumRegister(1, "q")
+    creg = ClassicalRegister(1, "c")
+    creg_ps = ClassicalRegister(1, "c_ps")
+
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.measure(0, 0)
+
+    expected_circuit_rx = QuantumCircuit(qreg, creg, creg_ps)
+    expected_circuit_rx.measure(0, [creg[0]])
+    expected_circuit_rx.barrier([0])
+    for _ in range(20):
+        expected_circuit_rx.append(RXGate(np.pi / 20), [0])
+    expected_circuit_rx.measure(0, creg_ps[0])
+
+    pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
+    assert expected_circuit_rx == pm.run(circuit)
+
+
+def test_raises():
+    """Test that the pass raises."""
+    with pytest.raises(ValueError, match="not a valid input"):
+        AddPostSelectionMeasures(x_pulse_type="rz")
+
+    pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
+    circuit = QuantumCircuit(1)
+    circuit.reset(0)
+    with pytest.raises(TranspilerError, match="``'reset'`` is not supported"):
+        pm.run(circuit)
