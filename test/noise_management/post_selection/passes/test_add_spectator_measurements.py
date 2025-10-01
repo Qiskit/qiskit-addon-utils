@@ -24,6 +24,8 @@ from qiskit_addon_utils.noise_management.post_selection.passes import AddSpectat
 class TestAddSpectatorMeasures(unittest.TestCase):
     """Tests the AddSpectatorMeasures pass."""
 
+    # pylint: disable=no-self-use
+
     def setUp(self):
         """Setup."""
         super().setUp()

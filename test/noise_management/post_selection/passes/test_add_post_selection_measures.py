@@ -11,7 +11,6 @@
 # that they have been altered from the originals.
 """Test the `AddPostSelectionMeasures` pass."""
 
-
 import numpy as np
 import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
