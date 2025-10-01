@@ -29,8 +29,6 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         super().setUp()
 
         # The same coupling map as FakeBrisbane, but trimmed down
-        circuit_qubits = [7, 17, 27, 28]
-        spectator_qubits = [6, 8, 12, 26, 29, 30, 35]
         self.coupling_map = [
             (6, 7),
             (7, 8),
