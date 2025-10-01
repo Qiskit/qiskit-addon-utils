@@ -13,7 +13,7 @@
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
 """Post selection summary."""
 
-from typing import Any, TypeAlias, Union  # type: ignore[attr-defined]
+from typing import Any, Union
 
 from qiskit.circuit import ClassicalRegister, QuantumCircuit
 from qiskit.converters import circuit_to_dag
@@ -22,19 +22,15 @@ from qiskit.transpiler import CouplingMap
 
 from ...constants import DEFAULT_POST_SELECTION_SUFFIX
 
-CregName: TypeAlias = str
-QubitIdx: TypeAlias = int
-ClbitIdx: TypeAlias = int
-
 
 class PostSelectionSummary:
     """A helper class to store the properties of a quantum circuit required to post select the results."""
 
     def __init__(
         self,
-        primary_cregs: set[CregName],
-        measure_map: dict[QubitIdx, tuple[CregName, ClbitIdx]],
-        edges: set[frozenset[QubitIdx]],
+        primary_cregs: set[str],
+        measure_map: dict[int, tuple[str, int]],
+        edges: set[frozenset[int]],
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ):
         """Initialize a ``PostSelectionSummary`` object.
@@ -53,17 +49,17 @@ class PostSelectionSummary:
         self._post_selection_suffix = post_selection_suffix
 
     @property
-    def measure_map(self) -> dict[QubitIdx, tuple[CregName, ClbitIdx]]:
+    def measure_map(self) -> dict[int, tuple[str, int]]:
         """A map from qubit indices to the register and clbit index used to measure those qubits."""
         return self._measure_map
 
     @property
-    def edges(self) -> set[frozenset[QubitIdx]]:
+    def edges(self) -> set[frozenset[int]]:
         """A set of edges to consider for edge-based post selection."""
         return self._edges
 
     @property
-    def primary_cregs(self) -> set[CregName]:
+    def primary_cregs(self) -> set[str]:
         """The names of the "primary" classical registers."""
         return self._primary_cregs
 
@@ -118,9 +114,9 @@ class PostSelectionSummary:
 
 
 def _get_primary_and_ps_cregs(
-    cregs: dict[CregName, ClassicalRegister],
+    cregs: dict[str, ClassicalRegister],
     post_selection_suffix: str,
-) -> tuple[dict[CregName, ClassicalRegister], dict[CregName, ClassicalRegister]]:
+) -> tuple[dict[str, ClassicalRegister], dict[str, ClassicalRegister]]:
     """Split a dictionary of registers into primary and post selection registers.
 
     Args:
@@ -137,8 +133,8 @@ def _get_primary_and_ps_cregs(
 
 
 def _validate_cregs(
-    primary_cregs: dict[CregName, ClassicalRegister],
-    ps_cregs: dict[CregName, ClassicalRegister],
+    primary_cregs: dict[str, ClassicalRegister],
+    ps_cregs: dict[str, ClassicalRegister],
     post_selection_suffix: str,
 ):
     """Validate primary and post selection registers.
@@ -176,9 +172,9 @@ def _validate_cregs(
 
 def _get_measure_maps(
     dag: DAGCircuit,
-    primary_cregs: dict[CregName, ClassicalRegister],
-    ps_cregs: dict[CregName, ClassicalRegister],
-) -> tuple[dict[QubitIdx, tuple[CregName, ClbitIdx]], dict[QubitIdx, tuple[CregName, ClbitIdx]]]:
+    primary_cregs: dict[str, ClassicalRegister],
+    ps_cregs: dict[str, ClassicalRegister],
+) -> tuple[dict[int, tuple[str, int]], dict[int, tuple[str, int]]]:
     """Map the qubits in ``dag`` to the registers and clbits used to measure them.
 
     Args:
@@ -204,8 +200,8 @@ def _get_measure_maps(
 
     qubit_map = {qubit: idx for idx, qubit in enumerate(dag.qubits)}
 
-    measure_map: dict[QubitIdx, tuple[CregName, ClbitIdx]] = {}
-    measure_map_ps: dict[QubitIdx, tuple[CregName, ClbitIdx]] = {}
+    measure_map: dict[int, tuple[str, int]] = {}
+    measure_map_ps: dict[int, tuple[str, int]] = {}
 
     for node in dag.topological_op_nodes():
         if node.op.name == "measure":
@@ -220,8 +216,8 @@ def _get_measure_maps(
 
 
 def _validate_measure_maps(
-    measure_map: dict[QubitIdx, tuple[CregName, ClbitIdx]],
-    measure_map_ps: dict[QubitIdx, tuple[CregName, ClbitIdx]],
+    measure_map: dict[int, tuple[str, int]],
+    measure_map_ps: dict[int, tuple[str, int]],
     post_selection_suffix: str,
 ):
     """Validate measurement maps.
@@ -264,8 +260,8 @@ def _validate_measure_maps(
 
 def _get_edges(
     coupling_map: CouplingMap,
-    measure_map: dict[QubitIdx, tuple[CregName, ClbitIdx]],
-) -> set[frozenset[QubitIdx]]:
+    measure_map: dict[int, tuple[str, int]],
+) -> set[frozenset[int]]:
     """Get the set of edges that are relevant for edge-based post selection."""
     return {
         frozenset(edge)
