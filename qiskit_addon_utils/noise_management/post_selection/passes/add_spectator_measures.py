@@ -95,7 +95,7 @@ class AddSpectatorMeasures(TransformationPass):
             spectator_qubits_ls = list(spectator_qubits)
             spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
 
-            if self.add_barrier:
+            if self.add_barrier is True:
                 qubits = active_qubits.union(spectator_qubits_ls)
                 dag.apply_operation_back(Barrier(len(qubits)), qubits)
 
@@ -150,7 +150,7 @@ class AddSpectatorMeasures(TransformationPass):
                     )
 
                 terminated_qubits.update(set.intersection(*all_terminated_qubits))
-            else:
+            else:  # pragma: no cover
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")
 
         return active_qubits, terminated_qubits

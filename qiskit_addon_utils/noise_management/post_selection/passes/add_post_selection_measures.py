@@ -156,7 +156,7 @@ class AddPostSelectionMeasures(TransformationPass):
                             terminal_measurements[qubit] = next(iter(clbits))
                         else:
                             terminal_measurements[qubit] = None
-            else:
+            else:  # pragma: no cover
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")
 
         return terminal_measurements

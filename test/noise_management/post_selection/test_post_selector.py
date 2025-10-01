@@ -12,6 +12,7 @@
 """Tests for ``PostSelector``."""
 
 import numpy as np
+import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit_addon_utils.noise_management.post_selection import PostSelectionSummary, PostSelector
 
@@ -168,3 +169,24 @@ def test_edge_based_post_selection():
     expected = np.ones(outer_shape, dtype=bool)
     expected[1, 10] = False
     assert np.all(mask == expected)
+
+
+def test_raises():
+    """Test that the PostSelector raises."""
+    qreg = QuantumRegister(5, "q")
+    creg0 = ClassicalRegister(3, "alpha")
+    creg0_ps = ClassicalRegister(3, "alpha_ps")
+    circuit = QuantumCircuit(qreg, creg0, creg0_ps)
+
+    post_selector = PostSelector.from_circuit(circuit, [])
+
+    with pytest.raises(ValueError, match="Strategy 'invalid' is not supported"):
+        post_selector.compute_mask({}, strategy="invalid")
+
+    result = {"alpha": np.zeros((1, 2), dtype=bool), "alpha_ps": np.zeros((2, 2), dtype=bool)}
+    with pytest.raises(ValueError, match="arrays of inconsistent shapes"):
+        post_selector.compute_mask(result, strategy="node")
+
+    result = {"beta": np.zeros((1, 2), dtype=bool)}
+    with pytest.raises(ValueError, match="Result does not contain creg"):
+        post_selector.compute_mask(result, strategy="node")

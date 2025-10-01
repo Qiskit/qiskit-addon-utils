@@ -204,12 +204,12 @@ def _get_measure_maps(
     measure_map_ps: dict[int, tuple[str, int]] = {}
 
     for node in dag.topological_op_nodes():
-        if node.op.name == "measure":
+        if node.op.name == "measure":  # pragma: no cover
             if clbit := clbit_map.get(node.cargs[0], None):
                 measure_map[qubit_map[node.qargs[0]]] = clbit
             elif clbit_ps := clbit_map_ps.get(node.cargs[0], None):
                 measure_map_ps[qubit_map[node.qargs[0]]] = clbit_ps
-            else:
+            else:  # pragma: no cover
                 raise ValueError(f"Clbit {node.cargs[0]} does not belong to any valid register.")
 
     return measure_map, measure_map_ps

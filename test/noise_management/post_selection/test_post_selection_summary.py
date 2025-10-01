@@ -130,17 +130,17 @@ def test_invalid_measure_maps_raises():
     circuit = QuantumCircuit(qreg, creg0, creg0_ps)
     circuit.measure(qreg[0], creg0[0])
     circuit.measure(qreg, creg0_ps)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="1 measurements and 3 post selection measurements"):
         PostSelectionSummary.from_circuit(circuit, [])
 
     circuit = QuantumCircuit(qreg, creg0, creg0_ps)
     circuit.measure(qreg[0], creg0[0])
     circuit.measure(qreg[1], creg0_ps[0])
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Missing post selection measurement on qubit 0"):
         PostSelectionSummary.from_circuit(circuit, [])
 
     circuit = QuantumCircuit(qreg, creg0, creg0_ps)
     circuit.measure(qreg[0], creg0[0])
     circuit.measure(qreg[0], creg0_ps[1])
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Expected measurement on qubit 0 writing to bit 0"):
         PostSelectionSummary.from_circuit(circuit, [])

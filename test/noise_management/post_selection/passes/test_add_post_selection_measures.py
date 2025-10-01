@@ -14,8 +14,10 @@
 import unittest
 
 import numpy as np
+import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit.circuit.library import RXGate
+from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.passmanager import PassManager
 from qiskit_addon_utils.noise_management.post_selection.passes import (
     AddPostSelectionMeasures,
@@ -112,6 +114,7 @@ class TestAddPostSelectionMeasures(unittest.TestCase):
         creg_ps = ClassicalRegister(2, "c_ps")
 
         circuit = QuantumCircuit(qreg, creg)
+        circuit.barrier(0)
         circuit.measure(0, creg[0])
         with circuit.if_test((creg[0], 0)) as else_:
             circuit.measure(1, creg[1])
@@ -124,6 +127,7 @@ class TestAddPostSelectionMeasures(unittest.TestCase):
             circuit.measure(3, creg[1])
 
         expected_circuit = QuantumCircuit(qreg, creg, creg_ps)
+        expected_circuit.barrier(0)
         expected_circuit.measure(0, creg[0])
         with expected_circuit.if_test((creg[0], 0)) as else_:
             expected_circuit.measure(1, creg[1])
@@ -142,8 +146,6 @@ class TestAddPostSelectionMeasures(unittest.TestCase):
 
         pm = PassManager([AddPostSelectionMeasures()])
 
-        print(expected_circuit.draw(idle_wires=0))
-        print(pm.run(circuit).draw(idle_wires=0))
         self.assertEqual(expected_circuit, pm.run(circuit))
 
     def test_circuit_with_mid_circuit_measurements(self):
@@ -220,8 +222,6 @@ class TestAddPostSelectionMeasures(unittest.TestCase):
         expected_circuit.measure(0, creg_ps[0])
 
         pm = PassManager([AddPostSelectionMeasures(post_selection_suffix="_ciao")])
-        print(expected_circuit.draw())
-        print(pm.run(circuit).draw())
         self.assertEqual(expected_circuit, pm.run(circuit))
 
     def test_x_pulse_type(self):
@@ -242,3 +242,14 @@ class TestAddPostSelectionMeasures(unittest.TestCase):
 
         pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
         self.assertEqual(expected_circuit_rx, pm.run(circuit))
+
+    def test_raises(self):
+        """Test that the pass raises."""
+        with pytest.raises(ValueError, match="not a valid input"):
+            AddPostSelectionMeasures(x_pulse_type="rz")
+
+        pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
+        circuit = QuantumCircuit(1)
+        circuit.reset(0)
+        with pytest.raises(TranspilerError, match="``'reset'`` is not supported"):
+            pm.run(circuit)

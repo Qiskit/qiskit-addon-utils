@@ -13,8 +13,10 @@
 
 import unittest
 
+import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit.dagcircuit.exceptions import DAGCircuitError
+from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.passmanager import PassManager
 from qiskit_addon_utils.noise_management.post_selection.passes import AddSpectatorMeasures
 from qiskit_ibm_runtime.fake_provider import FakeBrisbane
@@ -49,6 +51,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         circuit.h(7)
         circuit.cz(7, 17)
         circuit.cz(17, 27)
+        circuit.barrier(17)
         circuit.cz(27, 28)
         circuit.measure(7, creg[0])
         circuit.measure(17, creg[1])
@@ -59,6 +62,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         expected_circuit.h(7)
         expected_circuit.cz(7, 17)
         expected_circuit.cz(17, 27)
+        expected_circuit.barrier(17)
         expected_circuit.cz(27, 28)
         for idx, qubit in enumerate(circuit_qubits):
             expected_circuit.measure(qubit, creg[idx])
@@ -244,12 +248,50 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         pm = PassManager([AddSpectatorMeasures(coupling_map)])
         self.assertEqual(expected_circuit, pm.run(circuit))
 
+    def test_add_barrier_false(self):
+        """Test for ``add_barrier=False``."""
+        circuit_qubits = [7, 17, 27, 28]
+        spectator_qubits = [6, 8, 12, 26, 29, 30, 35]
+
+        qreg = QuantumRegister(self.backend.num_qubits, "q")
+        creg = ClassicalRegister(len(circuit_qubits), "c")
+        creg_spec = ClassicalRegister(len(spectator_qubits), "spec")
+
+        circuit = QuantumCircuit(qreg, creg)
+        circuit.h(7)
+        circuit.cz(7, 17)
+        circuit.cz(17, 27)
+        circuit.barrier(17)
+        circuit.cz(27, 28)
+        circuit.measure(7, creg[0])
+        circuit.measure(17, creg[1])
+        circuit.measure(27, creg[2])
+        circuit.measure(28, creg[3])
+
+        expected_circuit = QuantumCircuit(qreg, creg, creg_spec)
+        expected_circuit.h(7)
+        expected_circuit.cz(7, 17)
+        expected_circuit.cz(17, 27)
+        expected_circuit.barrier(17)
+        expected_circuit.cz(27, 28)
+        for idx, qubit in enumerate(circuit_qubits):
+            expected_circuit.measure(qubit, creg[idx])
+        for idx, spec_qubit in enumerate(spectator_qubits):
+            expected_circuit.measure(spec_qubit, creg_spec[idx])
+
+        pm = PassManager([AddSpectatorMeasures(self.coupling_map, add_barrier=False)])
+        self.assertEqual(expected_circuit, pm.run(circuit))
+
     def test_conflicting_creg(self):
         """Test that an error is raise when the circuit already contains a register named ``spectator_creg_name``."""
-        circuit = QuantumCircuit(QuantumRegister(1), ClassicalRegister(1, "my_name"))
-        circuit.x(0)
-
         pm = PassManager([AddSpectatorMeasures(coupling_map=[], spectator_creg_name="my_name")])
 
-        with self.assertRaises(DAGCircuitError):
+        circuit = QuantumCircuit(QuantumRegister(1), ClassicalRegister(1, "my_name"))
+        circuit.x(0)
+        with pytest.raises(DAGCircuitError, match="duplicate register"):
+            pm.run(circuit)
+
+        circuit = QuantumCircuit(1)
+        circuit.reset(0)
+        with pytest.raises(TranspilerError, match="``'reset'`` is not supported"):
             pm.run(circuit)
