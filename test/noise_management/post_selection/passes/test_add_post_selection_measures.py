@@ -17,7 +17,7 @@ import numpy as np
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit.circuit.library import RXGate
 from qiskit.transpiler.passmanager import PassManager
-from qiskit_addon_utils.noise_management.post_selection import AddPostSelectionMeasures, XSlowGate
+from qiskit_addon_utils.noise_management.post_selection.passes import AddPostSelectionMeasures, XSlowGate
 
 
 class TestAddPostSelectionMeasures(unittest.TestCase):

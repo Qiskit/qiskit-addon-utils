@@ -145,7 +145,7 @@ def _validate_cregs(
 
     This function checks that every primary register has a corresponding post selection register with
     matching names (expect for the suffix at the end of the posts election register's name) and the same
-    number of clbits.
+    number of clbits.s
 
     Args:
         primary_cregs: The primary cregs.
