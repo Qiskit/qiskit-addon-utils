@@ -19,7 +19,6 @@ from qiskit.dagcircuit.exceptions import DAGCircuitError
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.passmanager import PassManager
 from qiskit_addon_utils.noise_management.post_selection.passes import AddSpectatorMeasures
-from qiskit_ibm_runtime.fake_provider import FakeBrisbane
 
 
 class TestAddSpectatorMeasures(unittest.TestCase):
@@ -29,8 +28,24 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         """Setup."""
         super().setUp()
 
-        self.backend = FakeBrisbane()
-        self.coupling_map = self.backend.coupling_map
+        # The same coupling map as FakeBrisbane, but trimmed down
+        circuit_qubits = [7, 17, 27, 28]
+        spectator_qubits = [6, 8, 12, 26, 29, 30, 35]
+        self.coupling_map = [
+            (6, 7),
+            (7, 8),
+            (8, 9),
+            (11, 12),
+            (12, 17),
+            (13, 12),
+            (16, 8),
+            (17, 30),
+            (26, 25),
+            (27, 26),
+            (28, 29),
+            (28, 35),
+        ]
+        self.num_qubits = 127
         self.pm = PassManager([AddSpectatorMeasures(self.coupling_map)])
 
     def test_empty_circuit(self):
@@ -43,7 +58,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         circuit_qubits = [7, 17, 27, 28]
         spectator_qubits = [6, 8, 12, 26, 29, 30, 35]
 
-        qreg = QuantumRegister(self.backend.num_qubits, "q")
+        qreg = QuantumRegister(self.num_qubits, "q")
         creg = ClassicalRegister(len(circuit_qubits), "c")
         creg_spec = ClassicalRegister(len(spectator_qubits), "spec")
 
@@ -77,7 +92,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         circuit_qubits = [7, 17, 27, 28]
         spectator_qubits = [6, 8, 12, 26, 29, 30, 35]
 
-        qreg = QuantumRegister(self.backend.num_qubits, "q")
+        qreg = QuantumRegister(self.num_qubits, "q")
         creg = ClassicalRegister(len(circuit_qubits), "c")
         creg_spec = ClassicalRegister(len(spectator_qubits), "spec")
 
@@ -112,7 +127,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
 
     def test_circuit_with_mid_circuit_measurements(self):
         """Test the pass on a circuit with mid-circuit measurements."""
-        qreg = QuantumRegister(self.backend.num_qubits, "q")
+        qreg = QuantumRegister(self.num_qubits, "q")
         creg = ClassicalRegister(2, "c")
         creg_spec = ClassicalRegister(2, "spec")
 
@@ -170,7 +185,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
 
     def test_include_unmeasured(self):
         """Test the ``include_unmeasured`` argument of the pass."""
-        qreg = QuantumRegister(self.backend.num_qubits, "q")
+        qreg = QuantumRegister(self.num_qubits, "q")
         creg = ClassicalRegister(2, "c")
         creg_spec = ClassicalRegister(1, "spec")
 
@@ -196,7 +211,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
 
     def test_custom_spectator_creg_name(self):
         """Test the pass for a custom register name."""
-        qreg = QuantumRegister(self.backend.num_qubits, "q")
+        qreg = QuantumRegister(self.num_qubits, "q")
         creg = ClassicalRegister(4, "c")
 
         circuit = QuantumCircuit(qreg, creg)
@@ -214,7 +229,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
 
     def test_custom_coupling_map(self):
         """Test the pass for a custom coupling map."""
-        qreg = QuantumRegister(self.backend.num_qubits, "q")
+        qreg = QuantumRegister(self.num_qubits, "q")
         creg = ClassicalRegister(4, "c")
         creg_spec = ClassicalRegister(3, "spec")
 
@@ -253,7 +268,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         circuit_qubits = [7, 17, 27, 28]
         spectator_qubits = [6, 8, 12, 26, 29, 30, 35]
 
-        qreg = QuantumRegister(self.backend.num_qubits, "q")
+        qreg = QuantumRegister(self.num_qubits, "q")
         creg = ClassicalRegister(len(circuit_qubits), "c")
         creg_spec = ClassicalRegister(len(spectator_qubits), "spec")
 
