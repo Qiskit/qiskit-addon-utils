@@ -30,7 +30,7 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.23",
     "rustworkx>=0.15",
-    "qiskit>=1.2, <3",
+    "qiskit>=2.0, <3",
 ]
 
 [project.optional-dependencies]
