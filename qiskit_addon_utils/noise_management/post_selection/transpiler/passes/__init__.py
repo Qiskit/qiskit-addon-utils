@@ -11,12 +11,10 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Functions and classes to perform Post Selection."""
+"""A submodule with transpilation passes for post selection."""
 
-from .post_selection_summary import PostSelectionSummary
-from .post_selector import PostSelector
+from .add_post_selection_measures import AddPostSelectionMeasures
+from .add_spectator_measures import AddSpectatorMeasures
+from .xslow_gate import XSlowGate
 
-__all__ = [
-    "PostSelectionSummary",
-    "PostSelector",
-]
+__all__ = ["AddPostSelectionMeasures", "AddSpectatorMeasures", "XSlowGate"]

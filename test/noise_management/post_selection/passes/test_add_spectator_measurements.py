@@ -18,7 +18,9 @@ from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit.dagcircuit.exceptions import DAGCircuitError
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.passmanager import PassManager
-from qiskit_addon_utils.noise_management.post_selection.passes import AddSpectatorMeasures
+from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
+    AddSpectatorMeasures,
+)
 
 
 class TestAddSpectatorMeasures(unittest.TestCase):

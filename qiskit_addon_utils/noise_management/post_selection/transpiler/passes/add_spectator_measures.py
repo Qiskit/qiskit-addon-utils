@@ -25,7 +25,7 @@ from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ....constants import DEFAULT_SPECTATOR_CREG_NAME
+from .....constants import DEFAULT_SPECTATOR_CREG_NAME
 from .utils import validate_op_is_supported
 
 

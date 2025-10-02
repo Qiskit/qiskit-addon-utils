@@ -25,7 +25,7 @@ from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ....constants import DEFAULT_POST_SELECTION_SUFFIX
+from .....constants import DEFAULT_POST_SELECTION_SUFFIX
 from .utils import validate_op_is_supported
 from .xslow_gate import XSlowGate
 
