@@ -51,6 +51,7 @@ class AddPostSelectionMeasures(TransformationPass):
     def __init__(
         self,
         x_pulse_type: Literal["xslow", "rx"] = "xslow",
+        *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ):
         """Initialize the pass.
