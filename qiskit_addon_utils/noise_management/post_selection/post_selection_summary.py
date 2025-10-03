@@ -31,6 +31,7 @@ class PostSelectionSummary:
         primary_cregs: set[str],
         measure_map: dict[int, tuple[str, int]],
         edges: set[frozenset[int]],
+        *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ):
         """Initialize a ``PostSelectionSummary`` object.
