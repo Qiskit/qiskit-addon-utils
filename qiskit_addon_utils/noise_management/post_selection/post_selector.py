@@ -51,6 +51,7 @@ class PostSelector:
         cls,
         circuit: QuantumCircuit,
         coupling_map: CouplingMap | list[tuple[int, int]],
+        *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ) -> PostSelector:
         """Initialize from quantum circuits.
