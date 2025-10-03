@@ -20,7 +20,7 @@ from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler import CouplingMap
 
-from ...constants import DEFAULT_POST_SELECTION_SUFFIX
+from ..constants import DEFAULT_POST_SELECTION_SUFFIX
 
 
 class PostSelectionSummary:

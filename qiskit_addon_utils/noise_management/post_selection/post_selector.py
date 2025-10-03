@@ -22,7 +22,7 @@ from numpy.typing import NDArray
 from qiskit import QuantumCircuit
 from qiskit.transpiler import CouplingMap
 
-from ...constants import DEFAULT_POST_SELECTION_SUFFIX
+from ..constants import DEFAULT_POST_SELECTION_SUFFIX
 from .post_selection_summary import PostSelectionSummary
 
 
