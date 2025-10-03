@@ -28,9 +28,6 @@ from .post_selection_summary import PostSelectionSummary
 
 class PostSelector:
     """A class to process the results of quantum programs based on the outcome of post selection measurements.
-
-    Args:
-        summary: A summary of the circuit being post selected.
     """
 
     def __init__(self, summary: PostSelectionSummary):
