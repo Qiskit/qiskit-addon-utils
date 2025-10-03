@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Post selection post-processing functions."""
+"""Noise management tools."""
 
 from .post_selection import PostSelectionSummary, PostSelector
 
