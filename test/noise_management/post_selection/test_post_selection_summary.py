@@ -20,6 +20,7 @@ from qiskit_addon_utils.noise_management.post_selection import PostSelectionSumm
 
 def test_init():
     """Test the init constructors."""
+    post_selection_suffix = "my_suffix"
     summary = PostSelectionSummary(
         primary_cregs := {"alpha", "beta"},
         measure_map := {
@@ -30,7 +31,7 @@ def test_init():
             4: ("beta", 1),
         },
         edges := {frozenset(pair) for pair in [(0, 1), (1, 2), (2, 3), (3, 4)]},
-        post_selection_suffix := "my_suffix",
+        post_selection_suffix=post_selection_suffix,
     )
 
     assert summary.primary_cregs == primary_cregs
@@ -59,10 +60,11 @@ def test_constructor_from_circuit():
     circuit.measure(qreg[3], creg1_ps[0])
     circuit.measure(qreg[4], creg1_ps[1])
 
+    post_selection_suffix = "_ps"
     summary = PostSelectionSummary.from_circuit(
         circuit,
         coupling_map := [(0, 1), (1, 2), (2, 3), (3, 4)],
-        post_selection_suffix := "_ps",
+        post_selection_suffix=post_selection_suffix,
     )
 
     assert summary.primary_cregs == {"alpha", "beta"}
@@ -79,6 +81,7 @@ def test_constructor_from_circuit():
 
 def test_eq():
     """Test equality between summaries."""
+    post_selection_suffix = "my_suffix"
     summary = PostSelectionSummary(
         primary_cregs := {"alpha", "beta"},
         measure_map := {
@@ -89,19 +92,23 @@ def test_eq():
             4: ("beta", 1),
         },
         edges := {frozenset(pair) for pair in [(0, 1), (1, 2), (2, 3), (3, 4)]},
-        post_selection_suffix := "my_suffix",
+        post_selection_suffix=post_selection_suffix,
     )
 
     assert summary == deepcopy(summary)
     assert summary != 3
-    assert summary != PostSelectionSummary({"alpha"}, measure_map, edges, post_selection_suffix)
     assert summary != PostSelectionSummary(
-        primary_cregs, {0: ("alpha", 0)}, edges, post_selection_suffix
+        {"alpha"}, measure_map, edges, post_selection_suffix=post_selection_suffix
     )
     assert summary != PostSelectionSummary(
-        primary_cregs, measure_map, {frozenset([0, 1])}, post_selection_suffix
+        primary_cregs, {0: ("alpha", 0)}, edges, post_selection_suffix=post_selection_suffix
     )
-    assert summary != PostSelectionSummary(primary_cregs, measure_map, edges, "ciao")
+    assert summary != PostSelectionSummary(
+        primary_cregs, measure_map, {frozenset([0, 1])}, post_selection_suffix=post_selection_suffix
+    )
+    assert summary != PostSelectionSummary(
+        primary_cregs, measure_map, edges, post_selection_suffix="ciao"
+    )
 
 
 def test_invalid_cregs_raises():

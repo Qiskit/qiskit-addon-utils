@@ -240,7 +240,7 @@ def test_x_pulse_type():
 
 def test_raises():
     """Test that the pass raises."""
-    with pytest.raises(ValueError, match="not a valid input"):
+    with pytest.raises(ValueError):
         AddPostSelectionMeasures(x_pulse_type="rz")
 
     pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])

@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from enum import Enum
 
 import numpy as np
 from qiskit.circuit import ClassicalRegister, Clbit, ControlFlowOp, Qubit
@@ -28,6 +28,16 @@ from qiskit.transpiler.exceptions import TranspilerError
 from ....constants import DEFAULT_POST_SELECTION_SUFFIX
 from .utils import validate_op_is_supported
 from .xslow_gate import XSlowGate
+
+
+class XPulseType(str, Enum):
+    """The type of X-pulse to apply for the post-selection measurements."""
+
+    XSLOW = "xslow"
+    """An ``xslow`` gate."""
+
+    RX = "rx"
+    """Twenty ``rx`` gates with angles ``pi/20``."""
 
 
 class AddPostSelectionMeasures(TransformationPass):
@@ -50,7 +60,7 @@ class AddPostSelectionMeasures(TransformationPass):
 
     def __init__(
         self,
-        x_pulse_type: Literal["xslow", "rx"] = "xslow",
+        x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ):
@@ -61,15 +71,13 @@ class AddPostSelectionMeasures(TransformationPass):
             post_selection_suffix: A fixed suffix to append to the names of the classical registers when copying them.
         """
         super().__init__()
-        self.x_pulse_type = x_pulse_type
+        self.x_pulse_type = XPulseType(x_pulse_type)
         self.post_selection_suffix = post_selection_suffix
 
-        if self.x_pulse_type == "xslow":
+        if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate()]
-        elif self.x_pulse_type == "rx":
-            self.pulse_sequence = [RXGate(np.pi / 20)] * 20
         else:
-            raise ValueError(f"'{x_pulse_type}' is not a valid input for ``x_pulse_type``.")
+            self.pulse_sequence = [RXGate(np.pi / 20)] * 20
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Find what qubits have a terminal measurement
