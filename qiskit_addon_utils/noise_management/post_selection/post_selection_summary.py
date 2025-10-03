@@ -74,6 +74,7 @@ class PostSelectionSummary:
         cls,
         circuit: QuantumCircuit,
         coupling_map: Union[CouplingMap, list[tuple[int, int]]],
+        *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ):
         """Initialize from quantum circuits.
