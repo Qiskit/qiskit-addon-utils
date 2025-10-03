@@ -102,7 +102,7 @@ class PostSelectionSummary:
             set(primary_cregs),
             measure_map,
             _get_edges(coupling_map, measure_map),
-            post_selection_suffix,
+            post_selection_suffix=post_selection_suffix,
         )
 
     def __eq__(self, other: Any) -> bool:  # noqa: D105

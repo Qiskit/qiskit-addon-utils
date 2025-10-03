@@ -27,8 +27,7 @@ from .post_selection_summary import PostSelectionSummary
 
 
 class PostSelector:
-    """A class to process the results of quantum programs based on the outcome of post selection measurements.
-    """
+    """A class to process the results of quantum programs based on the outcome of post selection measurements."""
 
     def __init__(self, summary: PostSelectionSummary):
         """Initialize a ``PostSelector`` object.
@@ -65,7 +64,9 @@ class PostSelector:
             else CouplingMap(couplinglist=coupling_map)
         )
 
-        summary = PostSelectionSummary.from_circuit(circuit, coupling_map, post_selection_suffix)
+        summary = PostSelectionSummary.from_circuit(
+            circuit, coupling_map, post_selection_suffix=post_selection_suffix
+        )
         return PostSelector(summary)
 
     def compute_mask(
