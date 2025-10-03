@@ -28,9 +28,6 @@ from .post_selection_summary import PostSelectionSummary
 
 class PostSelector:
     """A class to process the results of quantum programs based on the outcome of post selection measurements.
-
-    Args:
-        summary: A summary of the circuit being post selected.
     """
 
     def __init__(self, summary: PostSelectionSummary):
@@ -51,6 +48,7 @@ class PostSelector:
         cls,
         circuit: QuantumCircuit,
         coupling_map: CouplingMap | list[tuple[int, int]],
+        *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ) -> PostSelector:
         """Initialize from quantum circuits.

@@ -31,6 +31,7 @@ class PostSelectionSummary:
         primary_cregs: set[str],
         measure_map: dict[int, tuple[str, int]],
         edges: set[frozenset[int]],
+        *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ):
         """Initialize a ``PostSelectionSummary`` object.
@@ -73,6 +74,7 @@ class PostSelectionSummary:
         cls,
         circuit: QuantumCircuit,
         coupling_map: Union[CouplingMap, list[tuple[int, int]]],
+        *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
     ) -> "PostSelectionSummary":
         """Initialize from quantum circuits.
