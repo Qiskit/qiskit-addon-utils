@@ -15,7 +15,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from enum import Enum
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -24,6 +25,17 @@ from qiskit.transpiler import CouplingMap
 
 from ..constants import DEFAULT_POST_SELECTION_SUFFIX
 from .post_selection_summary import PostSelectionSummary
+
+
+class PostSelectionStrategy(str, Enum):
+    """The supported post selection strategies."""
+
+    NODE = "node"
+    """Discard every shot where one or more bits failed to flip. Keep every other shot."""
+
+    EDGE = "edge"
+    """Discard every shot where there exists a pair of neighbouring qubits for which both of
+    the bits failed to flip. Keep every other shot."""
 
 
 class PostSelector:
@@ -70,20 +82,15 @@ class PostSelector:
         return PostSelector(summary)
 
     def compute_mask(
-        self, result: dict[str, NDArray[np.bool]], strategy: Literal["node", "edge"] = "node"
+        self,
+        result: dict[str, NDArray[np.bool]],
+        strategy: str | PostSelectionStrategy = PostSelectionStrategy.NODE,
     ) -> NDArray[np.bool]:
         """Compute boolean masks indicating what shots should be kept or discarded for the given result.
 
         This function compares the bits returned by every pair of measurement and post selection measurement,
-        identifying all those that failed to flip. The following strategies for deciding if a shot should be
-        kept or discarded are available:
-
-            * ``'node'``: Discard every shot where one or more bits failed to flip. Keep every other shot.
-            * ``'edge'``: Discard every shot where there exists a pair of neighbouring qubits for which both of
-                the bits failed to flip. Keep every other shot.
-
-        The shots that should be kept are marked as ``True`` in the returned mask, those that should be discarded
-        are marked as ``False``.
+        identifying all those that failed to flip. The shots that should be kept are marked as ``True`` in the
+        returned mask, those that should be discarded are marked as ``False``.
 
         By construction, the returned mask has the same shape as the arrays in corresponding result, but with one
         fewer dimension (the last axis of every array, over clbits, is not present in the mask).
@@ -93,12 +100,11 @@ class PostSelector:
                 a dictionary.
             strategy: The post selection strategy used to process the result.
         """
-        if strategy == "node":
+        strategy = PostSelectionStrategy(strategy)
+        if strategy == PostSelectionStrategy.NODE:
             _compute_mask = _compute_mask_by_node
-        elif strategy == "edge":
-            _compute_mask = _compute_mask_by_edge
         else:
-            raise ValueError(f"Strategy '{strategy}' is not supported.")
+            _compute_mask = _compute_mask_by_edge
 
         return _compute_mask(result, self.summary)
 

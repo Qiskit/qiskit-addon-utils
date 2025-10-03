@@ -14,9 +14,10 @@
 """Functions and classes to perform Post Selection."""
 
 from .post_selection_summary import PostSelectionSummary
-from .post_selector import PostSelector
+from .post_selector import PostSelectionStrategy, PostSelector
 
 __all__ = [
+    "PostSelectionStrategy",
     "PostSelectionSummary",
     "PostSelector",
 ]

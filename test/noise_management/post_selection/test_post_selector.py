@@ -180,7 +180,7 @@ def test_raises():
 
     post_selector = PostSelector.from_circuit(circuit, [])
 
-    with pytest.raises(ValueError, match="Strategy 'invalid' is not supported"):
+    with pytest.raises(ValueError):
         post_selector.compute_mask({}, strategy="invalid")
 
     result = {"alpha": np.zeros((1, 2), dtype=bool), "alpha_ps": np.zeros((2, 2), dtype=bool)}
