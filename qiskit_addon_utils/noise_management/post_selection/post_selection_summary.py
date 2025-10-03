@@ -74,7 +74,7 @@ class PostSelectionSummary:
         circuit: QuantumCircuit,
         coupling_map: Union[CouplingMap, list[tuple[int, int]]],
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
-    ):
+    ) -> "PostSelectionSummary":
         """Initialize from quantum circuits.
 
         Args:
@@ -136,7 +136,7 @@ def _validate_cregs(
     primary_cregs: dict[str, ClassicalRegister],
     ps_cregs: dict[str, ClassicalRegister],
     post_selection_suffix: str,
-):
+) -> None:
     """Validate primary and post selection registers.
 
     This function checks that every primary register has a corresponding post selection register with
@@ -219,7 +219,7 @@ def _validate_measure_maps(
     measure_map: dict[int, tuple[str, int]],
     measure_map_ps: dict[int, tuple[str, int]],
     post_selection_suffix: str,
-):
+) -> None:
     """Validate measurement maps.
 
     This function checks that the measurement maps of the primary registers and those of the post selection
