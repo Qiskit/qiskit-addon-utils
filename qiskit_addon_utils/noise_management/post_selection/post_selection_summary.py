@@ -13,7 +13,9 @@
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
 """Post selection summary."""
 
-from typing import Any, Union
+from __future__ import annotations
+
+from typing import Any
 
 from qiskit.circuit import ClassicalRegister, QuantumCircuit
 from qiskit.converters import circuit_to_dag
@@ -73,10 +75,10 @@ class PostSelectionSummary:
     def from_circuit(
         cls,
         circuit: QuantumCircuit,
-        coupling_map: Union[CouplingMap, list[tuple[int, int]]],
+        coupling_map: CouplingMap | list[tuple[int, int]],
         *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
-    ) -> "PostSelectionSummary":
+    ) -> PostSelectionSummary:
         """Initialize from quantum circuits.
 
         Args:
