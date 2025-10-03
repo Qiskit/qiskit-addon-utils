@@ -1,6 +1,6 @@
-﻿============================================================
-passes (:mod:`qiskit_addon_utils.slicing.transpiler.passes`)
-============================================================
+﻿===============================================================================
+slicing_transpiler_passes (:mod:`qiskit_addon_utils.slicing.transpiler.passes`)
+===============================================================================
 
 .. automodule:: qiskit_addon_utils.slicing.transpiler.passes
    :no-members:
