@@ -61,7 +61,7 @@ style = [
 ]
 lint = [
     "qiskit-addon-utils[style]",
-    "mypy==1.16.1",
+    "mypy==1.18.2",
     "pylint==3.3.8",
     "reno>=4.1",
 ]
