@@ -6,4 +6,4 @@ features:
     the results.
 upgrade:
   - |
-    This addition required bumping the minimum version of Qiskit SDK to 2.0.
+    This addition requires bumping the version of Qiskit SDK to at least 2.0.
