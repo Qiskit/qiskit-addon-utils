@@ -12,6 +12,8 @@
 
 """Utility functions for calculating expectation values of observables."""
 
+from __future__ import annotations
+
 import numpy as np
 from qiskit.quantum_info import Pauli, PauliLindbladMap, PauliList, SparsePauliOp
 

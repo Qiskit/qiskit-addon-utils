@@ -12,6 +12,8 @@
 
 """Utility functions for selecting efficient bases for measurement of observables."""
 
+from __future__ import annotations
+
 import numpy as np
 from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp
 
