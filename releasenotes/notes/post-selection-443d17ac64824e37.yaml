@@ -1,0 +1,9 @@
+---
+features:
+  - |
+    Add the transpiler passes required to pre-process the circuits, as well as the
+    ``PostSelector`` and ``PostSelectionSummary`` objects required to post-process
+    the results.
+upgrade:
+  - |
+    This addition requires bumping the version of Qiskit SDK to at least 2.0.
