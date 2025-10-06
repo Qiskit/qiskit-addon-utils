@@ -49,6 +49,7 @@ class AddSpectatorMeasures(TransformationPass):
     def __init__(
         self,
         coupling_map: CouplingMap | list[tuple[int, int]],
+        *,
         include_unmeasured: bool = True,
         spectator_creg_name: str = DEFAULT_SPECTATOR_CREG_NAME,
         add_barrier: bool = True,
