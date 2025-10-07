@@ -100,9 +100,8 @@ def observable_to_dict(observable: SparsePauliOp) -> dict[str, np.complex128]:
         The converted observable.
     """
     observable_dict = {}
-    for pauli in observable.paulis:
-        for coeff in observable.coeffs:
-            observable_dict[pauli.to_label()] = coeff
+    for pauli, coeff in zip(observable.paulis, observable.coeffs):
+        observable_dict[pauli.to_label()] = coeff
     return observable_dict
 
 
