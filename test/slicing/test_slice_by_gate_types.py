@@ -57,3 +57,19 @@ class TestSliceByGateTypes(unittest.TestCase):
                 self.assertEqual(targets[i][0], op_name)
                 for inst in slice_.data:
                     self.assertEqual(op_name, inst.operation.name)
+        with self.subTest("Circuit with classical bits"):
+            qc = QuantumCircuit(2)
+            qc.x(0)
+            qc.x(1)
+            qc.cx(0, 1)
+            qc.measure_all()  # Add classical bits to the circuit
+            slices = slice_by_gate_types(qc)
+            self.assertEqual(4, len(slices))
+            targets = (("x", 2), ("cx", 1), ("barrier", 1), ("measure", 2))
+            for i, slice_ in enumerate(slices):
+                self.assertEqual(qc.num_clbits, slice_.num_clbits)
+                self.assertEqual(targets[i][1], len(slice_.data))
+                op_name = slice_.data[0].operation.name
+                self.assertEqual(targets[i][0], op_name)
+                for inst in slice_.data:
+                    self.assertEqual(op_name, inst.operation.name)
