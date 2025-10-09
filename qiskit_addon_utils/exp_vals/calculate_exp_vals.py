@@ -69,7 +69,7 @@ def calculate_expectation_values(
                 
                 - (..., param_dim1, ..., param_dimN, num layers)
 
-        gamma: The gamma factor associated with the mitigation.
+        gamma: The gamma factor associated with the mitigation. If ``None``, ``gamma`` will be calculated automatically.
 
     Returns:
         The expectation value and variance for each observable and each parameter vector.
