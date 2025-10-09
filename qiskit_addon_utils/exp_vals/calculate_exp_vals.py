@@ -32,7 +32,9 @@ def calculate_expectation_values(
     where :math:`k` refers to the number of layered noise injections into the circuit.
     
     If ``signs`` are provided but ``gamma`` is ``None``, the gammas will be calculated
-    automatically for each basis Pauli and parametrization.
+    automatically for each basis/parametrization pair with the formula :math:`\gamma = \frac{k}{(k_{even} - k_{odd})}`,
+    where :math:`k` is the total number of randomizations, and :math:`k_{even},k_{odd}`
+    are the number of randomizations associated with an even/odd number of positive signs.
     
     .. note::
         This function is designed for compatibility with the ``qiskit_ibm_runtime.Executor``
