@@ -68,8 +68,10 @@ def calculate_expectation_values(
                     if signs is not None:
                         if gamma is not None:
                             expval *= gamma
+                            var *= gamma**2
                         else:
                             expval *= gamma_per_base_per_parameter[i, j]
+                            var *= gamma_per_base_per_parameter[i, j]**2
                     exp_vals[obs_index, j] += sign * expval.real
                     exp_vars[obs_index, j] += var.real
 
