@@ -49,8 +49,9 @@ def slice_by_gate_types(circuit: QuantumCircuit) -> list[QuantumCircuit]:
         # NOTE: due to our transpiler pass above, we know that each op_node in this circuit will be
         # an Instruction instance representing a slice
         qargs = [circuit.find_bit(q).index for q in op_node.qargs]
-        qc = QuantumCircuit(circuit.num_qubits)
-        qc.append(op_node.op, qargs)
+        cargs = [circuit.find_bit(c).index for c in op_node.cargs]
+        qc = QuantumCircuit(circuit.num_qubits, circuit.num_clbits)
+        qc.append(op_node.op, qargs, cargs)
         slices.append(qc.decompose())
 
     return slices
