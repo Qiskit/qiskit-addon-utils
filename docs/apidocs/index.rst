@@ -13,3 +13,4 @@ This package contains functionality which is meant to supplement workflows invol
    qiskit_addon_utils.problem_generators
    qiskit_addon_utils.slicing
    qiskit_addon_utils.slicing.transpiler.passes
+   qiskit_addon_utils.exp_vals

@@ -29,13 +29,43 @@ def calculate_expectation_values(
     If signs are given, mitigated expectation values of observables are calculated.
     For an observable O, the mitigated expectation value is calculated as:
     :math:`<\tilde{O}> = -1^k * \gamma * <O>`
-    while k refers to the number of layered noise injections into the circuit.
+    where :math:`k` refers to the number of layered noise injections into the circuit.
+    
     If gamma is not given, calculate it using only the signs.
+    
+    .. note::
+        This function is designed for compatibility with the ``qiskit_ibm_runtime.Executor``
+        primitive. There are strong assumptions made about the shapes of the ``meas_results``
+        and ``signs`` inputs, which are based on the shapes output from ``Executor`` results.
 
     Args:
-        meas_results: measured state for each qubit, for each shot, for all the parameters and bases measured.
-        reverser: Map for each measured basis to the relevant Paulis and their coefficients in each observable.
-        signs: Whether a noise was injected for each layer at each sampling batch.
+        meas_results: Measurement results. This boolean array is expected to be formatted as follows:
+
+            - The final two dimensions should always be num shots and num measurements respectively.
+            - If only one basis/randomization is measured, a dimension should not be allocated; otherwise, these should be the first two dimensions respectively. Valid shapes include:
+
+                - (num shots, num meas)
+                - (num rand, num shots, num meas)
+                - (num bases, num rand, num shots, num meas)
+            
+            - Any sampled parameter sets should be specified along the dimensions immediately preceding the final two.
+                
+                - (..., param_dim1, ..., param_dimN, num shots, num meas)
+
+        reverser: Map for each measured basis Pauli to the associated qubit-wise commuting Pauli terms and their coefficients. 
+        signs: Signs associated with PEC-related measurements. This boolean array is expected to be formatted as follows:
+            
+            - The final dimension should always be associated with the mitigated circuit layers.
+            - If only one basis/randomization is measured, a dimension should not be allocated; otherwise, these should be the first two dimensions respectively. Valid shapes are:
+
+                - (num layers)
+                - (num rand, num layers)
+                - (num bases, num rand, num layers)
+            
+            - Any sampled parameter sets should be specified along the dimensions immediately preceding the final two.
+                
+                - (..., param_dim1, ..., param_dimN, num layers)
+
         gamma: The gamma factor associated with the mitigation.
 
     Returns:
