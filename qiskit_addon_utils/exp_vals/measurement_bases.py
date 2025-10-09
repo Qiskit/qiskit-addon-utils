@@ -38,7 +38,7 @@ def get_measurement_bases(
         observables = [observables]
     combined_observables = sum(observables)
     pauli_groups = combined_observables.paulis.group_commuting(qubit_wise=qubit_wise)
-    bases = PauliList([meas_basis_for_pauli_group(group) for group in pauli_groups])
+    bases = PauliList([_meas_basis_for_pauli_group(group) for group in pauli_groups])
     reverser: dict[Pauli, list[SparsePauliOp]] = {}
     for basis, group in zip(bases, pauli_groups):
         reverser[basis] = [[] for _ in range(len(observables))]
@@ -59,7 +59,7 @@ def get_measurement_bases(
     return bases, reverser
 
 
-def meas_basis_for_pauli_group(group: list[Pauli] | PauliList) -> Pauli:
+def _meas_basis_for_pauli_group(group: PauliList) -> Pauli:
     """Find the collective measurement basis of a given commutative Pauli group.
 
     Args:
@@ -67,27 +67,10 @@ def meas_basis_for_pauli_group(group: list[Pauli] | PauliList) -> Pauli:
 
     Returns:
         The Pauli basis to measure that represents the given Pauli group.
-
-    Raises:
-        ValueError: Some Paulis in the list have different numbers of qubits.
     """
-    # assuming the length of all the Paulis in the group is the same
-    num_qubits = len(group[0])
-    for pauli in group:
-        if len(pauli) != num_qubits:
-            raise ValueError("All of the Paulis in the list must be same size.")
-    basis = ""
-    for index in range(num_qubits):
-        index_ops = [element.to_label()[index] for element in group]
-        if "X" in index_ops:
-            basis += "X"
-        elif "Y" in index_ops:
-            basis += "Y"
-        elif "Z" in index_ops:
-            basis += "Z"
-        else:
-            basis += "I"
-    return Pauli(basis)
+    sum_z = group.z.sum(axis=0, dtype=bool)
+    sum_x = group.x.sum(axis=0, dtype=bool)
+    return Pauli((sum_z, sum_x))
 
 
 def observable_to_dict(observable: SparsePauliOp) -> dict[str, np.complex128]:
