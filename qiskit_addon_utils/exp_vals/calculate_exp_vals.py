@@ -26,12 +26,13 @@ def calculate_expectation_values(
 ) -> tuple[np.typing.NDArray[np.float64], np.typing.NDArray[np.float64]]:
     r"""Return the expectation values of the observables represented by the reverser.
 
-    If signs are given, mitigated expectation values of observables are calculated.
+    If ``signs`` are given, mitigated expectation values of observables are calculated.
     For an observable O, the mitigated expectation value is calculated as:
     :math:`<\tilde{O}> = -1^k * \gamma * <O>`
     where :math:`k` refers to the number of layered noise injections into the circuit.
     
-    If gamma is not given, calculate it using only the signs.
+    If ``signs`` are provided but ``gamma`` is ``None``, the gammas will be calculated
+    automatically for each basis Pauli and parametrization.
     
     .. note::
         This function is designed for compatibility with the ``qiskit_ibm_runtime.Executor``
