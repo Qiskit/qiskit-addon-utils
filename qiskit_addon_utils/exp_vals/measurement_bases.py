@@ -39,16 +39,17 @@ def get_measurement_bases(
     combined_observables = sum(observables)
     pauli_groups = combined_observables.paulis.group_commuting(qubit_wise=qubit_wise)
     bases = PauliList([_meas_basis_for_pauli_group(group) for group in pauli_groups])
+
+    observables_as_dicts = [dict(obs.label_iter()) for obs in observables]
     reverser: dict[Pauli, list[SparsePauliOp]] = {}
     for basis, group in zip(bases, pauli_groups):
         reverser[basis] = [[] for _ in range(len(observables))]
         current_basis_weight = np.complex128(0)
-        for i, observable in enumerate(observables):
-            observable_dict = observable_to_dict(observable)
+        for i, observable in enumerate(observables_as_dicts):
             coeffs = []
             paulis = []
             for pauli in set(group):
-                coeff = observable_dict.get(pauli.to_label(), None)
+                coeff = observable.get(pauli.to_label(), None)
                 if coeff:
                     coeffs.append(coeff)
                     paulis.append(pauli)
@@ -71,21 +72,6 @@ def _meas_basis_for_pauli_group(group: PauliList) -> Pauli:
     sum_z = group.z.sum(axis=0, dtype=bool)
     sum_x = group.x.sum(axis=0, dtype=bool)
     return Pauli((sum_z, sum_x))
-
-
-def observable_to_dict(observable: SparsePauliOp) -> dict[str, np.complex128]:
-    """Converts an observable in SparsePauliOp object into a dict object.
-
-    Args:
-        observable: The observable to convert.
-
-    Returns:
-        The converted observable.
-    """
-    observable_dict = {}
-    for pauli, coeff in zip(observable.paulis, observable.coeffs):
-        observable_dict[pauli.to_label()] = coeff
-    return observable_dict
 
 
 def _convert_basis_to_uint_representation(bases: PauliList) -> list[np.typing.NDArray[np.uint8]]:
