@@ -65,7 +65,7 @@ def calculate_expectation_values(
                 - (num rand, num layers)
                 - (num bases, num rand, num layers)
             
-            - Any sampled parameter sets should be specified along the dimensions immediately preceding the final two.
+            - Any sampled parameter sets should be specified along the dimensions immediately preceding the final dimension.
                 
                 - (..., param_dim1, ..., param_dimN, num layers)
 
