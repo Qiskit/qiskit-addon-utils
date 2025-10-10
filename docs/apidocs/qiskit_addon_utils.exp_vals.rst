@@ -1,5 +1,5 @@
 =============================================
-exp_vals (:mod:`qiskit_addon_utils.exp_vals`)
+Expectation Values (:mod:`qiskit_addon_utils.exp_vals`)
 =============================================
 
 .. automodule:: qiskit_addon_utils.exp_vals
