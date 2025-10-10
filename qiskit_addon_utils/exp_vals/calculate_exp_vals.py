@@ -30,12 +30,12 @@ def calculate_expectation_values(
     For an observable O, the mitigated expectation value is calculated as:
     :math:`<\tilde{O}> = -1^k * \gamma * <O>`
     where :math:`k` refers to the number of layered noise injections into the circuit.
-    
+
     If ``signs`` are provided but ``gamma`` is ``None``, the gammas will be calculated
     automatically for each basis/parametrization pair with the formula :math:`\gamma = \frac{k}{(k_{even} - k_{odd})}`,
     where :math:`k` is the total number of randomizations, and :math:`k_{even},k_{odd}`
     are the number of randomizations associated with an even/odd number of positive signs.
-    
+
     .. note::
         This function is designed for compatibility with the ``qiskit_ibm_runtime.Executor``
         primitive. There are strong assumptions made about the shapes of the ``meas_results``
@@ -50,23 +50,23 @@ def calculate_expectation_values(
                 - (num shots, num meas)
                 - (num rand, num shots, num meas)
                 - (num bases, num rand, num shots, num meas)
-            
+
             - Any sampled parameter sets should be specified along the dimensions immediately preceding the final two.
-                
+
                 - (..., param_dim1, ..., param_dimN, num shots, num meas)
 
-        reverser: Map for each measured basis Pauli to the associated qubit-wise commuting Pauli terms and their coefficients. 
+        reverser: Map for each measured basis Pauli to the associated qubit-wise commuting Pauli terms and their coefficients.
         signs: Signs associated with PEC-related measurements. This boolean array is expected to be formatted as follows:
-            
+
             - The final dimension should always be associated with the mitigated circuit layers.
             - If only one basis/randomization is measured, a dimension should not be allocated; otherwise, these should be the first two dimensions respectively. Valid shapes are:
 
                 - (num layers)
                 - (num rand, num layers)
                 - (num bases, num rand, num layers)
-            
+
             - Any sampled parameter sets should be specified along the dimensions immediately preceding the final dimension.
-                
+
                 - (..., param_dim1, ..., param_dimN, num layers)
 
         gamma: The gamma factor associated with the mitigation. If ``None``, ``gamma`` will be calculated automatically.
