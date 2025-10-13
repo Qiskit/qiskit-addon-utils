@@ -8,6 +8,8 @@ This package contains functionality which is meant to supplement workflows invol
    :maxdepth: 1
 
    qiskit_addon_utils.coloring
+   qiskit_addon_utils.noise_management.post_selection
+   qiskit_addon_utils.noise_management.post_selection.transpiler.passes
    qiskit_addon_utils.problem_generators
    qiskit_addon_utils.slicing
    qiskit_addon_utils.slicing.transpiler.passes

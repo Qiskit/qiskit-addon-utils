@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Support circuits that include classical bits when slicing a circuit by gate types.
+    See `#115 <https://github.com/Qiskit/qiskit-addon-utils/issues/115>` for details.
