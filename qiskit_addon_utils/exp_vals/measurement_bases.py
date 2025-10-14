@@ -19,7 +19,7 @@ from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp
 
 
 def get_measurement_bases(
-    observables: SparsePauliOp | list[SparsePauliOp]
+    observables: SparsePauliOp | list[SparsePauliOp],
 ) -> tuple[list[np.typing.NDArray[np.uint8]], dict[Pauli, list[SparsePauliOp]]]:
     """Choose bases to sample in order to calculate expectation values for all given observables.
 
