@@ -157,7 +157,7 @@ def expectation_values(
         mean_each_observable += means
         var_each_observable += variances
 
-    mean_and_var_each_observable = list(zip(mean_each_observable, var_each_observable))
+    mean_and_var_each_observable = list(zip(mean_each_observable.tolist(), var_each_observable.tolist()))
 
     return mean_and_var_each_observable
 
