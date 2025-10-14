@@ -70,7 +70,7 @@ def expectation_values(
     else:
         avg_axis = tuple(avg_axis)
 
-    if min(avg_axis) < 0:
+    if any(a < 0 for a in avg_axis):
         raise ValueError("`avg_axis` must be nonnegative")
 
     if len(basis_dict) != bool_array.shape[meas_basis_axis]:
