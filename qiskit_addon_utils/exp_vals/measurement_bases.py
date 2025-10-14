@@ -85,7 +85,7 @@ def _convert_basis_to_uint_representation(bases: PauliList) -> list[np.typing.ND
     Returns:
         The bases represented as a list of integers.
     """
-    pauli_to_int = {"I": 0, "X": 1, "Z": 2, "Y": 3}
+    pauli_to_int = {"I": 0, "Z": 1, "X": 2, "Y": 3}
     bases_uint8 = [
         np.array([pauli_to_int[p] for p in pauli.to_label()], dtype=np.uint8) for pauli in bases
     ]
