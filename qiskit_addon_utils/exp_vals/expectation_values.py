@@ -75,7 +75,7 @@ def expectation_values(
 
     if len(basis_dict) != bool_array.shape[meas_basis_axis]:
         raise ValueError(
-            f"{len(basis_dict) =} does not match {bool_array.shape[meas_basis_axis] =}."
+            f"{len(basis_dict) = } does not match {bool_array.shape[meas_basis_axis] = }."
         )
 
     for i, v in enumerate(basis_dict.values()):
