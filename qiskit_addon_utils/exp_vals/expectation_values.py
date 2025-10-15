@@ -133,6 +133,7 @@ def expectation_values(
         idx = tuple([*skip_axes, meas_basis_idx])
         barray_this_basis = barray[idx]
         num_kept = num_shots_kept[idx]
+        signs = net_signs[idx]
 
         ## AVERAGE OVER SHOTS:
         means = barray_this_basis.expectation_values(diagonal_observables)
@@ -144,15 +145,18 @@ def expectation_values(
         variances = (1 - means**2) / num_kept
 
         ## AVERAGE OVER SPECIFIED AXES ("TWIRLS"):
+        # Update indexing since we already sliced away meas_basis axis:
+        avg_axis_ = tuple(a if a < meas_basis_idx else a-1 for a in avg_axis)
+        
         # Will weight each twirl by its fraction of kept shots
-        weights = num_kept / np.sum(num_kept, axis=avg_axis)
-        num_minus = np.count_nonzero(net_signs, axis=avg_axis)
-        num_plus = np.count_nonzero(~net_signs, axis=avg_axis)
+        weights = num_kept / np.sum(num_kept, axis=avg_axis_)
+        num_minus = np.count_nonzero(signs, axis=avg_axis_)
+        num_plus = np.count_nonzero(~signs, axis=avg_axis_)
         num_twirls = num_plus + num_minus
         gamma = num_twirls / (num_plus - num_minus)
-        means = gamma * np.sum(means * weights, axis=avg_axis)
+        means = gamma * np.sum(means * weights, axis=avg_axis_)
         # Propagate uncertainties:
-        variances = gamma**2 * np.sum(variances * weights**2, axis=avg_axis)
+        variances = gamma**2 * np.sum(variances * weights**2, axis=avg_axis_)
 
         mean_each_observable += means
         var_each_observable += variances
