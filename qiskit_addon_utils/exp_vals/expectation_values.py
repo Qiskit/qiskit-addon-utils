@@ -137,7 +137,14 @@ def expectation_values(
 
         ## AVERAGE OVER SHOTS:
         barray_this_basis = barray_this_basis.reshape((*barray_this_basis.shape, 1))
+        
+        # validate = False is necessary to allow the zero observable:
+        # (workaround qiskit issue 15185)
+        diagonal_observables = ObservablesArray(diagonal_observables, validate=False)
         means = barray_this_basis.expectation_values(diagonal_observables)
+        # Last explicit axis is now a new axis over desired observables.
+        # We'll need to broadcast other arrays over this axis.
+        
         # BitArray.expectation_values normalized by num_shots, but
         # we should only count those kept by postselection:
         means *= barray_this_basis.num_shots / num_kept[:, None]
