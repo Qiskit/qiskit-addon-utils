@@ -20,8 +20,8 @@ from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp
 
 
 def expectation_values(
-    basis_dict: dict[Pauli, list[SparsePauliOp | None]],
     bool_array: np.ndarray[np._bool],
+    basis_dict: dict[Pauli, list[SparsePauliOp | None]],
     meas_basis_axis: int,
     avg_axis: int | tuple[int] | None = None,
     meas_flips: np.ndarray[np._bool] | None = None,
@@ -37,6 +37,9 @@ def expectation_values(
     Optionally supports measurement twirling, PEC, and postselection.
 
     Args:
+        bool_array: Boolean array, presumably representing data from measured qubits.
+            The last two axes are the number of shots and number of classical bits, respectively.
+            At least one more axis must be defined indicating the measurement bases, at position `meas_basis_axis` and of length `len(basis_dict)`.
         basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
             The ith key is a measurement basis assumed to correspond to the ith slice of `bool_array` along the `meas_basis_axis` axis.
             Each dict value is a list of length equal to the number of desired observables.
@@ -46,9 +49,6 @@ def expectation_values(
             - Note the order of dict entries is relied on here for indexing; the dict keys are never used.
             - Assumes each Pauli term (in dict values) is compatible with each measurement basis (in keys).
             - Assumes each term in each observable appears for exactly one basis (TODO: remove this assumption).
-        bool_array: Boolean array, presumably representing data from measured qubits.
-            The last two axes are the number of shots and number of classical bits, respectively.
-            At least one more axis must be defined indicating the measurement bases, at position `meas_basis_axis` and of length `len(basis_dict)`.
         meas_basis_axis: Axis of bool_array that indexes measurement bases. Ordering must match ordering in `basis_dict`.
         avg_axis: Optional axis or axes of bool_array to average over when computing expectation values. Usually this is the "twirling" axis.
             Must be nonnegative. (The shots axis, assumed to be at index -2 in the boolean array, is always averaged over).
@@ -163,18 +163,18 @@ def expectation_values(
 
 
 def apply_postselect_mask(
-    basis_dict: dict[Pauli, list[SparseObservable]],
     bool_array: np.ndarray[np._bool],
+    basis_dict: dict[Pauli, list[SparseObservable]],
     postselect_mask: np.ndarray[np._bool],
 ):
     """Applies postselection mask in preparation for computing expectation values.
 
     Args:
+        bool_array: Boolean array, presumably representing data from measured qubits.
+            The last two axes are the number of shots and number of classical bits, respectively.
         basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
             Similar to `basis_dict` arg of `expectation_values()`, but here Pauli components and coefficients must be represented as
             `SparseObservable` instead of `SparsePauliOp`, and `None` may not be used as a placeholder for the zero operator.
-        bool_array: Boolean array, presumably representing data from measured qubits.
-            The last two axes are the number of shots and number of classical bits, respectively.
         postselect_mask: Boolean array used for postselection. `True` (`False`) indicates a shot accepted (rejected) by postselection.
             Shape must be `bool_array.shape[:-1]`.
 
@@ -202,14 +202,18 @@ def apply_postselect_mask(
     return bool_array, basis_dict, num_shots_kept
 
 
-def apply_pec_signs(bool_array, basis_dict, pec_signs):
+def apply_pec_signs(
+        bool_array, 
+        basis_dict, 
+        pec_signs
+        ):
     """Applies PEC signs in preparation for computing expectation values.
 
     Args:
-        basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
-            Similar to `basis_dict` arg of `expectation_values()`, but here `None` may not be used as a placeholder for the zero operator.
         bool_array: Boolean array, presumably representing data from measured qubits.
             The last two axes are the number of shots and number of classical bits, respectively.
+        basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
+            Similar to `basis_dict` arg of `expectation_values()`, but here `None` may not be used as a placeholder for the zero operator.
         pec_signs: Optional boolean array used with probabilistic error cancellation (PEC). Indicates which errors were inserted in each
                 circuit randomization. Final axis, assumed to index all error generators in circuit, is immediately collapsed as a sum mod 2.
                 Remaining shape must be `pec_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
