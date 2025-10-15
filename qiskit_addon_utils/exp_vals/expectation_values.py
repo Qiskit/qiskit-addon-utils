@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 from qiskit.primitives import BitArray
 from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp
-
+from qiskit.primitives.containers.observables_array import ObservablesArray
 
 def expectation_values(
     bool_array: np.ndarray[np._bool],
@@ -143,7 +143,8 @@ def expectation_values(
         # For each circuit, shots are nominally samples of binomial distribution,
         # so can compute variance from expectation value:
         ddof = 1 
-        variances = (1 - means**2) / (num_kept-ddof)
+        ## FIXME
+        variances = np.nan #(1 - means**2) / (num_kept[:,None]-ddof)
 
         ## AVERAGE OVER SPECIFIED AXES ("TWIRLS"):
         # Update indexing since we already sliced away meas_basis axis:
