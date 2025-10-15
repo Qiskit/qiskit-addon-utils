@@ -61,7 +61,7 @@ def expectation_values(
             Shape must be `bool_array.shape[:-1]`.
 
     Returns:
-        A list of tuples, one for each desired observable. Each tuple is length 2
+        A list of (exp. val, variance) 2-tuples, one for each desired observable.
     """
     if avg_axis is None:
         avg_axis = tuple()
