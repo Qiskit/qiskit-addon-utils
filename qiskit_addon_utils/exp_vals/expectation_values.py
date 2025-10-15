@@ -28,7 +28,7 @@ def expectation_values(
     pec_signs: np.ndarray[np._bool] | None = None,
     postselect_mask: np.ndarray[np._bool] | None = None,
 ):
-    """Computes expectation values from data.
+    """Computes expectation values from boolean data.
 
     Uses data in `bool_array`, acquired with measurement bases as ordered in keys of `basis_dict`, to compute observables encoded in values of `basis_dict`.
 
@@ -117,9 +117,9 @@ def expectation_values(
     # We will need to correct the shot counts later when computing expectation values.
 
     bool_array, basis_dict, net_signs = apply_pec_signs(bool_array, basis_dict, pec_signs)
-    ## We will need to correct the twirl counts later when computing expectation values,
-    ## which may be interpreted as treating the negated randomizations as negative counts.
-    ## This is approximately equivalent to rescaling by gamma from the noisy circuit.
+    # We will need to correct the twirl counts later when computing expectation values,
+    # which may be interpreted as treating the negated randomizations as negative counts.
+    # This is approximately equivalent to rescaling by gamma from the noisy circuit.
 
     barray = BitArray.from_bool_array(bool_array)
 
@@ -148,16 +148,16 @@ def expectation_values(
         # Update indexing since we already sliced away meas_basis axis:
         avg_axis_ = tuple(a if a < meas_basis_idx else a-1 for a in avg_axis)
         
-        # Will weight each twirl by its fraction of kept shots
+        # Will weight each twirl by its fraction of kept shots.
+        # If no postselection, weighting reduces to dividing by num_twirls:
         weights = num_kept / np.sum(num_kept, axis=avg_axis_)
         num_minus = np.count_nonzero(signs, axis=avg_axis_)
         num_plus = np.count_nonzero(~signs, axis=avg_axis_)
         num_twirls = num_plus + num_minus
-        gamma = num_twirls / (num_plus - num_minus)
-        means = gamma * np.sum(means * weights, axis=avg_axis_)
+        gamma_approx = num_twirls / (num_plus - num_minus)
+        means = gamma_approx * np.sum(means * weights, axis=avg_axis_)
         # Propagate uncertainties:
-        variances = gamma**2 * np.sum(variances * weights**2, axis=avg_axis_)
-
+        variances = gamma_approx**2 * np.sum(variances * weights**2, axis=avg_axis_)
         mean_each_observable += means
         var_each_observable += variances
 
