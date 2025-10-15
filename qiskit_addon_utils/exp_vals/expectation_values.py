@@ -136,12 +136,11 @@ def expectation_values(
         signs = net_signs[idx]
 
         ## AVERAGE OVER SHOTS:
+        barray_this_basis = barray_this_basis.reshape((*barray_this_basis.shape, 1))
         means = barray_this_basis.expectation_values(diagonal_observables)
         # BitArray.expectation_values normalized by num_shots, but
         # we should only count those kept by postselection:
-        means *= barray_this_basis.num_shots / num_kept
-        # For each circuit, shots are nominally samples of binomial distribution,
-        # so can compute variance from expectation value:
+        means *= barray_this_basis.num_shots / num_kept[:, None]
         ddof = 1 
         ## FIXME
         variances = np.nan #(1 - means**2) / (num_kept[:,None]-ddof)
@@ -152,7 +151,7 @@ def expectation_values(
         
         # Will weight each twirl by its fraction of kept shots.
         # If no postselection, weighting reduces to dividing by num_twirls:
-        weights = num_kept / np.sum(num_kept, axis=avg_axis_)
+        weights = num_kept[:, None] / np.sum(num_kept, axis=avg_axis_)
         num_minus = np.count_nonzero(signs, axis=avg_axis_)
         num_plus = np.count_nonzero(~signs, axis=avg_axis_)
         num_twirls = num_plus + num_minus
