@@ -142,7 +142,8 @@ def expectation_values(
         means *= barray_this_basis.num_shots / num_kept
         # For each circuit, shots are nominally samples of binomial distribution,
         # so can compute variance from expectation value:
-        variances = (1 - means**2) / num_kept
+        ddof = 1 
+        variances = (1 - means**2) / (num_kept-ddof)
 
         ## AVERAGE OVER SPECIFIED AXES ("TWIRLS"):
         # Update indexing since we already sliced away meas_basis axis:
