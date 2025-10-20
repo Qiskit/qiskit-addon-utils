@@ -19,7 +19,7 @@ from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp
 
 
 def get_measurement_bases(
-    observables: SparsePauliOp | list[SparsePauliOp], qubit_wise: bool = True
+    observables: SparsePauliOp | list[SparsePauliOp]
 ) -> tuple[list[np.typing.NDArray[np.uint8]], dict[Pauli, list[SparsePauliOp]]]:
     """Choose bases to sample in order to calculate expectation values for all given observables.
 
@@ -27,7 +27,6 @@ def get_measurement_bases(
 
     Args:
         observables: The observables to calculate using the quantum computer.
-        qubit_wise: Whether to group the commuting Pauli groups qubit wise.
 
     Returns:
         * List of Pauli bases to sample encoded in a list of uint8 where 0=I,1=X,2=Y,3=Z.
@@ -36,8 +35,8 @@ def get_measurement_bases(
     """
     if isinstance(observables, SparsePauliOp):
         observables = [observables]
-    combined_observables = sum(observables)
-    pauli_groups = combined_observables.paulis.group_commuting(qubit_wise=qubit_wise)
+    combined_paulis = sum([obs.paulis for obs in observables]).unique()
+    pauli_groups = combined_paulis.group_commuting(qubit_wise=True)
     bases = PauliList([_meas_basis_for_pauli_group(group) for group in pauli_groups])
 
     observables_as_dicts = [dict(obs.label_iter()) for obs in observables]
@@ -78,7 +77,7 @@ def _convert_basis_to_uint_representation(bases: PauliList) -> list[np.typing.ND
     """Converts list of Paulis in PauliList format into a list of integers representing those Paulis.
 
     The representation of the Paulis as integers is:
-    I=0, X=1, Y=2, Z=3
+    I=0, X=1, Z=2, Y=3
 
     Args:
         bases: The bases in PauliList format to convert.

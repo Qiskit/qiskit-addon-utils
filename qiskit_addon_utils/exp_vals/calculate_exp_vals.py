@@ -96,7 +96,7 @@ def calculate_expectation_values(
             for obs_index in range(num_obs):
                 obs_pauli_op = measured_pauli_group[obs_index]
                 if obs_pauli_op:
-                    expval, var = calculate_expectation_values_for_observable(counts, obs_pauli_op)
+                    expval, var = _calculate_expectation_values_for_observable(counts, obs_pauli_op)
                     # If signs are given, calculate the mitigated expectation value
                     if signs is not None:
                         if gamma is not None:
@@ -128,13 +128,15 @@ def calculate_gamma_by_noise_map(
     Returns:
         The gamma factor.
     """
-    layers_gamma = {}
-    for layer_key, layer_noise in noise_map.items():
-        layers_gamma[layer_key] = layer_noise.inverse().gamma()
+    gamma = 1.0
+    gamma_per_noise_id = {}
 
-    gamma = 1
-    for layer_type in layer_map.values():
-        gamma *= layers_gamma[layer_type]
+    for box_id, noise_id in layer_map.items():
+        if noise_id not in gamma_per_noise_id:
+            gamma_per_noise_id[noise_id] = noise_map[noise_id].inverse().gamma()
+
+        gamma *= gamma_per_noise_id[noise_id]
+
     return gamma
 
 
@@ -173,7 +175,7 @@ def calculate_gamma_by_signs(signs: np.typing.NDArray[np.bool_]) -> np.typing.ND
     return gamma_per_base_per_parameter
 
 
-def calculate_expectation_values_for_observable(
+def _calculate_expectation_values_for_observable(
     counts: dict[str, int], pauli_op: SparsePauliOp
 ) -> tuple[np.ndarray, np.ndarray]:
     """Calculate expectation value of a SparsePauliOp.
@@ -185,14 +187,14 @@ def calculate_expectation_values_for_observable(
     Returns:
         The expectation value and variance for each Pauli operation of the observable.
     """
-    expvals, variances = pauli_expval_with_variance(counts, pauli_op.paulis)
+    expvals, variances = _pauli_expval_with_variance(counts, pauli_op.paulis)
     # Multiply by the operator coefficients
     expval = np.dot(expvals, pauli_op.coeffs)
     var = np.dot(variances, pauli_op.coeffs**2)
     return expval, var
 
 
-def pauli_expval_with_variance(
+def _pauli_expval_with_variance(
     counts: dict[str, int], paulis: PauliList
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return array of expval and variance pairs for input Paulis.
@@ -280,7 +282,8 @@ def _bits2counts(meas_results: list) -> dict[str, int]:
         for shot in randomization:
             # skip post-selected shots
             if shot[0] is not None:
-                meas_state = "".join(["1" if meas_res else "0" for meas_res in shot])
+                # reverse shot array to align with qiskit qubit order convention
+                meas_state = "".join(["1" if meas_res else "0" for meas_res in shot[::-1]])
                 if meas_state in counts:
                     counts[meas_state] += 1
                 else:
