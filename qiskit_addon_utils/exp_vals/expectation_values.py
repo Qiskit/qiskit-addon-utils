@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 from qiskit.primitives import BitArray
 from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp
-from qiskit.primitives.containers.observables_array import ObservablesArray
+
 
 def expectation_values(
     bool_array: np.ndarray[np._bool],
@@ -27,6 +27,7 @@ def expectation_values(
     meas_flips: np.ndarray[np._bool] | None = None,
     pec_signs: np.ndarray[np._bool] | None = None,
     postselect_mask: np.ndarray[np._bool] | None = None,
+    bit_order: str = 'little',
 ):
     """Computes expectation values from boolean data.
 
@@ -59,10 +60,16 @@ def expectation_values(
             Remaining shape must be `pec_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
         postselect_mask: Optional boolean array used for postselection. `True` (`False`) indicates a shot accepted (rejected) by postselection.
             Shape must be `bool_array.shape[:-1]`.
+        bit_order: Bit ordering of `bool_array` along bits axis. Defined as in Qiskit docs for `BitArray`.
 
     Returns:
         A list of (exp. val, variance) 2-tuples, one for each desired observable.
+
+        Note: Covariances between summed Paulis are not currently accounted for in the
+            returned variances. (TODO)
     """
+
+    ##### VALIDATE INPUTS:
     if avg_axis is None:
         avg_axis = tuple()
     elif isinstance(avg_axis, int):
@@ -87,48 +94,48 @@ def expectation_values(
                 f"Entry 0 in `basis_dict` indicates {num_observables} observables, but entry {i} indicates {len(v)} observables."
             )
 
+    ##### APPLY MEAS FLIPS:
     if meas_flips is not None:
         bool_array = np.logical_xor(bool_array, meas_flips)
 
+    ##### FORMAT OBSERVABLES:
     original_num_bits = bool_array.shape[-1]
 
-    # Convert SparsePauliOps to SparseObservables,
-    # and make diagonal (replace X or Y with Z, assuming
-    # correct rotation gates were included in circuit):
+    # Convert SparsePauliOps to SparseObservables
     basis_dict_ = {}
     for basis, spo_list in basis_dict.items():
         diag_obs_list = []
         for spo in spo_list:
-            if spo is None:
+            if isinstance(spo, SparseObservable):
+                diag_obs_list.append(spo)
+            elif spo is None:
                 diag_obs_list.append(SparseObservable.zero(original_num_bits))
             else:
-                paulis = spo.paulis.copy()
-                paulis.z = paulis.z | paulis.x
-                paulis.x = 0
-                paulis.phase = spo.paulis.phase.copy()
-                spo = SparsePauliOp(paulis, spo.coeffs)
-                diag_obs_list.append(SparseObservable.from_sparse_pauli_op(spo))
+                diag_obs_list.append(SparseObservable(spo))
         basis_dict_[basis] = diag_obs_list
     basis_dict = basis_dict_
 
+    ##### POSTSELECTION:
     bool_array, basis_dict, num_shots_kept = apply_postselect_mask(
         bool_array, basis_dict, postselect_mask
     )
     # We will need to correct the shot counts later when computing expectation values.
 
+    ##### PEC SIGNS:
     bool_array, basis_dict, net_signs = apply_pec_signs(bool_array, basis_dict, pec_signs)
     # We will need to correct the twirl counts later when computing expectation values,
     # which may be interpreted as treating the negated randomizations as negative counts.
     # This is approximately equivalent to rescaling by gamma from the noisy circuit.
 
-    barray = BitArray.from_bool_array(bool_array)
-
-    mean_each_observable = np.zeros(num_observables, dtype=float)
-    var_each_observable = np.zeros(num_observables, dtype=float)
+    ##### ACCUMULATE CONTRIBUTIONS FROM EACH MEAS BASIS:
+    barray = BitArray.from_bool_array(bool_array, bit_order)
+    output_shape_each_obs = np.delete(barray.shape, (meas_basis_axis, *avg_axis))
+    mean_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
+    var_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
 
     skip_axes = list([slice(None) for _ in range(meas_basis_axis)])
 
-    for meas_basis_idx, (_, diagonal_observables) in enumerate(basis_dict.items()):
+    for meas_basis_idx, (_, observables) in enumerate(basis_dict.items()):
         # Take element `meas_basis_idx` along axis `meas_basis_axis` of BitArray:
         idx = tuple([*skip_axes, meas_basis_idx])
         barray_this_basis = barray[idx]
@@ -136,33 +143,25 @@ def expectation_values(
         signs = net_signs[idx]
 
         ## AVERAGE OVER SHOTS:
-        barray_this_basis = barray_this_basis.reshape((*barray_this_basis.shape, 1))
-        
-        # validate = False is necessary to allow the zero observable:
-        # (workaround qiskit issue 15185)
-        diagonal_observables = ObservablesArray(diagonal_observables, validate=False)
-        means = barray_this_basis.expectation_values(diagonal_observables)
-        # Last explicit axis is now a new axis over desired observables.
-        # We'll need to broadcast other arrays over this axis.
-        
-        # BitArray.expectation_values normalized by num_shots, but
-        # we should only count those kept by postselection:
-        means *= barray_this_basis.num_shots / num_kept[..., None]
-        ddof = 1 
-        ## FIXME
-        variances = np.nan #(1 - means**2) / (num_kept[:,None]-ddof)
+        (means, standard_errs) = bitarray_expectation_value(barray_this_basis, 
+                                                            observables, 
+                                                            shots=num_kept)
+
+        variances = standard_errs**2
+        del standard_errs
 
         ## AVERAGE OVER SPECIFIED AXES ("TWIRLS"):
         # Update indexing since we already sliced away meas_basis axis:
         avg_axis_ = tuple(a if a < meas_basis_idx else a-1 for a in avg_axis)
         
-        # Will weight each twirl by its fraction of kept shots.
-        # If no postselection, weighting reduces to dividing by num_twirls:
-        weights = num_kept[..., None] / np.sum(num_kept, axis=avg_axis_)
         num_minus = np.count_nonzero(signs, axis=avg_axis_)
         num_plus = np.count_nonzero(~signs, axis=avg_axis_)
         num_twirls = num_plus + num_minus
         gamma_approx = num_twirls / (num_plus - num_minus)
+        
+        # Will weight each twirl by its fraction of kept shots.
+        # If no postselection, weighting reduces to dividing by num_twirls:
+        weights = num_kept[..., np.newaxis] / np.sum(num_kept, axis=avg_axis_)
         means = gamma_approx * np.sum(means * weights, axis=avg_axis_)
         # Propagate uncertainties:
         variances = gamma_approx**2 * np.sum(variances * weights**2, axis=avg_axis_)
@@ -215,9 +214,9 @@ def apply_postselect_mask(
 
 
 def apply_pec_signs(
-        bool_array, 
-        basis_dict, 
-        pec_signs
+        bool_array: np.ndarray[np._bool],
+        basis_dict: dict[Pauli, list[SparseObservable|SparsePauliOp]],
+        pec_signs: np.ndarray[np._bool],
         ):
     """Applies PEC signs in preparation for computing expectation values.
 
@@ -253,3 +252,127 @@ def apply_pec_signs(
         bool_array = bool_array.copy()
 
     return bool_array, basis_dict, net_signs
+
+
+def bitarray_expectation_value(
+    outcomes: BitArray,
+    observables: list[SparseObservable],
+    shots: int | np.ndarray[int] | None = None,
+):
+    """Calculate expectation value of observables on the BitArray data.
+    Observables are assumed to be diagonal in the measured bases.
+
+    Args:
+        outcomes: BitArray containing the classical data.
+        observables: List of `SparseObservable`s to evaluate. These are assumed
+            to be diagonal in the measured bases, so X, Y, Z are all treated as Z;
+            1, -, l are treated as 1; and 0, +, r are treated as 0.
+        shots: If `None` (default), results will be averaged over shots in the data 
+            as usual. If `shots` is specified, it will be used in the denominator when
+            computing the mean instead of the number of shots in the data. This 
+            permits vectorized processing of postselected data despite the tendency
+            of postselection to produce ragged arrays. See `apply_postselect_mask`.
+            
+    Returns:
+        The means and standard errors for the observable expectation values.
+
+        Note: Covariances between summed Paulis are not currently accounted for in the
+            returned variances. (TODO)
+    """
+
+    num_obs = len(observables)
+    obs_lengths = [len(obs) for obs in observables]
+    num_bits = observables[0].num_qubits
+    
+    # Sum to create flat list of all terms:
+    obs_tot = sum(observables, start=SparseObservable.zero(num_bits))
+    term_lengths = np.diff(obs_tot.boundaries)
+    num_terms = len(obs_tot)
+
+    all_coeffs = obs_tot.coeffs
+    all_coeffs = np.array(all_coeffs)
+    if not np.allclose(all_coeffs.imag, 0):
+        raise ValueError("Nonzero imaginary parts of observable coeffs not supported.")
+    all_coeffs = all_coeffs.real
+
+    # We only care whether each (non-id) bit is Z-like, 0-like, or 1-like:
+    bit_term_types = np.array(obs_tot.bit_terms) & 0b1100
+
+    mask_z = np.zeros((num_terms, num_bits), dtype=bool)
+    mask_0 = mask_z.copy()
+    mask_1 = mask_z.copy()
+    # fancy indexing:
+    term_idx = np.repeat(np.arange(num_terms), np.asarray(term_lengths, dtype=int))
+    mask_z[term_idx, obs_tot.indices] = bit_term_types == 0b0000
+    mask_0[term_idx, obs_tot.indices] = bit_term_types == 0b1000
+    mask_1[term_idx, obs_tot.indices] = bit_term_types == 0b0100
+    
+    # Observables have least significant bit at zeroth index in array:
+    mask_z = BitArray.from_bool_array(mask_z[:, np.newaxis,:], 'little')
+    mask_0 = BitArray.from_bool_array(mask_0[:, np.newaxis,:], 'little')
+    mask_1 = BitArray.from_bool_array(mask_1[:, np.newaxis,:], 'little')
+    # BitArray shape: terms, shots (1 for broadcasting), bits.
+
+    # append terms axis to outcomes BitArray shape:
+    outcomes = outcomes.reshape((*outcomes.shape, 1))
+
+    # Compute parities (0 or 1) of Z components
+    parities = (outcomes & mask_z).bitcount() % 2
+
+    # Compute the coefficients of 0 and 1 components.
+    nulled_by_0_projector = np.logical_or.reduce((outcomes & mask_0).array, axis=-1)
+    nulled_by_1_projector = np.logical_or.reduce(((outcomes & mask_1) ^ mask_1).array, axis=-1)
+    coeffs_01 = ~np.logical_or(nulled_by_0_projector, nulled_by_1_projector)
+
+    # Compute expectation values
+    shape = np.broadcast_shapes(outcomes.shape, mask_z.shape)
+    expvals_each_term = np.zeros(shape, dtype=float)
+    sq_expvals_each_term = np.zeros_like(expvals_each_term)
+
+    # Combine masks to get coeff for each shot (-1, 0, or 1)
+    if np.all(coeffs_01):
+        # We can do a faster computation of pure Pauli parities
+        expvals_each_term += outcomes.num_shots - 2 * np.sum(parities, axis=-1, dtype=int)
+        sq_expvals_each_term += outcomes.num_shots
+    else:
+        samples = coeffs_01 * ((-1) ** parities.astype(np.int8))
+        expvals_each_term += np.sum(samples, axis=-1)
+        sq_expvals_each_term += np.sum(np.abs(samples), axis=-1)
+
+    # Divide by total shots. May be less than nominal number in array if
+    # we are postselecting via projector in observable terms:
+    if shots is None:
+        denom = np.asarray(outcomes.num_shots)
+    else:
+        denom = np.asarray(shots)
+
+    # Edge case of counts dict containing outcomes but with total shots, eg {"0": 0}.
+    no_shots = denom==0
+
+    expvals_each_term[~no_shots] /= denom[..., np.newaxis]
+    sq_expvals_each_term[~no_shots] /= denom[..., np.newaxis]
+    expvals_each_term[no_shots] = np.nan
+    sq_expvals_each_term[no_shots] = np.nan
+    variances_each_term = np.clip(sq_expvals_each_term - expvals_each_term**2, 0, None) / denom[..., np.newaxis]
+    
+    # all_coeffs == number of bit terms == means.shape[-1], so broadcasts automatically:
+    expvals_each_term *= all_coeffs
+    variances_each_term *= all_coeffs**2
+
+    ### We have the expectation value and variance for each term.
+    ### Next, we sum these back into their original observables:
+    expval_each_observable = np.zeros((*expvals_each_term.shape[:-1], num_obs))
+    variance_each_observable = np.zeros((*expvals_each_term.shape[:-1], num_obs))
+    start = 0
+    for obs_idx, obs_len in enumerate(obs_lengths):
+        stop = start + obs_len
+        expval_each_observable[..., obs_idx] += np.sum(expvals_each_term[..., start:stop], axis=-1)
+        variance_each_observable[..., obs_idx] += np.sum(variances_each_term[..., start:stop], axis=-1)
+        start = stop
+    
+    stderr_each_observable = np.sqrt(variance_each_observable)
+
+    # Observables are along last axis.
+    # Shots, bits axes have been collapsed.
+
+    return expval_each_observable, stderr_each_observable
