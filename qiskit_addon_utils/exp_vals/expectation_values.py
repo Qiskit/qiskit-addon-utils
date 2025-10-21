@@ -152,7 +152,7 @@ def expectation_values(
 
         ## AVERAGE OVER SPECIFIED AXES ("TWIRLS"):
         # Update indexing since we already sliced away meas_basis axis:
-        avg_axis_ = tuple(a if a < meas_basis_idx else a-1 for a in avg_axis)
+        avg_axis_ = tuple(a if a < meas_basis_axis else a-1 for a in avg_axis)
         
         num_minus = np.count_nonzero(signs, axis=avg_axis_)
         num_plus = np.count_nonzero(~signs, axis=avg_axis_)
