@@ -27,6 +27,7 @@ def expectation_values(
     meas_flips: np.ndarray[np._bool] | None = None,
     pec_signs: np.ndarray[np._bool] | None = None,
     postselect_mask: np.ndarray[np._bool] | None = None,
+    pec_gamma: float | None = None,
     bit_order: str = 'little',
 ):
     """Computes expectation values from boolean data.
@@ -60,6 +61,10 @@ def expectation_values(
             Remaining shape must be `pec_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
         postselect_mask: Optional boolean array used for postselection. `True` (`False`) indicates a shot accepted (rejected) by postselection.
             Shape must be `bool_array.shape[:-1]`.
+        pec_gamma: Rescaling factor gamma to be applied to PEC mitigated expectation values. If `None`, rescaling factors will be computed as the
+            number of positive samples minus the number of negative samples, computed as `1/(np.sum(~pec_signs, axis=avg_axis) - np.sum(pec_signs, axis=avg_axis))`.
+            This can fail due to division by zero if there are an equal number of positive and negative samples. Also note this rescales each expectation value
+            by a different factor. (TODO: allow specifying an array of gamma values).
         bit_order: Bit ordering of `bool_array` along bits axis. Defined as in Qiskit docs for `BitArray`.
 
     Returns:
@@ -123,9 +128,7 @@ def expectation_values(
 
     ##### PEC SIGNS:
     bool_array, basis_dict, net_signs = apply_pec_signs(bool_array, basis_dict, pec_signs)
-    # We will need to correct the twirl counts later when computing expectation values,
-    # which may be interpreted as treating the negated randomizations as negative counts.
-    # This is approximately equivalent to rescaling by gamma from the noisy circuit.
+    # For PEC, we will need to apply a rescaling factor gamma later when computing expectation values.
 
     ##### ACCUMULATE CONTRIBUTIONS FROM EACH MEAS BASIS:
     barray = BitArray.from_bool_array(bool_array, bit_order)
@@ -154,17 +157,20 @@ def expectation_values(
         # Update indexing since we already sliced away meas_basis axis:
         avg_axis_ = tuple(a if a < meas_basis_axis else a-1 for a in avg_axis)
         
-        num_minus = np.count_nonzero(signs, axis=avg_axis_)
-        num_plus = np.count_nonzero(~signs, axis=avg_axis_)
-        num_twirls = num_plus + num_minus
-        gamma_approx = num_twirls / (num_plus - num_minus)
+        if pec_gamma is not None:
+            rescaling = pec_gamma
+        else:
+            num_minus = np.count_nonzero(signs, axis=avg_axis_)
+            num_plus = np.count_nonzero(~signs, axis=avg_axis_)
+            num_twirls = num_plus + num_minus
+            rescaling = num_twirls / (num_plus - num_minus)
         
         # Will weight each twirl by its fraction of kept shots.
         # If no postselection, weighting reduces to dividing by num_twirls:
         weights = num_kept[..., np.newaxis] / np.sum(num_kept, axis=avg_axis_)
-        means = gamma_approx * np.sum(means * weights, axis=avg_axis_)
+        means = rescaling * np.sum(means * weights, axis=avg_axis_)
         # Propagate uncertainties:
-        variances = gamma_approx**2 * np.sum(variances * weights**2, axis=avg_axis_)
+        variances = rescaling**2 * np.sum(variances * weights**2, axis=avg_axis_)
         mean_each_observable += means
         var_each_observable += variances
 
