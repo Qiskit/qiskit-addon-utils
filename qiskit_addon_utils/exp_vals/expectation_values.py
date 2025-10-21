@@ -22,7 +22,7 @@ from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp, PauliLin
 def expectation_values(
     bool_array: np.ndarray[np._bool],
     basis_dict: dict[Pauli, list[SparsePauliOp | None]],
-    meas_basis_axis: int,
+    meas_basis_axis: int | None = None,
     avg_axis: int | tuple[int] | None = None,
     meas_flips: np.ndarray[np._bool] | None = None,
     pec_signs: np.ndarray[np._bool] | None = None,
@@ -41,7 +41,7 @@ def expectation_values(
     Args:
         bool_array: Boolean array, presumably representing data from measured qubits.
             The last two axes are the number of shots and number of classical bits, respectively.
-            At least one more axis must be defined indicating the measurement bases, at position `meas_basis_axis` and of length `len(basis_dict)`.
+            If `meas_basis_axis` is given, that axis of `bool_array` indexes the measurement bases, with length `len(basis_dict)`.
         basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
             The ith key is a measurement basis assumed to correspond to the ith slice of `bool_array` along the `meas_basis_axis` axis.
             Each dict value is a list of length equal to the number of desired observables.
@@ -51,7 +51,8 @@ def expectation_values(
             - Note the order of dict entries is relied on here for indexing; the dict keys are never used.
             - Assumes each Pauli term (in dict values) is compatible with each measurement basis (in keys).
             - Assumes each term in each observable appears for exactly one basis (TODO: remove this assumption).
-        meas_basis_axis: Axis of bool_array that indexes measurement bases. Ordering must match ordering in `basis_dict`.
+        meas_basis_axis: Axis of bool_array that indexes measurement bases. Ordering must match ordering in `basis_dict`. If `None`,
+            then `len(basis_dict)` must be 1, and `bool_array` is assumed to correspond to the only measurement basis.
         avg_axis: Optional axis or axes of bool_array to average over when computing expectation values. Usually this is the "twirling" axis.
             Must be nonnegative. (The shots axis, assumed to be at index -2 in the boolean array, is always averaged over).
         meas_flips: Optional boolean array used with measurement twirling. Indicates which bits were acquired with measurements preceded by bit-flip gates.
@@ -84,6 +85,13 @@ def expectation_values(
 
     if any(a < 0 for a in avg_axis):
         raise ValueError("`avg_axis` must be nonnegative")
+
+    if meas_basis_axis is None:
+        if len(basis_dict) != 1:
+            raise ValueError(f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_dict) = }. ")
+        bool_array = bool_array.reshape((1, *bool_array.shape))
+        meas_basis_axis = 0
+        avg_axis = tuple(a+1 for a in avg_axis)    
 
     if len(basis_dict) != bool_array.shape[meas_basis_axis]:
         raise ValueError(
