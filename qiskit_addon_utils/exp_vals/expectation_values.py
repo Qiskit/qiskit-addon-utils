@@ -73,6 +73,12 @@ def expectation_values(
 
         Note: Covariances between summed Paulis are not currently accounted for in the
             returned variances. (TODO)
+    
+    Raises:
+        ValueError if `avg_axis` contains negative values.
+        ValueError if `meas_basis_axis` is `None` but `len(basis_dict) != 1`.
+        ValueError if the number of entries in `basis_dict` does not equal the length of `bool_array` along `meas_basis_axis`.
+
     """
 
     ##### VALIDATE INPUTS:
