@@ -96,6 +96,12 @@ def expectation_values(
                 f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_dict) = }. "
             )
         bool_array = bool_array.reshape((1, *bool_array.shape))
+        if meas_flips is not None:
+            meas_flips = meas_flips.reshape((1, *meas_flips.shape))
+        if pec_signs is not None:
+            pec_signs = pec_signs.reshape((1, *pec_signs.shape))
+        if postselect_mask is not None:
+            postselect_mask = postselect_mask.reshape((1, *postselect_mask.shape))
         meas_basis_axis = 0
         avg_axis = tuple(a + 1 for a in avg_axis)
 
