@@ -16,19 +16,19 @@ from __future__ import annotations
 
 import numpy as np
 from qiskit.primitives import BitArray
-from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp, PauliLindbladMap
+from qiskit.quantum_info import Pauli, PauliLindbladMap, SparseObservable, SparsePauliOp
 
 
 def expectation_values(
-    bool_array: np.ndarray[np._bool],
+    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparsePauliOp | None]],
     meas_basis_axis: int | None = None,
-    avg_axis: int | tuple[int] | None = None,
-    meas_flips: np.ndarray[np._bool] | None = None,
-    pec_signs: np.ndarray[np._bool] | None = None,
-    postselect_mask: np.ndarray[np._bool] | None = None,
+    avg_axis: int | tuple[int, ...] | None = None,
+    meas_flips: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
+    pec_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
+    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     pec_gamma: float | None = None,
-    bit_order: str = 'little',
+    bit_order: str = "little",
 ):
     """Computes expectation values from boolean data.
 
@@ -73,14 +73,12 @@ def expectation_values(
 
         Note: Covariances between summed Paulis are not currently accounted for in the
             returned variances. (TODO)
-    
+
     Raises:
         ValueError if `avg_axis` contains negative values.
         ValueError if `meas_basis_axis` is `None` but `len(basis_dict) != 1`.
         ValueError if the number of entries in `basis_dict` does not equal the length of `bool_array` along `meas_basis_axis`.
-
     """
-
     ##### VALIDATE INPUTS:
     if avg_axis is None:
         avg_axis = tuple()
@@ -94,10 +92,12 @@ def expectation_values(
 
     if meas_basis_axis is None:
         if len(basis_dict) != 1:
-            raise ValueError(f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_dict) = }. ")
+            raise ValueError(
+                f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_dict) = }. "
+            )
         bool_array = bool_array.reshape((1, *bool_array.shape))
         meas_basis_axis = 0
-        avg_axis = tuple(a+1 for a in avg_axis)    
+        avg_axis = tuple(a + 1 for a in avg_axis)
 
     if len(basis_dict) != bool_array.shape[meas_basis_axis]:
         raise ValueError(
@@ -160,17 +160,17 @@ def expectation_values(
         signs = net_signs[idx]
 
         ## AVERAGE OVER SHOTS:
-        (means, standard_errs) = bitarray_expectation_value(barray_this_basis, 
-                                                            observables, 
-                                                            shots=num_kept)
+        (means, standard_errs) = bitarray_expectation_value(
+            barray_this_basis, observables, shots=num_kept
+        )
 
         variances = standard_errs**2
         del standard_errs
 
         ## AVERAGE OVER SPECIFIED AXES ("TWIRLS"):
         # Update indexing since we already sliced away meas_basis axis:
-        avg_axis_ = tuple(a if a < meas_basis_axis else a-1 for a in avg_axis)
-        
+        avg_axis_ = tuple(a if a < meas_basis_axis else a - 1 for a in avg_axis)
+
         if pec_gamma is not None:
             rescaling = pec_gamma
         else:
@@ -178,7 +178,7 @@ def expectation_values(
             num_plus = np.count_nonzero(~signs, axis=avg_axis_)
             num_twirls = num_plus + num_minus
             rescaling = num_twirls / (num_plus - num_minus)
-        
+
         # Will weight each twirl by its fraction of kept shots.
         # If no postselection, weighting reduces to dividing by num_twirls:
         weights = num_kept[..., np.newaxis] / np.sum(num_kept, axis=avg_axis_)
@@ -188,15 +188,17 @@ def expectation_values(
         mean_each_observable += means
         var_each_observable += variances
 
-    mean_and_var_each_observable = list(zip(mean_each_observable.tolist(), var_each_observable.tolist()))
+    mean_and_var_each_observable = list(
+        zip(mean_each_observable.tolist(), var_each_observable.tolist())
+    )
 
     return mean_and_var_each_observable
 
 
 def apply_postselect_mask(
-    bool_array: np.ndarray[np._bool],
+    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparseObservable]],
-    postselect_mask: np.ndarray[np._bool],
+    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
 ):
     """Applies postselection mask in preparation for computing expectation values.
 
@@ -234,10 +236,10 @@ def apply_postselect_mask(
 
 
 def apply_pec_signs(
-        bool_array: np.ndarray[np._bool],
-        basis_dict: dict[Pauli, list[SparseObservable|SparsePauliOp]],
-        pec_signs: np.ndarray[np._bool],
-        ):
+    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
+    basis_dict: dict[Pauli, list[SparseObservable | SparsePauliOp]],
+    pec_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
+):
     """Applies PEC signs in preparation for computing expectation values.
 
     Args:
@@ -277,9 +279,10 @@ def apply_pec_signs(
 def bitarray_expectation_value(
     outcomes: BitArray,
     observables: list[SparseObservable],
-    shots: int | np.ndarray[int] | None = None,
+    shots: int | np.ndarray[tuple[int, ...], np.dtype[np.int64]] | None = None,
 ):
     """Calculate expectation value of observables on the BitArray data.
+
     Observables are assumed to be diagonal in the measured bases.
 
     Args:
@@ -287,23 +290,22 @@ def bitarray_expectation_value(
         observables: List of `SparseObservable`s to evaluate. These are assumed
             to be diagonal in the measured bases, so X, Y, Z are all treated as Z;
             1, -, l are treated as 1; and 0, +, r are treated as 0.
-        shots: If `None` (default), results will be averaged over shots in the data 
+        shots: If `None` (default), results will be averaged over shots in the data
             as usual. If `shots` is specified, it will be used in the denominator when
-            computing the mean instead of the number of shots in the data. This 
+            computing the mean instead of the number of shots in the data. This
             permits vectorized processing of postselected data despite the tendency
             of postselection to produce ragged arrays. See `apply_postselect_mask`.
-            
+
     Returns:
         The means and standard errors for the observable expectation values.
 
         Note: Covariances between summed Paulis are not currently accounted for in the
             returned variances. (TODO)
     """
-
     num_obs = len(observables)
     obs_lengths = [len(obs) for obs in observables]
     num_bits = observables[0].num_qubits
-    
+
     # Sum to create flat list of all terms:
     obs_tot = sum(observables, start=SparseObservable.zero(num_bits))
     term_lengths = np.diff(obs_tot.boundaries)
@@ -326,11 +328,11 @@ def bitarray_expectation_value(
     mask_z[term_idx, obs_tot.indices] = bit_term_types == 0b0000
     mask_0[term_idx, obs_tot.indices] = bit_term_types == 0b1000
     mask_1[term_idx, obs_tot.indices] = bit_term_types == 0b0100
-    
+
     # Observables have least significant bit at zeroth index in array:
-    mask_z = BitArray.from_bool_array(mask_z[:, np.newaxis,:], 'little')
-    mask_0 = BitArray.from_bool_array(mask_0[:, np.newaxis,:], 'little')
-    mask_1 = BitArray.from_bool_array(mask_1[:, np.newaxis,:], 'little')
+    mask_z = BitArray.from_bool_array(mask_z[:, np.newaxis, :], "little")
+    mask_0 = BitArray.from_bool_array(mask_0[:, np.newaxis, :], "little")
+    mask_1 = BitArray.from_bool_array(mask_1[:, np.newaxis, :], "little")
     # BitArray shape: terms, shots (1 for broadcasting), bits.
 
     # append terms axis to outcomes BitArray shape:
@@ -361,20 +363,19 @@ def bitarray_expectation_value(
 
     # Divide by total shots. May be less than nominal number in array if
     # we are postselecting via projector in observable terms:
-    if shots is None:
-        denom = np.asarray(outcomes.num_shots)
-    else:
-        denom = np.asarray(shots)
+    denom = np.asarray(outcomes.num_shots if shots is None else shots)
 
     # Edge case of counts dict containing outcomes but with total shots, eg {"0": 0}.
-    no_shots = denom==0
+    no_shots = denom == 0
 
     expvals_each_term[~no_shots] /= denom[..., np.newaxis]
     sq_expvals_each_term[~no_shots] /= denom[..., np.newaxis]
     expvals_each_term[no_shots] = np.nan
     sq_expvals_each_term[no_shots] = np.nan
-    variances_each_term = np.clip(sq_expvals_each_term - expvals_each_term**2, 0, None) / denom[..., np.newaxis]
-    
+    variances_each_term = (
+        np.clip(sq_expvals_each_term - expvals_each_term**2, 0, None) / denom[..., np.newaxis]
+    )
+
     # all_coeffs == number of bit terms == means.shape[-1], so broadcasts automatically:
     expvals_each_term *= all_coeffs
     variances_each_term *= all_coeffs**2
@@ -387,9 +388,11 @@ def bitarray_expectation_value(
     for obs_idx, obs_len in enumerate(obs_lengths):
         stop = start + obs_len
         expval_each_observable[..., obs_idx] += np.sum(expvals_each_term[..., start:stop], axis=-1)
-        variance_each_observable[..., obs_idx] += np.sum(variances_each_term[..., start:stop], axis=-1)
+        variance_each_observable[..., obs_idx] += np.sum(
+            variances_each_term[..., start:stop], axis=-1
+        )
         start = stop
-    
+
     stderr_each_observable = np.sqrt(variance_each_observable)
 
     # Observables are along last axis.
@@ -399,7 +402,7 @@ def bitarray_expectation_value(
 
 
 def gamma_from_noisy_boxes(
-    noise_models: dict[str, PauliLindbladMap], 
+    noise_models: dict[str, PauliLindbladMap],
     box_id_to_noise_id: dict[str, str],
     noise_scales_each_box: dict[str, np.ndarray] | None = None,
 ) -> float:
@@ -421,14 +424,17 @@ def gamma_from_noisy_boxes(
     gamma = 1.0
 
     for box_id, noise_id in box_id_to_noise_id.items():
-        
         plm = noise_models[noise_id]
-        
+
         if noise_scales_each_box is not None:
             scales = noise_scales_each_box[box_id]
             if len(scales) != len(plm.rates):
-                raise ValueError(f'Cannot apply noise scales of length {len(scales)} to PauliLindbladMap with {len(plm.rates)} terms.')
-            plm = PauliLindbladMap.from_components(plm.rates * scales, plm.get_qubit_sparse_pauli_list_copy())
+                raise ValueError(
+                    f"Cannot apply noise scales of length {len(scales)} to PauliLindbladMap with {len(plm.rates)} terms."
+                )
+            plm = PauliLindbladMap.from_components(
+                plm.rates * scales, plm.get_qubit_sparse_pauli_list_copy()
+            )
 
         gamma *= plm.inverse().gamma()
 
