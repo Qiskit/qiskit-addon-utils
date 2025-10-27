@@ -28,6 +28,7 @@ def expectation_values(
     pec_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     pec_gamma: float | None = None,
+    trex_factors: list[list[float]] | None = None,
     bit_order: str = "little",
     flip_pec_sign_convention: bool = True,
 ):
@@ -68,6 +69,10 @@ def expectation_values(
             number of positive samples minus the number of negative samples, computed as `1/(np.sum(~pec_signs, axis=avg_axis) - np.sum(pec_signs, axis=avg_axis))`.
             This can fail due to division by zero if there are an equal number of positive and negative samples. Also note this rescales each expectation value
             by a different factor. (TODO: allow specifying an array of gamma values).
+        trex_factors: TREX scale factor for each Pauli term in each observable of each basis in the given basis_dict.
+            Each item in the list corresponds to a different basis, and is a single list of all of the terms related to that basis.
+            The order of the bases and the observables inside each basis should be the same as in `basis_dict`.
+            If `None`, TREX will not be applied.
         bit_order: Bit ordering of `bool_array` along bits axis. Defined as in Qiskit docs for `BitArray`.
         flip_pec_sign_convention: If `True`, invert the sign convention used in processing `pec_signs`. So, if this is `True`,
             then `True` in `pec_signs` indicates `+1`.
@@ -93,7 +98,7 @@ def expectation_values(
 
     if any(a < 0 for a in avg_axis):
         raise ValueError("`avg_axis` must be nonnegative")
-    
+
     if pec_signs is not None and flip_pec_sign_convention:
         pec_signs = ~pec_signs
 
@@ -174,7 +179,10 @@ def expectation_values(
 
         ## AVERAGE OVER SHOTS:
         (means, standard_errs) = bitarray_expectation_value(
-            barray_this_basis, observables, shots=num_kept
+            barray_this_basis,
+            observables,
+            shots=num_kept,
+            trex_scale_each_term=trex_factors,
         )
 
         variances = standard_errs**2
@@ -293,6 +301,7 @@ def bitarray_expectation_value(
     outcomes: BitArray,
     observables: list[SparseObservable],
     shots: int | np.ndarray[tuple[int, ...], np.dtype[np.int64]] | None = None,
+    trex_scale_each_term: list[float] | None = None,
 ):
     """Calculate expectation value of observables on the BitArray data.
 
@@ -308,6 +317,9 @@ def bitarray_expectation_value(
             computing the mean instead of the number of shots in the data. This
             permits vectorized processing of postselected data despite the tendency
             of postselection to produce ragged arrays. See `apply_postselect_mask`.
+        trex_scale_each_term: divide the calculated expectation value of each Pauli term of the
+            combined observable list by its TREX scale factor.
+            If `None`, TREX scale factors will not be applied to the calculated expectation values.
 
     Returns:
         The means and standard errors for the observable expectation values.
@@ -392,6 +404,10 @@ def bitarray_expectation_value(
     # all_coeffs == number of bit terms == means.shape[-1], so broadcasts automatically:
     expvals_each_term *= all_coeffs
     variances_each_term *= all_coeffs**2
+
+    # Divide by TREX scale factors if supplied
+    if trex_scale_each_term:
+        expvals_each_term /= trex_scale_each_term
 
     ### We have the expectation value and variance for each term.
     ### Next, we sum these back into their original observables:
