@@ -176,13 +176,14 @@ def expectation_values(
         barray_this_basis = barray[idx]
         num_kept = num_shots_kept[idx]
         signs = net_signs[idx]
+        basis_trex_factors = trex_factors[meas_basis_idx] if trex_factors else None
 
         ## AVERAGE OVER SHOTS:
         (means, standard_errs) = bitarray_expectation_value(
             barray_this_basis,
             observables,
             shots=num_kept,
-            trex_scale_each_term=trex_factors,
+            trex_scale_each_term=basis_trex_factors,
         )
 
         variances = standard_errs**2
