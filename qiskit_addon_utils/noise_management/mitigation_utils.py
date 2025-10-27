@@ -19,6 +19,7 @@ from qiskit.quantum_info import (
     SparseObservable,
     QubitSparsePauli,
 )
+import numpy as np
 
 
 def trex_factors(
@@ -55,4 +56,4 @@ def trex_factors(
                 for term in observable_sum
             ]
         )
-    return scales_each_basis
+    return np.array(scales_each_basis)
