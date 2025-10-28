@@ -30,7 +30,6 @@ def expectation_values(
     pec_gamma: float | None = None,
     rescale_factors: list[list[float]] | None = None,
     bit_order: str = "little",
-    flip_pec_sign_convention: bool = True,
 ):
     """Computes expectation values from boolean data.
 
@@ -62,7 +61,6 @@ def expectation_values(
         pec_signs: Optional boolean array used with probabilistic error cancellation (PEC). Indicates which errors were inserted in each
             circuit randomization. Final axis, assumed to index all error generators in circuit, is immediately collapsed as a sum mod 2.
             Remaining shape must be `pec_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
-            - FIXME: If `flip_pec_sign_convention` is `True`, the opposite sign convention is used. (This kwarg is temporary as conventions settle across repos.)
         postselect_mask: Optional boolean array used for postselection. `True` (`False`) indicates a shot accepted (rejected) by postselection.
             Shape must be `bool_array.shape[:-1]`.
         pec_gamma: Rescaling factor gamma to be applied to PEC mitigated expectation values. If `None`, rescaling factors will be computed as the
@@ -74,8 +72,6 @@ def expectation_values(
             The order of the bases and the observables inside each basis should be the same as in `basis_dict`.
             If `None`, scaling factor will not be applied.
         bit_order: Bit ordering of `bool_array` along bits axis. Defined as in Qiskit docs for `BitArray`.
-        flip_pec_sign_convention: If `True`, invert the sign convention used in processing `pec_signs`. So, if this is `True`,
-            then `True` in `pec_signs` indicates `+1`.
 
     Returns:
         A list of (exp. val, variance) 2-tuples, one for each desired observable.
@@ -98,9 +94,6 @@ def expectation_values(
 
     if any(a < 0 for a in avg_axis):
         raise ValueError("`avg_axis` must be nonnegative")
-
-    if pec_signs is not None and flip_pec_sign_convention:
-        pec_signs = ~pec_signs
 
     if meas_basis_axis is None:
         if len(basis_dict) != 1:
