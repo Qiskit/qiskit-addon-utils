@@ -37,23 +37,28 @@ def trex_factors(
         expectation value calculation.
 
     Returns:
-        A list of floats that represent the TREX mitigation algorithm's expectation value scale factor for each
-        Pauli term in each observable.
+        A list of numpy array of floats that represent the TREX mitigation algorithm's expectation value scale factor
+        for each Pauli term in each observable in each basis in the given basis_dict.
+        .
 
     """
+    num_qubits = measurement_noise_map.num_qubits
     scales_each_basis = []
     for _, spo_list in basis_dict.items():
-        sparse_obs_list = []
+        scales_for_basis = []
         for spo in spo_list:
-            sparse_obs_list.append(SparseObservable(spo))
-        num_bits = sparse_obs_list[0].num_qubits
-        observable_sum = sum(sparse_obs_list, start=SparseObservable.zero(num_bits))
-        scales_each_basis.append(
-            [
-                measurement_noise_map.pauli_fidelity(
-                    QubitSparsePauli(("Z" * len(term.indices), term.indices), num_qubits=num_bits)
-                )
-                for term in observable_sum
-            ]
-        )
-    return np.array(scales_each_basis)
+            sparse_observable = (
+                SparseObservable(spo) if spo is not None else SparseObservable.zero(num_qubits)
+            )
+            scales_for_basis.append(
+                [
+                    1 / measurement_noise_map.pauli_fidelity(
+                        QubitSparsePauli(
+                            ("Z" * len(term.indices), term.indices), num_qubits=num_qubits
+                        )
+                    )
+                    for term in sparse_observable
+                ]
+            )
+        scales_each_basis.append(scales_for_basis)
+    return scales_each_basis

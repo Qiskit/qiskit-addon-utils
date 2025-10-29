@@ -67,9 +67,11 @@ def expectation_values(
             number of positive samples minus the number of negative samples, computed as `1/(np.sum(~pec_signs, axis=avg_axis) - np.sum(pec_signs, axis=avg_axis))`.
             This can fail due to division by zero if there are an equal number of positive and negative samples. Also note this rescales each expectation value
             by a different factor. (TODO: allow specifying an array of gamma values).
-        rescale_factors: Scale factor for each Pauli term in each observable of each basis in the given basis_dict.
-            Each item in the list corresponds to a different basis, and is a single list of all of the terms related to that basis.
-            The order of the bases and the observables inside each basis should be the same as in `basis_dict`.
+        rescale_factors: Scale factor for each Pauli term in each observable in each basis in the given basis_dict.
+            Each item in the list corresponds to a different basis, and contains an array of factor for each observable
+             related to that basis.
+            The order of the bases and the observables inside each basis should be the same as in `basis_dict`. for empty
+            observables for some of the bases, keep an empty array.
             If `None`, scaling factor will not be applied.
         bit_order: Bit ordering of `bool_array` along bits axis. Defined as in Qiskit docs for `BitArray`.
 
@@ -169,9 +171,12 @@ def expectation_values(
         barray_this_basis = barray[idx]
         num_kept = num_shots_kept[idx]
         signs = net_signs[idx]
-        basis_scale_factors = (
-            rescale_factors[meas_basis_idx] if rescale_factors is not None else None
-        )
+        # combine the rescale_factors for each basis into a single array of terms
+        if rescale_factors is not None:
+            rescale_factors_combined = [np.array([obs for base_obs in base for obs in base_obs]) for base in rescale_factors]
+            basis_scale_factors = rescale_factors_combined[meas_basis_idx]
+        else:
+            basis_scale_factors = None
 
         ## AVERAGE OVER SHOTS:
         (means, standard_errs) = bitarray_expectation_value(
