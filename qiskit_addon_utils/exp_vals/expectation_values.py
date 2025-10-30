@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 from qiskit.primitives import BitArray
 from qiskit.quantum_info import Pauli, PauliLindbladMap, SparseObservable, SparsePauliOp
@@ -28,7 +30,7 @@ def expectation_values(
     pec_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     pec_gamma: float | None = None,
-    rescale_factors: list[list[float]] | None = None,
+    rescale_factors: Sequence[Sequence[Sequence[float]]] | None = None,
     bit_order: str = "little",
 ):
     """Computes expectation values from boolean data.
@@ -173,7 +175,9 @@ def expectation_values(
         signs = net_signs[idx]
         # combine the rescale_factors for each basis into a single array of terms
         if rescale_factors is not None:
-            rescale_factors_combined = [np.array([obs for base_obs in base for obs in base_obs]) for base in rescale_factors]
+            rescale_factors_combined = [
+                np.array([obs for base_obs in base for obs in base_obs]) for base in rescale_factors
+            ]
             basis_scale_factors = rescale_factors_combined[meas_basis_idx]
         else:
             basis_scale_factors = None
@@ -409,7 +413,7 @@ def bitarray_expectation_value(
     # Divide by TREX scale factors if supplied
     if rescale_each_term is not None:
         expvals_each_term *= rescale_each_term
-        variances_each_term *= rescale_each_term**2
+        variances_each_term *= np.array(rescale_each_term) ** 2
 
     ### We have the expectation value and variance for each term.
     ### Next, we sum these back into their original observables:

@@ -12,21 +12,21 @@
 
 """Utility functions related to error mitigation algorithms."""
 
+from __future__ import annotations
+
 from qiskit.quantum_info import (
     Pauli,
-    SparsePauliOp,
     PauliLindbladMap,
-    SparseObservable,
     QubitSparsePauli,
+    SparseObservable,
+    SparsePauliOp,
 )
-import numpy as np
 
 
 def trex_factors(
     measurement_noise_map: PauliLindbladMap, basis_dict: dict[Pauli, list[SparsePauliOp | None]]
 ):
-    """Calculates TREX mitigation algorithm's expectation value scale factor for each Pauli term in each observable
-    in the basis dictionary.
+    """Calculates TREX mitigation algorithm's expectation value scale factor for each Pauli term in ``basis_dict``.
 
     Calculates <Z^n> for each Pauli term in each observable, where n is the non identity indices in the Pauli term.
     The calculation is done using learned measurement noise.
@@ -52,7 +52,8 @@ def trex_factors(
             )
             scales_for_basis.append(
                 [
-                    1 / measurement_noise_map.pauli_fidelity(
+                    1
+                    / measurement_noise_map.pauli_fidelity(
                         QubitSparsePauli(
                             ("Z" * len(term.indices), term.indices), num_qubits=num_qubits
                         )
