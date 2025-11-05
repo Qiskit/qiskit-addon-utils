@@ -153,13 +153,13 @@ def expectation_values(
     basis_dict = basis_dict_
 
     ##### POSTSELECTION:
-    bool_array, basis_dict, num_shots_kept = apply_postselect_mask(
+    bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(
         bool_array, basis_dict, postselect_mask
     )
     # We will need to correct the shot counts later when computing expectation values.
 
     ##### PEC SIGNS:
-    bool_array, basis_dict, net_signs = apply_pec_signs(bool_array, basis_dict, pauli_signs)
+    bool_array, basis_dict, net_signs = _apply_pec_signs(bool_array, basis_dict, pauli_signs)
     # For PEC, we will need to apply a rescaling factor gamma later when computing expectation values.
 
     ##### ACCUMULATE CONTRIBUTIONS FROM EACH MEAS BASIS:
@@ -181,7 +181,7 @@ def expectation_values(
         )
 
         ## AVERAGE OVER SHOTS:
-        (means, standard_errs) = bitarray_expectation_value(
+        (means, standard_errs) = _bitarray_expectation_value(
             barray_this_basis,
             observables,
             shots=num_kept,
@@ -219,7 +219,7 @@ def expectation_values(
     return mean_and_var_each_observable
 
 
-def apply_postselect_mask(
+def _apply_postselect_mask(
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparseObservable]],
     postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
@@ -259,7 +259,7 @@ def apply_postselect_mask(
     return bool_array, basis_dict, num_shots_kept
 
 
-def apply_pec_signs(
+def _apply_pec_signs(
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparseObservable | SparsePauliOp]],
     pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
@@ -300,7 +300,7 @@ def apply_pec_signs(
     return bool_array, basis_dict, net_signs
 
 
-def bitarray_expectation_value(
+def _bitarray_expectation_value(
     outcomes: BitArray,
     observables: list[SparseObservable],
     shots: int | np.ndarray[tuple[int, ...], np.dtype[np.int64]] | None = None,
