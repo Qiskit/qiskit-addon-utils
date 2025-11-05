@@ -35,6 +35,9 @@ def map_observable_isa_to_canonical(isa_observable, canonical_qubits):
     num_c_qubits = len(canonical_qubits)
 
     if isinstance(isa_observable, Pauli):
+        if isa_observable.phase != 0:
+            raise NotImplementedError("`Pauli` observable must have zero phase.")
+        
         return Pauli(
             "".join([isa_observable.to_label()[::-1][c_2_p[c]] for c in range(num_c_qubits)])[::-1]
         )
