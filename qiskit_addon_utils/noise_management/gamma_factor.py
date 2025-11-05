@@ -24,6 +24,7 @@ def gamma_from_noisy_boxes(
     noise_scales_each_box: dict[str, np.ndarray] | None = None,
 ) -> float:
     """Calculate the gamma factor for a circuit given the Pauli-Lindblad noise models for the boxes in that circuit.
+    This function expects the noise models to represent the noise in the circuit, and thus to have positive Lindblad rates. The returned gamma is that associated with the inverse noise maps needed to cancel the noise in the circuit.
 
     Args:
         noise_models: Dict of noise-model IDs (strings) and learned noise models for each unique noisy box in the circuit.
