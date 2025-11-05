@@ -79,7 +79,7 @@ def _convert_basis_to_uint_representation(bases: PauliList) -> list[np.typing.ND
     """Converts list of Paulis in PauliList format into a list of integers representing those Paulis.
 
     The representation of the Paulis as integers is:
-    I=0, X=1, Z=2, Y=3
+    I=0, Z=1, X=2, Y=3
 
     Args:
         bases: The bases in PauliList format to convert.
