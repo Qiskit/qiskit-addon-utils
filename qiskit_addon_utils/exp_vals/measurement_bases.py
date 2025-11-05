@@ -31,7 +31,7 @@ def get_measurement_bases(
         observables: The observables to calculate using the quantum computer.
 
     Returns:
-        * List of Pauli bases to sample encoded in a list of uint8 where 0=I,1=X,2=Y,3=Z.
+        * List of Pauli bases to sample encoded in a list of uint8 where 0=I,1=Z,2=X,3=Y.
         * Dict that maps each measured basis to the relevant Paulis and their coefficients for each observable.
           With the measured bases as keys, for each observable there is a SparsePauliOp representing it.
     """
