@@ -38,9 +38,7 @@ def map_observable_isa_to_canonical(isa_observable, canonical_qubits):
         if isa_observable.phase != 0:
             raise NotImplementedError("`Pauli` observable must have zero phase.")
         
-        return Pauli(
-            "".join([isa_observable.to_label()[::-1][c_2_p[c]] for c in range(num_c_qubits)])[::-1]
-        )
+        return isa_observable[canonical_qubits]
 
     elif isinstance(isa_observable, SparsePauliOp):
         return SparsePauliOp.from_sparse_list(
