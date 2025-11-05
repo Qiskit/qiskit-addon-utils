@@ -246,6 +246,7 @@ def _apply_postselect_mask(
         # Projector will ignore shots where ps bit is 0 when computing expectation
         # (though we will need to correct the shot counts later on)
         basis_dict = {
+            # Append a `1` projector to the observable, which will act on the postselection bit:
             basis: [obs.expand("1") for obs in diag_obs_list]
             for basis, diag_obs_list in basis_dict.items()
         }
