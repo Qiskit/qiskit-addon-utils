@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 from qiskit.primitives import BitArray
 from qiskit.quantum_info import Pauli, PauliLindbladMap, SparseObservable, SparsePauliOp
@@ -28,7 +30,7 @@ def expectation_values(
     pec_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     pec_gamma: float | None = None,
-    rescale_factors: list[list[float]] | None = None,
+    rescale_factors: Sequence[Sequence[Sequence[float]]] | None = None,
     bit_order: str = "little",
 ):
     """Computes expectation values from boolean data.
@@ -67,12 +69,10 @@ def expectation_values(
             number of positive samples minus the number of negative samples, computed as `1/(np.sum(~pec_signs, axis=avg_axis) - np.sum(pec_signs, axis=avg_axis))`.
             This can fail due to division by zero if there are an equal number of positive and negative samples. Also note this rescales each expectation value
             by a different factor. (TODO: allow specifying an array of gamma values).
-        rescale_factors: Scale factor for each Pauli term in each observable in each basis in the given basis_dict.
-            Each item in the list corresponds to a different basis, and contains an array of factor for each observable
-             related to that basis.
-            The order of the bases and the observables inside each basis should be the same as in `basis_dict`. for empty
-            observables for some of the bases, keep an empty array.
-            If `None`, scaling factor will not be applied.
+        rescale_factors: Scale factor for each Pauli term in each observable in each basis in the given ``basis_dict``.
+            Each item in the list corresponds to a different basis, and contains a list of lists of factors for each term in each observable related to that basis.
+            The order of the bases and the observables inside each basis should be the same as in `basis_dict`.
+            For empty observables for some of the bases, keep an empty list. If `None`, scaling factor will not be applied.
         bit_order: Bit ordering of `bool_array` along bits axis. Defined as in Qiskit docs for `BitArray`.
 
     Returns:
@@ -171,19 +171,16 @@ def expectation_values(
         barray_this_basis = barray[idx]
         num_kept = num_shots_kept[idx]
         signs = net_signs[idx]
-        # combine the rescale_factors for each basis into a single array of terms
-        if rescale_factors is not None:
-            rescale_factors_combined = [np.array([obs for base_obs in base for obs in base_obs]) for base in rescale_factors]
-            basis_scale_factors = rescale_factors_combined[meas_basis_idx]
-        else:
-            basis_scale_factors = None
+        basis_rescale_factors = (
+            rescale_factors[meas_basis_idx] if rescale_factors is not None else None
+        )
 
         ## AVERAGE OVER SHOTS:
         (means, standard_errs) = bitarray_expectation_value(
             barray_this_basis,
             observables,
             shots=num_kept,
-            rescale_each_term=basis_scale_factors,
+            rescale_each_observable=basis_rescale_factors,
         )
 
         variances = standard_errs**2
@@ -302,7 +299,7 @@ def bitarray_expectation_value(
     outcomes: BitArray,
     observables: list[SparseObservable],
     shots: int | np.ndarray[tuple[int, ...], np.dtype[np.int64]] | None = None,
-    rescale_each_term: list[float] | None = None,
+    rescale_each_observable: Sequence[Sequence[float]] | None = None,
 ):
     """Calculate expectation value of observables on the BitArray data.
 
@@ -318,8 +315,8 @@ def bitarray_expectation_value(
             computing the mean instead of the number of shots in the data. This
             permits vectorized processing of postselected data despite the tendency
             of postselection to produce ragged arrays. See `apply_postselect_mask`.
-        rescale_each_term: multiply the calculated expectation value of each Pauli term of the
-            combined observable list by the rescale factor.
+        rescale_each_observable: list of lists of rescale factors for each term in each observable in ``observables``.
+            The calculated expectation value of each Pauli term will be multiplied by the matching rescale factor.
             If `None`, rescale factors will not be applied to the calculated expectation values.
 
     Returns:
@@ -406,8 +403,13 @@ def bitarray_expectation_value(
     expvals_each_term *= all_coeffs
     variances_each_term *= all_coeffs**2
 
-    # Divide by TREX scale factors if supplied
-    if rescale_each_term is not None:
+    # Divide by rescale factors if supplied
+    if rescale_each_observable is not None:
+        # combine the rescale factors of all the terms of all observables into a single array
+        rescale_each_term = np.array(
+            [term for observable in rescale_each_observable for term in observable]
+        )
+
         expvals_each_term *= rescale_each_term
         variances_each_term *= rescale_each_term**2
 
