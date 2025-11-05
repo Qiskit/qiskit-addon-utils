@@ -22,7 +22,7 @@ def map_observable_isa_to_canonical(isa_observable, canonical_qubits):
 
     Args:
         isa_observable: A `Pauli`, `SparsePauliOp`, or `SparseObservable` object.
-        canonical_qubits: A dictionary mapping canonical qubits within a box to physical qubits within the layout.
+        canonical_qubits: A list specifying the physical qubit for each canonical qubit.
 
     Return:
         A mapped operator of the same type as ``isa_observable``
