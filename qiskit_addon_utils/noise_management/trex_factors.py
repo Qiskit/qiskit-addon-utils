@@ -10,7 +10,7 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""Utility functions related to error mitigation algorithms."""
+"""TREX rescaling factor computation."""
 
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ from qiskit.quantum_info import (
 
 
 def trex_factors(
-    measurement_noise_map: PauliLindbladMap, basis_dict: dict[Pauli, list[SparsePauliOp | None]]
+    measurement_noise_map: PauliLindbladMap,
+    basis_dict: dict[Pauli, list[SparsePauliOp | None]],
+    /,
 ):
     """Calculates TREX mitigation algorithm's expectation value scale factor for each Pauli term in ``basis_dict``.
 

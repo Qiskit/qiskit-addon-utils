@@ -11,11 +11,14 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
+
 """Noise management tools."""
 
 from .post_selection import PostSelectionSummary, PostSelector
+from .trex_factors import trex_factors
 
 __all__ = [
     "PostSelectionSummary",
     "PostSelector",
+    "trex_factors",
 ]
