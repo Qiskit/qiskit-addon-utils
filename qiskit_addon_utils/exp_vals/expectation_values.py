@@ -50,6 +50,7 @@ def executor_expectation_values(
     Args:
         bool_array: Boolean array, presumably representing data from measured qubits.
             The last two axes are the number of shots and number of classical bits, respectively.
+            The least significant bit is assumed to be at index `0` of the bits axis.
             If `meas_basis_axis` is given, that axis of `bool_array` indexes the measurement bases, with length `len(basis_dict)`.
         basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
             The ith key is a measurement basis assumed to correspond to the ith slice of `bool_array` along the `meas_basis_axis` axis.
