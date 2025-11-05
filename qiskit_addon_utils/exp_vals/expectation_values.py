@@ -67,8 +67,7 @@ def executor_expectation_values(
             Must be nonnegative. (The shots axis, assumed to be at index -2 in the boolean array, is always averaged over).
         measurement_flips: Optional boolean array used with measurement twirling. Indicates which bits were acquired with measurements preceded by bit-flip gates.
             Data processing will use the result of `xor`ing this array with `bool_array`. Must be same shape as `bool_array`.
-        pauli_signs: Optional boolean array used with probabilistic error cancellation (PEC). Indicates which errors were inserted in each
-            circuit randomization. Final axis, assumed to index all error generators in circuit, is immediately collapsed as a sum mod 2.
+        pauli_signs: Optional boolean array used with probabilistic error cancellation (PEC). Final axis is assumed to index all noisy boxes in circuit. Value of `True` indicates an overall sign of `-1` should be associated with the noisy box, typically because an odd number of inverse-noise errors were inserted in that box for the specified circuit randomization. The final axis is immediately collapsed as a sum mod 2 to obtain the overall sign associated with each circuit randomization.
             Remaining shape must be `pauli_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
         postselect_mask: Optional boolean array used for postselection. `True` (`False`) indicates a shot accepted (rejected) by postselection.
             Shape must be `bool_array.shape[:-1]`.
