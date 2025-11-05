@@ -67,7 +67,7 @@ def map_observable_isa_to_canonical(isa_observable, canonical_qubits):
 def map_observable_virtual_to_canonical(virt_observable, layout, canonical_qubits):
     """
     Maps an observable defined relative to the virtual qubit indexing (defined by the order of the qubits in the original
-    problem circuit before transilation), to the canonical qubit indexing (which is defined by the order of the qubits in the final measurement box of the used circuit)
+    problem circuit before transilation), to the canonical qubit indexing (see `Samplomatic docs <https://qiskit.github.io/samplomatic/guides/samplex_io.html#qubit-ordering-convention>`_)
 
     Args:
         virt_observable: A `Pauli`, `SparsePauliOp`, or `SparseObservable` object.
