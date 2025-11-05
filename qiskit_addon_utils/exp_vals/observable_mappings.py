@@ -18,7 +18,7 @@ from qiskit.quantum_info import Pauli, SparsePauliOp, SparseObservable
 def map_observable_isa_to_canonical(isa_observable, canonical_qubits):
     """
     Maps an observable defined relative to the isa circuit (where the qubits are indexed based on the "physical" layout of qubits in the device),
-    to the canonical qubit indexing (which is defined by the order of the qubits in the final measurement box of the used circuit)
+    to the canonical qubit indexing (see `Samplomatic docs <https://qiskit.github.io/samplomatic/guides/samplex_io.html#qubit-ordering-convention>`_)
 
     Args:
         isa_observable: A `Pauli`, `SparsePauliOp`, or `SparseObservable` object.
