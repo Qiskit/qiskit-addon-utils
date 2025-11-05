@@ -41,7 +41,6 @@ def trex_factors(
     Returns:
         A list of numpy array of floats that represent the TREX mitigation algorithm's expectation value scale factor
         for each Pauli term in each observable in each basis in the given basis_dict.
-        .
 
     """
     num_qubits = measurement_noise_map.num_qubits
