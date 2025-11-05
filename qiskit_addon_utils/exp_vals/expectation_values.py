@@ -76,6 +76,7 @@ def executor_expectation_values(
             This can fail due to division by zero if there are an equal number of positive and negative samples. Also note this rescales each expectation value
             by a different factor. (TODO: allow specifying an array of gamma values).
         rescale_factors: Scale factor for each Pauli term in each observable in each basis in the given ``basis_dict``.
+            Typically used for readout mitigation ("TREX") correction factors.
             Each item in the list corresponds to a different basis, and contains a list of lists of factors for each term in each observable related to that basis.
             The order of the bases and the observables inside each basis should be the same as in `basis_dict`.
             For empty observables for some of the bases, keep an empty list. If `None`, scaling factor will not be applied.
