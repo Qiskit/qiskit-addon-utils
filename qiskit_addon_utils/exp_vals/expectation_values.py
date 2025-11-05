@@ -18,7 +18,7 @@ from collections.abc import Sequence
 
 import numpy as np
 from qiskit.primitives import BitArray
-from qiskit.quantum_info import Pauli, PauliLindbladMap, SparseObservable, SparsePauliOp
+from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp
 
 
 def expectation_values(
@@ -437,43 +437,3 @@ def bitarray_expectation_value(
     # Shots, bits axes have been collapsed.
 
     return expval_each_observable, stderr_each_observable
-
-
-def gamma_from_noisy_boxes(
-    noise_models: dict[str, PauliLindbladMap],
-    box_id_to_noise_id: dict[str, str],
-    noise_scales_each_box: dict[str, np.ndarray] | None = None,
-) -> float:
-    """Calculate the gamma factor for a circuit given the Pauli-Lindblad noise models for the boxes in that circuit.
-
-    Args:
-        noise_models: Dict of noise-model IDs (strings) and learned noise models for each unique noisy box in the circuit.
-        box_id_to_noise_id: Dict of box IDs and noise-model IDs.
-        noise_scales_each_box: Dict of box IDs and factors by which to rescale the Lindblad error rates of each generator in the
-            associated noise model.
-
-    Returns:
-        The gamma factor.
-
-    Raises:
-        ValueError if the length of an array in `noise_scales_each_box` does not equal the length of `rates` of the associated
-            `PauliLindbladMap` in `noise_models`.
-    """
-    gamma = 1.0
-
-    for box_id, noise_id in box_id_to_noise_id.items():
-        plm = noise_models[noise_id]
-
-        if noise_scales_each_box is not None:
-            scales = noise_scales_each_box[box_id]
-            if len(scales) != len(plm.rates):
-                raise ValueError(
-                    f"Cannot apply noise scales of length {len(scales)} to PauliLindbladMap with {len(plm.rates)} terms."
-                )
-            plm = PauliLindbladMap.from_components(
-                plm.rates * scales, plm.get_qubit_sparse_pauli_list_copy()
-            )
-
-        gamma *= plm.inverse().gamma()
-
-    return gamma
