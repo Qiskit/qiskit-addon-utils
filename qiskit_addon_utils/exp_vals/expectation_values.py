@@ -39,7 +39,7 @@ def executor_expectation_values(
     gamma_factor: float | None = None,
     rescale_factors: Sequence[Sequence[Sequence[float]]] | None = None,
 ):
-    """Computes expectation values from boolean data.
+    """Computes expectation values from boolean data and metadata, aiming for compatibility with the components of a result from ``Executor`` in ``qiskit_ibm_runtime`` .
 
     Uses data in `bool_array`, acquired with measurement bases as ordered in keys of `basis_dict`, to compute observables encoded in values of `basis_dict`.
 
