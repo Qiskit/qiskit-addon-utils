@@ -231,7 +231,7 @@ def _apply_postselect_mask(
         bool_array: Boolean array, presumably representing data from measured qubits.
             The last two axes are the number of shots and number of classical bits, respectively.
         basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
-            Similar to `basis_dict` arg of `expectation_values()`, but here Pauli components and coefficients must be represented as
+            Similar to `basis_dict` arg of `executor_expectation_values()`, but here Pauli components and coefficients must be represented as
             `SparseObservable` instead of `SparsePauliOp`, and `None` may not be used as a placeholder for the zero operator.
         postselect_mask: Boolean array used for postselection. `True` (`False`) indicates a shot accepted (rejected) by postselection.
             Shape must be `bool_array.shape[:-1]`.
