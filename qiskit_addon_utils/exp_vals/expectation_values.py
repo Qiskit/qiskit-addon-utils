@@ -21,7 +21,7 @@ from qiskit.primitives import BitArray
 from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp
 
 
-def expectation_values(
+def executor_expectation_values(
     # positional-only arguments: these canNOT be specified as keyword arguments, meaning we can
     # rename them without breaking API
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
