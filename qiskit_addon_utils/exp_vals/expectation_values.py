@@ -22,16 +22,22 @@ from qiskit.quantum_info import Pauli, PauliLindbladMap, SparseObservable, Spars
 
 
 def expectation_values(
+    # positional-only arguments: these canNOT be specified as keyword arguments, meaning we can
+    # rename them without breaking API
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparsePauliOp | None]],
+    /,
+    # positional or keyword arguments
     meas_basis_axis: int | None = None,
+    *,
+    # keyword-only arguments: these can ONLY be specified as keyword arguments. Renaming them breaks
+    # API, but their order does not matter.
     avg_axis: int | tuple[int, ...] | None = None,
-    meas_flips: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
-    pec_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
+    measurement_flips: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
+    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
-    pec_gamma: float | None = None,
+    gamma_factor: float | None = None,
     rescale_factors: Sequence[Sequence[Sequence[float]]] | None = None,
-    bit_order: str = "little",
 ):
     """Computes expectation values from boolean data.
 
@@ -58,22 +64,21 @@ def expectation_values(
             then `len(basis_dict)` must be 1, and `bool_array` is assumed to correspond to the only measurement basis.
         avg_axis: Optional axis or axes of bool_array to average over when computing expectation values. Usually this is the "twirling" axis.
             Must be nonnegative. (The shots axis, assumed to be at index -2 in the boolean array, is always averaged over).
-        meas_flips: Optional boolean array used with measurement twirling. Indicates which bits were acquired with measurements preceded by bit-flip gates.
+        measurement_flips: Optional boolean array used with measurement twirling. Indicates which bits were acquired with measurements preceded by bit-flip gates.
             Data processing will use the result of `xor`ing this array with `bool_array`. Must be same shape as `bool_array`.
-        pec_signs: Optional boolean array used with probabilistic error cancellation (PEC). Indicates which errors were inserted in each
+        pauli_signs: Optional boolean array used with probabilistic error cancellation (PEC). Indicates which errors were inserted in each
             circuit randomization. Final axis, assumed to index all error generators in circuit, is immediately collapsed as a sum mod 2.
-            Remaining shape must be `pec_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
+            Remaining shape must be `pauli_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
         postselect_mask: Optional boolean array used for postselection. `True` (`False`) indicates a shot accepted (rejected) by postselection.
             Shape must be `bool_array.shape[:-1]`.
-        pec_gamma: Rescaling factor gamma to be applied to PEC mitigated expectation values. If `None`, rescaling factors will be computed as the
-            number of positive samples minus the number of negative samples, computed as `1/(np.sum(~pec_signs, axis=avg_axis) - np.sum(pec_signs, axis=avg_axis))`.
+        gamma_factor: Rescaling factor gamma to be applied to PEC mitigated expectation values. If `None`, rescaling factors will be computed as the
+            number of positive samples minus the number of negative samples, computed as `1/(np.sum(~pauli_signs, axis=avg_axis) - np.sum(pauli_signs, axis=avg_axis))`.
             This can fail due to division by zero if there are an equal number of positive and negative samples. Also note this rescales each expectation value
             by a different factor. (TODO: allow specifying an array of gamma values).
         rescale_factors: Scale factor for each Pauli term in each observable in each basis in the given ``basis_dict``.
             Each item in the list corresponds to a different basis, and contains a list of lists of factors for each term in each observable related to that basis.
             The order of the bases and the observables inside each basis should be the same as in `basis_dict`.
             For empty observables for some of the bases, keep an empty list. If `None`, scaling factor will not be applied.
-        bit_order: Bit ordering of `bool_array` along bits axis. Defined as in Qiskit docs for `BitArray`.
 
     Returns:
         A list of (exp. val, variance) 2-tuples, one for each desired observable.
@@ -103,10 +108,10 @@ def expectation_values(
                 f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_dict) = }. "
             )
         bool_array = bool_array.reshape((1, *bool_array.shape))
-        if meas_flips is not None:
-            meas_flips = meas_flips.reshape((1, *meas_flips.shape))
-        if pec_signs is not None:
-            pec_signs = pec_signs.reshape((1, *pec_signs.shape))
+        if measurement_flips is not None:
+            measurement_flips = measurement_flips.reshape((1, *measurement_flips.shape))
+        if pauli_signs is not None:
+            pauli_signs = pauli_signs.reshape((1, *pauli_signs.shape))
         if postselect_mask is not None:
             postselect_mask = postselect_mask.reshape((1, *postselect_mask.shape))
         meas_basis_axis = 0
@@ -127,8 +132,8 @@ def expectation_values(
             )
 
     ##### APPLY MEAS FLIPS:
-    if meas_flips is not None:
-        bool_array = np.logical_xor(bool_array, meas_flips)
+    if measurement_flips is not None:
+        bool_array = np.logical_xor(bool_array, measurement_flips)
 
     ##### FORMAT OBSERVABLES:
     original_num_bits = bool_array.shape[-1]
@@ -154,11 +159,11 @@ def expectation_values(
     # We will need to correct the shot counts later when computing expectation values.
 
     ##### PEC SIGNS:
-    bool_array, basis_dict, net_signs = apply_pec_signs(bool_array, basis_dict, pec_signs)
+    bool_array, basis_dict, net_signs = apply_pec_signs(bool_array, basis_dict, pauli_signs)
     # For PEC, we will need to apply a rescaling factor gamma later when computing expectation values.
 
     ##### ACCUMULATE CONTRIBUTIONS FROM EACH MEAS BASIS:
-    barray = BitArray.from_bool_array(bool_array, bit_order)
+    barray = BitArray.from_bool_array(bool_array, "little")
     output_shape_each_obs = np.delete(barray.shape, (meas_basis_axis, *avg_axis))
     mean_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
     var_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
@@ -190,8 +195,8 @@ def expectation_values(
         # Update indexing since we already sliced away meas_basis axis:
         avg_axis_ = tuple(a if a < meas_basis_axis else a - 1 for a in avg_axis)
 
-        if pec_gamma is not None:
-            rescaling = pec_gamma
+        if gamma_factor is not None:
+            rescaling = gamma_factor
         else:
             num_minus = np.count_nonzero(signs, axis=avg_axis_)
             num_plus = np.count_nonzero(~signs, axis=avg_axis_)
@@ -257,7 +262,7 @@ def apply_postselect_mask(
 def apply_pec_signs(
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparseObservable | SparsePauliOp]],
-    pec_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
+    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
 ):
     """Applies PEC signs in preparation for computing expectation values.
 
@@ -266,9 +271,9 @@ def apply_pec_signs(
             The last two axes are the number of shots and number of classical bits, respectively.
         basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
             Similar to `basis_dict` arg of `expectation_values()`, but here `None` may not be used as a placeholder for the zero operator.
-        pec_signs: Optional boolean array used with probabilistic error cancellation (PEC). Indicates which errors were inserted in each
+        pauli_signs: Optional boolean array used with probabilistic error cancellation (PEC). Indicates which errors were inserted in each
                 circuit randomization. Final axis, assumed to index all error generators in circuit, is immediately collapsed as a sum mod 2.
-                Remaining shape must be `pec_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
+                Remaining shape must be `pauli_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
 
     Returns:
         - A copy of `bool_array` with an extra classical bit appended indicating the PEC sign.
@@ -276,10 +281,10 @@ def apply_pec_signs(
         - An array indicating the net sign of each circuit randomization. When computing expectation values,
             this may be used to compute an approximation of the PEC rescaling factor gamma.
     """
-    if pec_signs is not None:
+    if pauli_signs is not None:
         # signs axes are [..., error_generator]
         # Append sign bit to classical bits:
-        net_signs = np.asarray(np.sum(pec_signs, axis=-1) % 2, dtype=bool)
+        net_signs = np.asarray(np.sum(pauli_signs, axis=-1) % 2, dtype=bool)
         #   Broadcast signs over shots axis:
         net_signs_bc = np.broadcast_to(net_signs[..., np.newaxis], shape=bool_array.shape[:-1])
         bool_array = np.concatenate((bool_array, net_signs_bc[..., np.newaxis]), axis=-1)
