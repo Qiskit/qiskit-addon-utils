@@ -125,6 +125,15 @@ _inlined_apis = [
     ("qiskit_addon_utils.slicing", "slice_by_coloring"),
     ("qiskit_addon_utils.slicing", "slice_by_depth"),
     ("qiskit_addon_utils.slicing", "slice_by_gate_types"),
+    ("qiskit_addon_utils.exp_vals", "executor_expectation_values"),
+    ("qiskit_addon_utils.exp_vals", "get_measurement_bases"),
+    ("qiskit_addon_utils.exp_vals", "map_observable_isa_to_canonical"),
+    ("qiskit_addon_utils.exp_vals", "map_observable_virtual_to_canonical"),
+    ("qiskit_addon_utils.exp_vals", "map_observable_isa_to_virtual"),
+    ("qiskit_addon_utils.noise_management", "PostSelectionSummary"),
+    ("qiskit_addon_utils.noise_management", "PostSelector"),
+    ("qiskit_addon_utils.noise_management", "gamma_from_noisy_boxes"),
+    ("qiskit_addon_utils.noise_management", "trex_factors"),
 ]
 
 redirects = {

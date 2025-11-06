@@ -9,6 +9,10 @@ post_selection_transpiler_passes (:mod:`qiskit_addon_utils.noise_management.post
 
 .. currentmodule:: qiskit_addon_utils.noise_management.post_selection.transpiler.passes
 
-.. autoclass:: AddSpectatorMeasures
-.. autoclass:: AddPostSelectionMeasures
-.. autoclass:: XSlowGate
+.. autosummary::
+   :toctree: ../stubs/
+   :nosignatures:
+   
+   AddSpectatorMeasures
+   AddPostSelectionMeasures
+   XSlowGate

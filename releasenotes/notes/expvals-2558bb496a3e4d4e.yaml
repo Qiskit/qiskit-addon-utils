@@ -1,0 +1,8 @@
+---
+features:
+  - |
+    Added a new sub-package, :mod:`qiskit_addon_utils.exp_vals`, containing functions for calculating expectation values from the outputs of Qiskit Runtime's new ``Executor`` primitive prototype. This includes:
+
+      * :func:`qiskit_addon_utils.exp_vals.executor_expectation_values` for expectation value calculation
+      * :func:`qiskit_addon_utils.exp_vals.get_measurement_bases` for identifying a minimal set of measurement bases to cover all terms in the observable.
+      * :func:`qiskit_addon_utils.exp_vals.map_observable_isa_to_canonical`, :func:`qiskit_addon_utils.exp_vals.map_observable_virtual_to_canonical`, and :func:`qiskit_addon_utils.exp_vals.map_observable_isa_to_virtual` for transforming the qubit order of Pauli observables.

@@ -12,15 +12,20 @@
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
 
-"""Noise management tools."""
+"""Tools for calculating expectation values."""
 
-from .gamma_factor import gamma_from_noisy_boxes
-from .post_selection import PostSelectionSummary, PostSelector
-from .trex_factors import trex_factors
+from .expectation_values import executor_expectation_values
+from .measurement_bases import get_measurement_bases
+from .observable_mappings import (
+    map_observable_isa_to_canonical,
+    map_observable_isa_to_virtual,
+    map_observable_virtual_to_canonical,
+)
 
 __all__ = [
-    "PostSelectionSummary",
-    "PostSelector",
-    "gamma_from_noisy_boxes",
-    "trex_factors",
+    "executor_expectation_values",
+    "get_measurement_bases",
+    "map_observable_isa_to_canonical",
+    "map_observable_isa_to_virtual",
+    "map_observable_virtual_to_canonical",
 ]
