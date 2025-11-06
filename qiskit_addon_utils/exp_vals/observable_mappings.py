@@ -22,7 +22,7 @@ from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp
 def map_observable_isa_to_canonical(
     isa_observable: Pauli | SparsePauliOp | SparseObservable, canonical_qubits: Sequence[int]
 ) -> Pauli | SparsePauliOp | SparseObservable:
-    """Map an observable defined relative to the transpiled circuit to canonical form.
+    """Map an observable defined relative to the transpiled circuit to canonical box-order.
 
     In the transpiled (or ISA) ordering, the qubits are indexed based on the "physical"
     layout of qubits in the device.
@@ -74,9 +74,9 @@ def map_observable_virtual_to_canonical(
     layout: Sequence[int],
     canonical_qubits: Sequence[int],
 ):
-    """Map an observable defined relative to the virtual qubit indexing to the canonical qubit indexing.
+    """Map an observable with virtual qubit ordering to canonical box-order.
 
-    See `Samplomatic docs <https://qiskit.github.io/samplomatic/guides/samplex_io.html#qubit-ordering-convention>`_ for more on qubit ordering conventions.
+    For info on canonical qubit ordering conventions see the `Samplomatic docs <https://qiskit.github.io/samplomatic/guides/samplex_io.html#qubit-ordering-convention>`_).
 
     Args:
         virt_observable: A `Pauli`, `SparsePauliOp`, or `SparseObservable` object.
@@ -128,7 +128,10 @@ def map_observable_virtual_to_canonical(
 def map_observable_isa_to_virtual(
     isa_observable: Pauli | SparsePauliOp | SparseObservable, layout: Sequence[int]
 ) -> Pauli | SparsePauliOp | SparseObservable:
-    """Maps an observable defined relative to the transpiled layout back to its virtual ordering.
+    """Map an observable defined relative to the transpiled circuit to virtual order.
+
+    In the transpiled (or ISA) ordering, the qubits are indexed based on the "physical"
+    layout of qubits in the device.
 
     Args:
         isa_observable: A `Pauli`, `SparsePauliOp`, or `SparseObservable` object.
