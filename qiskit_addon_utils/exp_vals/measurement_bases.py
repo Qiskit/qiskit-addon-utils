@@ -22,7 +22,7 @@ def get_measurement_bases(
     observables: SparsePauliOp | list[SparsePauliOp],
 ) -> tuple[list[np.typing.NDArray[np.uint8]], dict[Pauli, list[SparsePauliOp]]]:
     """Choose bases to sample in order to calculate expectation values for all given observables.
-    
+
     Here a "basis" refers to measurement of a full-weight or high-weight Pauli, from which multiple qubit-wise commuting Paulis may be estimated.
 
     The bases are chosen by grouping commuting Paulis across the different observables.
