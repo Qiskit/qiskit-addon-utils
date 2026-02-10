@@ -37,14 +37,16 @@ def create_and_sample_circ(layout, paulis, add_x, gate_twirl, meas_twirl):
     for q, P in enumerate(paulis):
         if add_x[q]:
             qc.x(q)
-        if P == 'X':
+        if P == "X":
             qc.h(q)
-        elif P == 'Y':
+        elif P == "Y":
             qc.h(q)
             qc.s(q)
     qc.measure_all()
 
-    isa_pm = generate_preset_pass_manager(backend=backend, initial_layout=layout, optimization_level=0)
+    isa_pm = generate_preset_pass_manager(
+        backend=backend, initial_layout=layout, optimization_level=0
+    )
     isa_circuit = isa_pm.run(qc)
     reverser = {observable.paulis[0]: [observable]}
 
@@ -65,15 +67,24 @@ def create_and_sample_circ(layout, paulis, add_x, gate_twirl, meas_twirl):
     boxed_circuit = boxes_pm.run(isa_circuit)
     # create measurement bases using the canonical qubits, assuming the mapping functions are working as expected
     measurement_box = boxed_circuit.data[-1]
-    canonical_qubits = [qubit._index for qubit in boxed_circuit.qubits if qubit in measurement_box.qubits]
-    observable_executor_cannon = map_observable_virtual_to_canonical(observable, layout, canonical_qubits)
-    measurement_bases = _convert_basis_to_uint_representation(PauliList(observable_executor_cannon.paulis))
+    canonical_qubits = [
+        qubit._index for qubit in boxed_circuit.qubits if qubit in measurement_box.qubits
+    ]
+    observable_executor_cannon = map_observable_virtual_to_canonical(
+        observable, layout, canonical_qubits
+    )
+    measurement_bases = _convert_basis_to_uint_representation(
+        PauliList(observable_executor_cannon.paulis)
+    )
 
     # build the samplex and sample some parameters
     template, samplex = build(boxed_circuit)
     inputs = samplex.inputs()
     samplex_input_inputs = {
-        "basis_changes": {get_annotation(boxed_circuit[-1].operation, ChangeBasis).ref: measurement_bases[0]}}
+        "basis_changes": {
+            get_annotation(boxed_circuit[-1].operation, ChangeBasis).ref: measurement_bases[0]
+        }
+    }
     samplex_arguments = inputs.bind(**samplex_input_inputs).make_broadcastable()
     outputs = samplex.sample(samplex_arguments, num_randomizations=n_rand)
 
@@ -82,7 +93,7 @@ def create_and_sample_circ(layout, paulis, add_x, gate_twirl, meas_twirl):
     job = sam.run([(template, outputs["parameter_values"])], shots=10_000)
     res = job.result()
 
-    bool_array = res[0].data.meas.to_bool_array('little')
+    bool_array = res[0].data.meas.to_bool_array("little")
     meas_flips = outputs["measurement_flips.meas"] if meas_twirl else None
     if n_rand == 1:
         bool_array = bool_array[0]
@@ -94,43 +105,69 @@ def create_and_sample_circ(layout, paulis, add_x, gate_twirl, meas_twirl):
         bool_array, reverser, meas_basis_axis=None, avg_axis=avg_axis, measurement_flips=meas_flips
     )
 
+
 class TestExpectationValues(unittest.TestCase):
     def test_executor_expectation_values_no_twirls(self):
         with self.subTest("Check exp val"):
-            exp_vals = create_and_sample_circ(layout = [1, 2], paulis = ['X', 'I'], add_x=[False,False],
-                                              gate_twirl=False, meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[1, 2],
+                paulis=["X", "I"],
+                add_x=[False, False],
+                gate_twirl=False,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals 1
             self.assertAlmostEqual(exp_vals[0][0], 1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val reversed layout"):
-            exp_vals = create_and_sample_circ(layout = [4, 1], paulis = ['X', 'I'], add_x=[False,False],
-                                              gate_twirl=False, meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[4, 1],
+                paulis=["X", "I"],
+                add_x=[False, False],
+                gate_twirl=False,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals 1
             self.assertAlmostEqual(exp_vals[0][0], 1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with x gate"):
-            exp_vals = create_and_sample_circ(layout = [1, 2], paulis = ['X', 'I'], add_x=[True,False],
-                                              gate_twirl=False, meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[1, 2],
+                paulis=["X", "I"],
+                add_x=[True, False],
+                gate_twirl=False,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with x gate reversed layout"):
-            exp_vals = create_and_sample_circ(layout = [4, 1], paulis = ['X', 'I'], add_x=[True,False],
-                                              gate_twirl=False, meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[4, 1],
+                paulis=["X", "I"],
+                add_x=[True, False],
+                gate_twirl=False,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with x gate reversed layout extended basis"):
-            exp_vals = create_and_sample_circ(layout = [4, 2, 0], paulis = ['X', 'Z', 'Y'], add_x=[True,False, False],
-                                              gate_twirl=False, meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[4, 2, 0],
+                paulis=["X", "Z", "Y"],
+                add_x=[True, False, False],
+                gate_twirl=False,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
@@ -139,40 +176,67 @@ class TestExpectationValues(unittest.TestCase):
 
     def test_executor_expectation_values_gate_twirls(self):
         with self.subTest("Check exp val with gate twirling"):
-            exp_vals = create_and_sample_circ(layout=[1, 2], paulis=['X', 'I'], add_x=[False, False], gate_twirl=True,
-                                   meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[1, 2],
+                paulis=["X", "I"],
+                add_x=[False, False],
+                gate_twirl=True,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals 1
             self.assertAlmostEqual(exp_vals[0][0], 1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with gate twirling reversed layout"):
-            exp_vals = create_and_sample_circ(layout=[4, 1], paulis=['X', 'I'], add_x=[False, False], gate_twirl=True,
-                                   meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[4, 1],
+                paulis=["X", "I"],
+                add_x=[False, False],
+                gate_twirl=True,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals 1
             self.assertAlmostEqual(exp_vals[0][0], 1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with gate twirling with x gate"):
-            exp_vals = create_and_sample_circ(layout=[1, 2], paulis=['X', 'I'], add_x=[True, False], gate_twirl=True,
-                                   meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[1, 2],
+                paulis=["X", "I"],
+                add_x=[True, False],
+                gate_twirl=True,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with gate twirling and x gate reversed layout"):
-            exp_vals = create_and_sample_circ(layout=[4, 1], paulis=['X', 'I'], add_x=[True, False], gate_twirl=True,
-                                   meas_twirl=False)
+            exp_vals = create_and_sample_circ(
+                layout=[4, 1],
+                paulis=["X", "I"],
+                add_x=[True, False],
+                gate_twirl=True,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
-        with self.subTest("Check exp val with gate twirling and x gate reversed layout extended basis"):
-            exp_vals = create_and_sample_circ(layout = [4, 2, 0], paulis = ['X', 'Z', 'Y'], add_x=[True,False, False],
-                                              gate_twirl=True, meas_twirl=False)
+        with self.subTest(
+            "Check exp val with gate twirling and x gate reversed layout extended basis"
+        ):
+            exp_vals = create_and_sample_circ(
+                layout=[4, 2, 0],
+                paulis=["X", "Z", "Y"],
+                add_x=[True, False, False],
+                gate_twirl=True,
+                meas_twirl=False,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
@@ -181,40 +245,67 @@ class TestExpectationValues(unittest.TestCase):
 
     def test_executor_expectation_values_meas_twirls(self):
         with self.subTest("Check exp val with measurement twirling"):
-            exp_vals = create_and_sample_circ(layout=[1, 2], paulis=['X', 'I'], add_x=[False, False], gate_twirl=True,
-                                   meas_twirl=True)
+            exp_vals = create_and_sample_circ(
+                layout=[1, 2],
+                paulis=["X", "I"],
+                add_x=[False, False],
+                gate_twirl=True,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals 1
             self.assertAlmostEqual(exp_vals[0][0], 1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with measurement twirling reversed layout"):
-            exp_vals = create_and_sample_circ(layout=[4, 1], paulis=['X', 'I'], add_x=[False, False], gate_twirl=False,
-                                   meas_twirl=True)
+            exp_vals = create_and_sample_circ(
+                layout=[4, 1],
+                paulis=["X", "I"],
+                add_x=[False, False],
+                gate_twirl=False,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals 1
             self.assertAlmostEqual(exp_vals[0][0], 1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with measurement twirling with x gate"):
-            exp_vals = create_and_sample_circ(layout=[1, 2], paulis=['X', 'I'], add_x=[True, False], gate_twirl=False,
-                                   meas_twirl=True)
+            exp_vals = create_and_sample_circ(
+                layout=[1, 2],
+                paulis=["X", "I"],
+                add_x=[True, False],
+                gate_twirl=False,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with measurement twirling and x gate reversed layout"):
-            exp_vals = create_and_sample_circ(layout=[4, 1], paulis=['X', 'I'], add_x=[True, False], gate_twirl=False,
-                                   meas_twirl=True)
+            exp_vals = create_and_sample_circ(
+                layout=[4, 1],
+                paulis=["X", "I"],
+                add_x=[True, False],
+                gate_twirl=False,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
-        with self.subTest("Check exp val with measurement twirling and x gate reversed layout extended basis"):
-            exp_vals = create_and_sample_circ(layout = [4, 2, 0], paulis = ['X', 'Z', 'Y'], add_x=[True,False, False],
-                                              gate_twirl=False, meas_twirl=True)
+        with self.subTest(
+            "Check exp val with measurement twirling and x gate reversed layout extended basis"
+        ):
+            exp_vals = create_and_sample_circ(
+                layout=[4, 2, 0],
+                paulis=["X", "Z", "Y"],
+                add_x=[True, False, False],
+                gate_twirl=False,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
@@ -223,40 +314,69 @@ class TestExpectationValues(unittest.TestCase):
 
     def test_executor_expectation_values_gate_and_meas_twirls(self):
         with self.subTest("Check exp val with gate and measurement twirling"):
-            exp_vals = create_and_sample_circ(layout=[1, 2], paulis=['X', 'I'], add_x=[False, False], gate_twirl=True,
-                                   meas_twirl=True)
+            exp_vals = create_and_sample_circ(
+                layout=[1, 2],
+                paulis=["X", "I"],
+                add_x=[False, False],
+                gate_twirl=True,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals 1
             self.assertAlmostEqual(exp_vals[0][0], 1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with gate and measurement twirling reversed layout"):
-            exp_vals = create_and_sample_circ(layout=[4, 1], paulis=['X', 'I'], add_x=[False, False], gate_twirl=True,
-                                   meas_twirl=True)
+            exp_vals = create_and_sample_circ(
+                layout=[4, 1],
+                paulis=["X", "I"],
+                add_x=[False, False],
+                gate_twirl=True,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals 1
             self.assertAlmostEqual(exp_vals[0][0], 1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
         with self.subTest("Check exp val with gate and measurement twirling with x gate"):
-            exp_vals = create_and_sample_circ(layout=[1, 2], paulis=['X', 'I'], add_x=[True, False], gate_twirl=True,
-                                   meas_twirl=True)
+            exp_vals = create_and_sample_circ(
+                layout=[1, 2],
+                paulis=["X", "I"],
+                add_x=[True, False],
+                gate_twirl=True,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
-        with self.subTest("Check exp val with gate and measurement twirling and x gate reversed layout"):
-            exp_vals = create_and_sample_circ(layout=[4, 1], paulis=['X', 'I'], add_x=[True, False], gate_twirl=True,
-                                   meas_twirl=True)
+        with self.subTest(
+            "Check exp val with gate and measurement twirling and x gate reversed layout"
+        ):
+            exp_vals = create_and_sample_circ(
+                layout=[4, 1],
+                paulis=["X", "I"],
+                add_x=[True, False],
+                gate_twirl=True,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
             # var equals 0
             self.assertAlmostEqual(exp_vals[0][1], 0)
-        with self.subTest("Check exp val with gate and measurement twirling and x gate reversed layout extended basis"):
-            exp_vals = create_and_sample_circ(layout = [4, 2, 0], paulis = ['X', 'Z', 'Y'], add_x=[True,False, False],
-                                              gate_twirl=True, meas_twirl=True)
+        with self.subTest(
+            "Check exp val with gate and measurement twirling and x gate reversed layout extended basis"
+        ):
+            exp_vals = create_and_sample_circ(
+                layout=[4, 2, 0],
+                paulis=["X", "Z", "Y"],
+                add_x=[True, False, False],
+                gate_twirl=True,
+                meas_twirl=True,
+            )
             self.assertEqual(len(exp_vals), 1)
             # exp val equals -1
             self.assertAlmostEqual(exp_vals[0][0], -1)
