@@ -111,7 +111,7 @@ class PostSelector:
 
 def _compute_mask_by_node(
     result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary
-) -> NDArray[bool]:
+) -> NDArray[np.bool]:
     """Compute the mask using a node-based post selection strategy.
 
     Mark as ``False`` every shot where one or more results failed to flip, and as ``True``
@@ -127,7 +127,9 @@ def _compute_mask_by_node(
     return mask
 
 
-def _compute_mask_by_edge(result: dict[str, Any], summary: PostSelectionSummary) -> NDArray[bool]:
+def _compute_mask_by_edge(
+    result: dict[str, Any], summary: PostSelectionSummary
+) -> NDArray[np.bool]:
     """Compute the mask using an edge-based post selection strategy.
 
     Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
