@@ -525,7 +525,7 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
             bool_array,
             basis_dict,
             meas_basis_axis=0,
-            avg_axis=(1,2),  # Average over axes 1 and 2
+            avg_axis=(1, 2),  # Average over axes 1 and 2
         )
 
         self.assertEqual(len(result), 1)
