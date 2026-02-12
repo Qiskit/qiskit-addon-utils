@@ -109,189 +109,189 @@ def create_and_sample_circ(layout, paulis, add_x, gate_twirl, meas_twirl):
     )
 
 
-class TestExpectationValues(unittest.TestCase):
-    def _assert_expectation_values(self, exp_vals, expected_val, expected_var):
-        """Helper to assert expectation value and variance.
+def _assert_expectation_values(exp_vals, expected_val, expected_var):
+    """Helper to assert expectation value and variance.
 
-        Args:
-            exp_vals: List of (expectation_value, variance) tuples
-            expected_val: Expected expectation value
-            expected_var: Expected variance
-        """
-        self.assertEqual(len(exp_vals), 1, msg="Expected exactly one observable result")
-        self.assertAlmostEqual(
-            exp_vals[0][0], expected_val, msg=f"Expectation value mismatch: expected {expected_val}"
-        )
-        self.assertAlmostEqual(
-            exp_vals[0][1], expected_var, msg=f"Variance mismatch: expected {expected_var}"
-        )
-
-    @pytest.mark.parametrize(
-        "qubit_layout,paulis,add_x,gate_twirl,meas_twirl,expected_val,expected_var",
-        [
-            # No twirls test cases
-            pytest.param([1, 2], ["X", "I"], [False, False], False, False, 1, 0, id="no_twirls"),
-            pytest.param(
-                [4, 1],
-                ["X", "I"],
-                [False, False],
-                False,
-                False,
-                1,
-                0,
-                id="no_twirls_reversed_layout",
-            ),
-            pytest.param(
-                [1, 2], ["X", "I"], [True, False], False, False, -1, 0, id="no_twirls_with_x_gate"
-            ),
-            pytest.param(
-                [4, 1],
-                ["X", "I"],
-                [True, False],
-                False,
-                False,
-                -1,
-                0,
-                id="no_twirls_with_x_gate_reversed_layout",
-            ),
-            pytest.param(
-                [4, 2, 0],
-                ["X", "Z", "Y"],
-                [True, False, False],
-                False,
-                False,
-                -1,
-                0,
-                id="no_twirls_with_x_gate_reversed_layout_extended_basis",
-            ),
-            # Gate twirls test cases
-            pytest.param([1, 2], ["X", "I"], [False, False], True, False, 1, 0, id="gate_twirls"),
-            pytest.param(
-                [4, 1],
-                ["X", "I"],
-                [False, False],
-                True,
-                False,
-                1,
-                0,
-                id="gate_twirls_reversed_layout",
-            ),
-            pytest.param(
-                [1, 2], ["X", "I"], [True, False], True, False, -1, 0, id="gate_twirls_with_x_gate"
-            ),
-            pytest.param(
-                [4, 1],
-                ["X", "I"],
-                [True, False],
-                True,
-                False,
-                -1,
-                0,
-                id="gate_twirls_with_x_gate_reversed_layout",
-            ),
-            pytest.param(
-                [4, 2, 0],
-                ["X", "Z", "Y"],
-                [True, False, False],
-                True,
-                False,
-                -1,
-                0,
-                id="gate_twirls_with_x_gate_reversed_layout_extended_basis",
-            ),
-            # Measurement twirls test cases
-            pytest.param([1, 2], ["X", "I"], [False, False], False, True, 1, 0, id="meas_twirls"),
-            pytest.param(
-                [4, 1],
-                ["X", "I"],
-                [False, False],
-                False,
-                True,
-                1,
-                0,
-                id="meas_twirls_reversed_layout",
-            ),
-            pytest.param(
-                [1, 2], ["X", "I"], [True, False], False, True, -1, 0, id="meas_twirls_with_x_gate"
-            ),
-            pytest.param(
-                [4, 1],
-                ["X", "I"],
-                [True, False],
-                False,
-                True,
-                -1,
-                0,
-                id="meas_twirls_with_x_gate_reversed_layout",
-            ),
-            pytest.param(
-                [4, 2, 0],
-                ["X", "Z", "Y"],
-                [True, False, False],
-                False,
-                True,
-                -1,
-                0,
-                id="meas_twirls_with_x_gate_reversed_layout_extended_basis",
-            ),
-            # Gate and measurement twirls test cases
-            pytest.param(
-                [1, 2], ["X", "I"], [False, False], True, True, 1, 0, id="gate_and_meas_twirls"
-            ),
-            pytest.param(
-                [4, 1],
-                ["X", "I"],
-                [False, False],
-                True,
-                True,
-                1,
-                0,
-                id="gate_and_meas_twirls_reversed_layout",
-            ),
-            pytest.param(
-                [1, 2],
-                ["X", "I"],
-                [True, False],
-                True,
-                True,
-                -1,
-                0,
-                id="gate_and_meas_twirls_with_x_gate",
-            ),
-            pytest.param(
-                [4, 1],
-                ["X", "I"],
-                [True, False],
-                True,
-                True,
-                -1,
-                0,
-                id="gate_and_meas_twirls_with_x_gate_reversed_layout",
-            ),
-            pytest.param(
-                [4, 2, 0],
-                ["X", "Z", "Y"],
-                [True, False, False],
-                True,
-                True,
-                -1,
-                0,
-                id="gate_and_meas_twirls_with_x_gate_reversed_layout_extended_basis",
-            ),
-        ],
+    Args:
+        exp_vals: List of (expectation_value, variance) tuples
+        expected_val: Expected expectation value
+        expected_var: Expected variance
+    """
+    assert len(exp_vals) == 1, "Expected exactly one observable result"
+    assert np.isclose(exp_vals[0][0], expected_val), (
+        f"Expectation value mismatch: expected {expected_val}, got {exp_vals[0][0]}"
     )
-    def test_executor_expectation_values(
-        self, qubit_layout, paulis, add_x, gate_twirl, meas_twirl, expected_val, expected_var
-    ):
-        """Test expectation values with various twirling configurations."""
-        exp_vals = create_and_sample_circ(
-            layout=qubit_layout,
-            paulis=paulis,
-            add_x=add_x,
-            gate_twirl=gate_twirl,
-            meas_twirl=meas_twirl,
-        )
-        self._assert_expectation_values(exp_vals, expected_val, expected_var)
+    assert np.isclose(exp_vals[0][1], expected_var), (
+        f"Variance mismatch: expected {expected_var}, got {exp_vals[0][1]}"
+    )
+
+
+@pytest.mark.parametrize(
+    "qubit_layout,paulis,add_x,gate_twirl,meas_twirl,expected_val,expected_var",
+    [
+        # No twirls test cases
+        pytest.param([1, 2], ["X", "I"], [False, False], False, False, 1, 0, id="no_twirls"),
+        pytest.param(
+            [4, 1],
+            ["X", "I"],
+            [False, False],
+            False,
+            False,
+            1,
+            0,
+            id="no_twirls_reversed_layout",
+        ),
+        pytest.param(
+            [1, 2], ["X", "I"], [True, False], False, False, -1, 0, id="no_twirls_with_x_gate"
+        ),
+        pytest.param(
+            [4, 1],
+            ["X", "I"],
+            [True, False],
+            False,
+            False,
+            -1,
+            0,
+            id="no_twirls_with_x_gate_reversed_layout",
+        ),
+        pytest.param(
+            [4, 2, 0],
+            ["X", "Z", "Y"],
+            [True, False, False],
+            False,
+            False,
+            -1,
+            0,
+            id="no_twirls_with_x_gate_reversed_layout_extended_basis",
+        ),
+        # Gate twirls test cases
+        pytest.param([1, 2], ["X", "I"], [False, False], True, False, 1, 0, id="gate_twirls"),
+        pytest.param(
+            [4, 1],
+            ["X", "I"],
+            [False, False],
+            True,
+            False,
+            1,
+            0,
+            id="gate_twirls_reversed_layout",
+        ),
+        pytest.param(
+            [1, 2], ["X", "I"], [True, False], True, False, -1, 0, id="gate_twirls_with_x_gate"
+        ),
+        pytest.param(
+            [4, 1],
+            ["X", "I"],
+            [True, False],
+            True,
+            False,
+            -1,
+            0,
+            id="gate_twirls_with_x_gate_reversed_layout",
+        ),
+        pytest.param(
+            [4, 2, 0],
+            ["X", "Z", "Y"],
+            [True, False, False],
+            True,
+            False,
+            -1,
+            0,
+            id="gate_twirls_with_x_gate_reversed_layout_extended_basis",
+        ),
+        # Measurement twirls test cases
+        pytest.param([1, 2], ["X", "I"], [False, False], False, True, 1, 0, id="meas_twirls"),
+        pytest.param(
+            [4, 1],
+            ["X", "I"],
+            [False, False],
+            False,
+            True,
+            1,
+            0,
+            id="meas_twirls_reversed_layout",
+        ),
+        pytest.param(
+            [1, 2], ["X", "I"], [True, False], False, True, -1, 0, id="meas_twirls_with_x_gate"
+        ),
+        pytest.param(
+            [4, 1],
+            ["X", "I"],
+            [True, False],
+            False,
+            True,
+            -1,
+            0,
+            id="meas_twirls_with_x_gate_reversed_layout",
+        ),
+        pytest.param(
+            [4, 2, 0],
+            ["X", "Z", "Y"],
+            [True, False, False],
+            False,
+            True,
+            -1,
+            0,
+            id="meas_twirls_with_x_gate_reversed_layout_extended_basis",
+        ),
+        # Gate and measurement twirls test cases
+        pytest.param(
+            [1, 2], ["X", "I"], [False, False], True, True, 1, 0, id="gate_and_meas_twirls"
+        ),
+        pytest.param(
+            [4, 1],
+            ["X", "I"],
+            [False, False],
+            True,
+            True,
+            1,
+            0,
+            id="gate_and_meas_twirls_reversed_layout",
+        ),
+        pytest.param(
+            [1, 2],
+            ["X", "I"],
+            [True, False],
+            True,
+            True,
+            -1,
+            0,
+            id="gate_and_meas_twirls_with_x_gate",
+        ),
+        pytest.param(
+            [4, 1],
+            ["X", "I"],
+            [True, False],
+            True,
+            True,
+            -1,
+            0,
+            id="gate_and_meas_twirls_with_x_gate_reversed_layout",
+        ),
+        pytest.param(
+            [4, 2, 0],
+            ["X", "Z", "Y"],
+            [True, False, False],
+            True,
+            True,
+            -1,
+            0,
+            id="gate_and_meas_twirls_with_x_gate_reversed_layout_extended_basis",
+        ),
+    ],
+)
+def test_executor_expectation_values(
+    qubit_layout, paulis, add_x, gate_twirl, meas_twirl, expected_val, expected_var
+):
+    """Test expectation values with various twirling configurations."""
+    exp_vals = create_and_sample_circ(
+        layout=qubit_layout,
+        paulis=paulis,
+        add_x=add_x,
+        gate_twirl=gate_twirl,
+        meas_twirl=meas_twirl,
+    )
+    _assert_expectation_values(exp_vals, expected_val, expected_var)
 
 
 class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
