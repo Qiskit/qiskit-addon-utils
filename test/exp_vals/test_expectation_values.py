@@ -500,11 +500,11 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
 
-    def test_valid_multiple_avg_axes(self):
+    def test_valid_meas_basis_axis_and_avg_axis(self):
         """Test valid edge case: multiple axes in avg_axis."""
         # Create array with extra dimensions for averaging
         bool_array = np.random.randint(0, 2, size=(2, 3, 100, 2), dtype=bool)
-        basis_dict = {Pauli("ZZ"): [SparsePauliOp("ZZ", coeffs=[1.0])]}
+        _, basis_dict = self._create_minimal_valid_inputs(num_bases=2)
 
         result = executor_expectation_values(
             bool_array,
@@ -515,16 +515,31 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
 
-    def test_avg_axis_as_list(self):
-        """Test that avg_axis works with list (converted to tuple internally)."""
-        bool_array = np.random.randint(0, 2, size=(2, 100, 2), dtype=bool)
-        _, basis_dict = self._create_minimal_valid_inputs(num_bases=2)
+    def test_valid_multiple_avg_axes(self):
+        """Test valid edge case: multiple axes in avg_axis."""
+        # Create array with extra dimensions for averaging
+        bool_array = np.random.randint(0, 2, size=(1, 3, 4, 100, 2), dtype=bool)
+        _, basis_dict = self._create_minimal_valid_inputs(num_bases=1)
 
         result = executor_expectation_values(
             bool_array,
             basis_dict,
             meas_basis_axis=0,
-            avg_axis=[1],  # Pass as list instead of tuple
+            avg_axis=(1,2),  # Average over axes 1 and 2
+        )
+
+        self.assertEqual(len(result), 1)
+
+    def test_avg_axis_as_list(self):
+        """Test that avg_axis works with list (converted to tuple internally)."""
+        bool_array = np.random.randint(0, 2, size=(3, 100, 2), dtype=bool)
+        _, basis_dict = self._create_minimal_valid_inputs(num_bases=1)
+
+        result = executor_expectation_values(
+            bool_array,
+            basis_dict,
+            meas_basis_axis=None,
+            avg_axis=[0],  # Pass as list instead of tuple
         )
 
         self.assertEqual(len(result), 1)
