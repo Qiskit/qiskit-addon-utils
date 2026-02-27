@@ -206,12 +206,17 @@ def executor_expectation_values(
 
         # Will weight each twirl by its fraction of kept shots.
         # If no postselection, weighting reduces to dividing by num_twirls:
-        weights = num_kept[..., np.newaxis] / np.sum(num_kept, axis=avg_axis_)
+        num_kept_each_avg = np.sum(num_kept, axis=avg_axis_)
+        weights = num_kept / np.expand_dims(num_kept_each_avg, avg_axis_)
+        # Append axis for observables being evaluated (to match axis in `means`):
+        weights = weights[..., np.newaxis]
+        rescaling = rescaling[..., np.newaxis]
         means = rescaling * np.sum(means * weights, axis=avg_axis_)
         # Propagate uncertainties:
         variances = rescaling**2 * np.sum(variances * weights**2, axis=avg_axis_)
-        mean_each_observable += means
-        var_each_observable += variances
+        # Move observable axis from end to front:
+        mean_each_observable += np.moveaxis(means,-1,0)
+        var_each_observable += np.moveaxis(variances,-1,0)
 
     mean_and_var_each_observable = list(
         zip(mean_each_observable.tolist(), var_each_observable.tolist())
