@@ -228,7 +228,7 @@ def executor_expectation_values(
 def _apply_postselect_mask(
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparseObservable]],
-    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
+    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
 ):
     """Applies postselection mask in preparation for computing expectation values.
 
@@ -247,19 +247,16 @@ def _apply_postselect_mask(
         - An array tabulating how many shots were kept for each circuit configuration. When computing expectation values,
             this must be used to correct for the number of shots included in each average.
     """
-    if postselect_mask is not None:
-        # Projector will ignore shots where ps bit is 0 when computing expectation
-        # (though we will need to correct the shot counts later on)
-        basis_dict = {
-            # Append a `1` projector to the observable, which will act on the postselection bit:
-            basis: [obs.expand("1") for obs in diag_obs_list]
-            for basis, diag_obs_list in basis_dict.items()
-        }
-        # Append ps bit to classical bits:
-        bool_array = np.concatenate((bool_array, postselect_mask[..., np.newaxis]), axis=-1)
-    else:
-        postselect_mask = np.ones(bool_array.shape[:-1], dtype=bool)
-        bool_array = bool_array.copy()
+
+    # Projector will ignore shots where ps bit is 0 when computing expectation
+    # (though we will need to correct the shot counts later on)
+    basis_dict = {
+        # Append a `1` projector to the observable, which will act on the postselection bit:
+        basis: [obs.expand("1") for obs in diag_obs_list]
+        for basis, diag_obs_list in basis_dict.items()
+    }
+    # Append ps bit to classical bits:
+    bool_array = np.concatenate((bool_array, postselect_mask[..., np.newaxis]), axis=-1)
 
     num_shots_kept = np.sum(postselect_mask, axis=-1)
 
