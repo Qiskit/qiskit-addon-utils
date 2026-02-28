@@ -266,7 +266,7 @@ def _apply_postselect_mask(
 def _apply_pec_signs(
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparseObservable | SparsePauliOp]],
-    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
+    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
 ):
     """Applies PEC signs in preparation for computing expectation values.
 
@@ -285,22 +285,19 @@ def _apply_pec_signs(
         - An array indicating the net sign of each circuit randomization. When computing expectation values,
             this may be used to compute an approximation of the PEC rescaling factor gamma.
     """
-    if pauli_signs is not None:
-        # signs axes are [..., error_generator]
-        # Append sign bit to classical bits:
-        net_signs = np.asarray(np.sum(pauli_signs, axis=-1) % 2, dtype=bool)
-        #   Broadcast signs over shots axis:
-        net_signs_bc = np.broadcast_to(net_signs[..., np.newaxis], shape=bool_array.shape[:-1])
-        bool_array = np.concatenate((bool_array, net_signs_bc[..., np.newaxis]), axis=-1)
-        # Pauli Z negates shots where sign bit is 1:
-        basis_dict = {
-            basis: [obs.expand("Z") for obs in diag_obs_list]
-            for basis, diag_obs_list in basis_dict.items()
-        }
-    else:
-        net_signs = np.zeros(bool_array.shape[:-2], dtype=bool)
-        bool_array = bool_array.copy()
-
+    
+    # signs axes are [..., error_generator]
+    # Append sign bit to classical bits:
+    net_signs = np.asarray(np.sum(pauli_signs, axis=-1) % 2, dtype=bool)
+    #   Broadcast signs over shots axis:
+    net_signs_bc = np.broadcast_to(net_signs[..., np.newaxis], shape=bool_array.shape[:-1])
+    bool_array = np.concatenate((bool_array, net_signs_bc[..., np.newaxis]), axis=-1)
+    # Pauli Z negates shots where sign bit is 1:
+    basis_dict = {
+        basis: [obs.expand("Z") for obs in diag_obs_list]
+        for basis, diag_obs_list in basis_dict.items()
+    }
+    
     return bool_array, basis_dict, net_signs
 
 
