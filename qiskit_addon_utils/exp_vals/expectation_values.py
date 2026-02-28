@@ -173,6 +173,7 @@ def executor_expectation_values(
     mean_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
     var_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
 
+    # Programmatic way of indexing along `meas_basis_axis`:
     skip_axes = list([slice(None) for _ in range(meas_basis_axis)])
 
     for meas_basis_idx, (_, observables) in enumerate(basis_dict.items()):
@@ -396,30 +397,27 @@ def _bitarray_expectation_value(
 
     # Divide by total shots. May be less than nominal number in array if
     # we are postselecting via projector in observable terms:
-    denom = np.asarray(outcomes.num_shots if shots is None else shots)
+    if shots is None:
+        shots = np.asarray(outcomes.num_shots)
+    else:
+        shots = shots[..., np.newaxis] # append axis for terms
 
     # Edge case of counts dict containing outcomes but with total shots, eg {"0": 0}.
-    no_shots = denom == 0
+    with np.errstate(divide='ignore'):
+        expvals_each_term /= shots
+        sq_expvals_each_term /= shots
+        expvals_each_term[~np.isfinite(expvals_each_term)] = np.nan
+        sq_expvals_each_term[~np.isfinite(expvals_each_term)] = np.nan
+        variances_each_term = np.clip(sq_expvals_each_term - expvals_each_term**2, 0, None) / shots
 
-    expvals_each_term[~no_shots] /= denom[..., np.newaxis]
-    sq_expvals_each_term[~no_shots] /= denom[..., np.newaxis]
-    expvals_each_term[no_shots] = np.nan
-    sq_expvals_each_term[no_shots] = np.nan
-    variances_each_term = (
-        np.clip(sq_expvals_each_term - expvals_each_term**2, 0, None) / denom[..., np.newaxis]
-    )
-
-    # all_coeffs == number of bit terms == means.shape[-1], so broadcasts automatically:
+    # len(all_coeffs) == number of bit terms == expvals_each_term.shape[-1], so broadcasts:
     expvals_each_term *= all_coeffs
     variances_each_term *= all_coeffs**2
 
     # Divide by rescale factors if supplied
     if rescale_each_observable is not None:
-        # combine the rescale factors of all the terms of all observables into a single array
-        rescale_each_term = np.array(
-            [term for observable in rescale_each_observable for term in observable]
-        )
-
+        # flatten rescale factors of all the terms of all observables into 1D array
+        rescale_each_term = np.reshape(rescale_each_observable, -1)
         expvals_each_term *= rescale_each_term
         variances_each_term *= rescale_each_term**2
 
