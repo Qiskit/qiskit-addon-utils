@@ -223,6 +223,7 @@ def executor_expectation_values(
         mean_each_observable += np.moveaxis(means,-1,0)
         var_each_observable += np.moveaxis(variances,-1,0)
 
+    # TODO: Return list of tuples of arrays, not list of tuples of list of list of list of ...
     mean_and_var_each_observable = list(
         zip(mean_each_observable.tolist(), var_each_observable.tolist())
     )
