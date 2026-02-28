@@ -154,13 +154,17 @@ def executor_expectation_values(
     basis_dict = basis_dict_
 
     ##### POSTSELECTION:
-    bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(
-        bool_array, basis_dict, postselect_mask
-    )
+    if postselect_mask is not None:
+        bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(bool_array, basis_dict, postselect_mask)
+    else:
+        num_shots_kept = np.full(bool_array.shape[:-2], bool_array.shape[-2])
     # We will need to correct the shot counts later when computing expectation values.
 
     ##### PEC SIGNS:
-    bool_array, basis_dict, net_signs = _apply_pec_signs(bool_array, basis_dict, pauli_signs)
+    if pauli_signs is not None:
+        bool_array, basis_dict, net_signs = _apply_pec_signs(bool_array, basis_dict, pauli_signs)
+    else:
+        net_signs = np.zeros(bool_array.shape[:-2], dtype=bool)
     # For PEC, we will need to apply a rescaling factor gamma later when computing expectation values.
 
     ##### ACCUMULATE CONTRIBUTIONS FROM EACH MEAS BASIS:
