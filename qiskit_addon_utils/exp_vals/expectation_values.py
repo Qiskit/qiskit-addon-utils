@@ -155,7 +155,9 @@ def executor_expectation_values(
 
     ##### POSTSELECTION:
     if postselect_mask is not None:
-        bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(bool_array, basis_dict, postselect_mask)
+        bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(
+            bool_array, basis_dict, postselect_mask
+        )
     else:
         num_shots_kept = np.full(bool_array.shape[:-2], bool_array.shape[-2])
     # We will need to correct the shot counts later when computing expectation values.
@@ -202,7 +204,8 @@ def executor_expectation_values(
         avg_axis_ = tuple(a if a < meas_basis_axis else a - 1 for a in avg_axis)
 
         if gamma_factor is not None:
-            rescaling = gamma_factor
+            axes = tuple(ax for i, ax in enumerate(signs.shape) if i not in avg_axis_)
+            rescaling = np.full(axes, gamma_factor)
         else:
             num_minus = np.count_nonzero(signs, axis=avg_axis_)
             num_plus = np.count_nonzero(~signs, axis=avg_axis_)
@@ -220,8 +223,8 @@ def executor_expectation_values(
         # Propagate uncertainties:
         variances = rescaling**2 * np.sum(variances * weights**2, axis=avg_axis_)
         # Move observable axis from end to front:
-        mean_each_observable += np.moveaxis(means,-1,0)
-        var_each_observable += np.moveaxis(variances,-1,0)
+        mean_each_observable += np.moveaxis(means, -1, 0)
+        var_each_observable += np.moveaxis(variances, -1, 0)
 
     # TODO: Return list of tuples of arrays, not list of tuples of list of list of list of ...
     mean_and_var_each_observable = list(
@@ -253,7 +256,6 @@ def _apply_postselect_mask(
         - An array tabulating how many shots were kept for each circuit configuration. When computing expectation values,
             this must be used to correct for the number of shots included in each average.
     """
-
     # Projector will ignore shots where ps bit is 0 when computing expectation
     # (though we will need to correct the shot counts later on)
     basis_dict = {
@@ -263,7 +265,6 @@ def _apply_postselect_mask(
     }
     # Append ps bit to classical bits:
     bool_array = np.concatenate((bool_array, postselect_mask[..., np.newaxis]), axis=-1)
-
     num_shots_kept = np.sum(postselect_mask, axis=-1)
 
     return bool_array, basis_dict, num_shots_kept
@@ -291,7 +292,6 @@ def _apply_pec_signs(
         - An array indicating the net sign of each circuit randomization. When computing expectation values,
             this may be used to compute an approximation of the PEC rescaling factor gamma.
     """
-    
     # signs axes are [..., error_generator]
     # Append sign bit to classical bits:
     net_signs = np.asarray(np.sum(pauli_signs, axis=-1) % 2, dtype=bool)
@@ -303,14 +303,14 @@ def _apply_pec_signs(
         basis: [obs.expand("Z") for obs in diag_obs_list]
         for basis, diag_obs_list in basis_dict.items()
     }
-    
+
     return bool_array, basis_dict, net_signs
 
 
 def _bitarray_expectation_value(
     outcomes: BitArray,
     observables: list[SparseObservable],
-    shots: int | np.ndarray[tuple[int, ...], np.dtype[np.int64]] | None = None,
+    shots: np.ndarray[tuple[int, ...], np.dtype[np.int64]] | None = None,
     rescale_each_observable: Sequence[Sequence[float]] | None = None,
 ):
     """Calculate expectation value of observables on the BitArray data.
@@ -398,13 +398,10 @@ def _bitarray_expectation_value(
 
     # Divide by total shots. May be less than nominal number in array if
     # we are postselecting via projector in observable terms:
-    if shots is None:
-        shots = np.asarray(outcomes.num_shots)
-    else:
-        shots = shots[..., np.newaxis] # append axis for terms
+    shots = np.asarray(outcomes.num_shots) if shots is None else shots[..., np.newaxis]
 
     # Edge case of counts dict containing outcomes but with total shots, eg {"0": 0}.
-    with np.errstate(divide='ignore'):
+    with np.errstate(divide="ignore"):
         expvals_each_term /= shots
         sq_expvals_each_term /= shots
         expvals_each_term[~np.isfinite(expvals_each_term)] = np.nan
