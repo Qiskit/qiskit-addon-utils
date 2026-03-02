@@ -41,10 +41,10 @@ def map_observable_isa_to_canonical(
     p_2_c = {p: c for c, p in c_2_p.items()}
 
     if isinstance(isa_observable, Pauli):
-        if isa_observable.phase != 0:
-            raise NotImplementedError("`Pauli` observable must have zero phase.")
-
-        return isa_observable[canonical_qubits]
+        obs_out = isa_observable.copy()
+        obs_out = obs_out[canonical_qubits]
+        obs_out.phase = isa_observable.phase
+        return obs_out
 
     if isinstance(isa_observable, SparsePauliOp):
         return SparsePauliOp.from_sparse_list(
