@@ -55,13 +55,13 @@ nbtest = [
     "nbmake>=1.5.0",
 ]
 style = [
-    "ruff==0.12.11",
+    "ruff==0.15.4",
     "nbqa>=1.8.5",
 ]
 lint = [
     "qiskit-addon-utils[style]",
-    "mypy==1.18.2",
-    "pylint==3.3.9",
+    "pylint==4.0.5",
+    "mypy==1.19.1",
     "reno>=4.1",
 ]
 notebook-dependencies = [

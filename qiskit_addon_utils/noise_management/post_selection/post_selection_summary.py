@@ -209,9 +209,9 @@ def _get_measure_maps(
 
     for node in dag.topological_op_nodes():
         if node.op.name == "measure":  # pragma: no cover
-            if clbit := clbit_map.get(node.cargs[0], None):
+            if clbit := clbit_map.get(node.cargs[0]):
                 measure_map[qubit_map[node.qargs[0]]] = clbit
-            elif clbit_ps := clbit_map_ps.get(node.cargs[0], None):
+            elif clbit_ps := clbit_map_ps.get(node.cargs[0]):
                 measure_map_ps[qubit_map[node.qargs[0]]] = clbit_ps
             else:  # pragma: no cover
                 raise ValueError(f"Clbit {node.cargs[0]} does not belong to any valid register.")
