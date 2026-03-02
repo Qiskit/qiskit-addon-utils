@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    Added two new functions to the :mod:`qiskit_addon_utils.noise_management` sub-package:
+
+      * :func:`qiskit_addon_utils.noise_management.trex_factors` for calculating TREX readout error mitigation scaling factors
+      * :func:`qiskit_addon_utils.noise_management.gamma_from_noisy_boxes` for calculating the gamma factor for a given circuit and noise model.
