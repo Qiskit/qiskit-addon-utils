@@ -398,8 +398,14 @@ def _bitarray_expectation_value(
     # Edge case of counts dict containing outcomes but with total shots, eg {"0": 0}.
     no_shots = denom == 0
 
-    expvals_each_term[~no_shots] /= denom[..., np.newaxis]
-    sq_expvals_each_term[~no_shots] /= denom[..., np.newaxis]
+    # Ensure denom has the right shape for broadcasting with expvals_each_term
+    # expvals_each_term has shape (..., terms) where ... are the leading dimensions
+    # denom should have shape (..., 1) to broadcast properly, with handling the case of empty observable
+    denom_broadcast = denom[..., np.newaxis] if expvals_each_term.shape[-1] > 0 else denom
+    no_shots_broadcast = no_shots[..., np.newaxis] if expvals_each_term.shape[-1] > 0 else no_shots
+
+    expvals_each_term[~no_shots_broadcast] /= denom_broadcast[~no_shots_broadcast]
+    sq_expvals_each_term[~no_shots_broadcast] /= denom_broadcast[~no_shots_broadcast]
     expvals_each_term[no_shots] = np.nan
     sq_expvals_each_term[no_shots] = np.nan
     variances_each_term = (
