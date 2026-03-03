@@ -571,6 +571,7 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
         self.assertIsInstance(result[0], tuple)
         self.assertEqual(len(result[0]), 2)
 
+
 class TestExecutorExpectationValuesSimple(unittest.TestCase):
     """Test certain simple cases of executor_expectation_values function."""
 
@@ -580,20 +581,17 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         return bool_array
 
     def _synthesize_simple_basis_dict(self, bool_array, meas_axis=None, seed=None):
-        if meas_axis is not None:
-            num_bases = bool_array.shape[meas_axis]
-        else:
-            num_bases = 1
+        num_bases = bool_array.shape[meas_axis] if meas_axis is not None else 1
         num_bits = bool_array.shape[-1]
         # will just evaluate a single Pauli with each basis:
         pauli_each_basis = random_pauli_list(num_bits, size=num_bases, seed=seed, phase=False)
         meas_bases = pauli_each_basis.copy()
-        is_id = np.logical_not(meas_bases.z|meas_bases.x)
-        meas_bases.z[is_id] = True # valid meas basis has no `I`, so changing to `Z`
+        is_id = np.logical_not(meas_bases.z | meas_bases.x)
+        meas_bases.z[is_id] = True  # valid meas basis has no `I`, so changing to `Z`
         meas_bases.phase = 0
         obs_terms_each_basis = []
         for i, p in enumerate(pauli_each_basis):
-            row = [None]*len(pauli_each_basis)
+            row = [None] * len(pauli_each_basis)
             row[i] = SparsePauliOp(p)
             obs_terms_each_basis.append(row)
         basis_dict = dict(zip(meas_bases, obs_terms_each_basis))
@@ -601,31 +599,34 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
 
     def _test_executor_expectation_values_noPEC_noPS_pauliObservables(
         self,
-        job_shape, 
+        job_shape,
         num_shots,
-        num_bits, 
+        num_bits,
         meas_basis_axis=None,
         avg_axis=None,
         measurement_flips=None,
         seed=None,
-        ):
+    ):
         """Test `executor_expectation_values` against a simplified, feature-light implementation"""
 
         bool_array = self._synthesize_data(job_shape, num_shots, num_bits, seed=seed)
-        basis_dict = self._synthesize_simple_basis_dict(bool_array, meas_axis=meas_basis_axis, seed=seed)
-        
-        exp_vals = executor_expectation_values(bool_array, 
-                                            basis_dict, 
-                                            meas_basis_axis, 
-                                            avg_axis=avg_axis, 
-                                            measurement_flips=measurement_flips
-                                            )
-        exp_vals = list([val for (val,var) in exp_vals])
+        basis_dict = self._synthesize_simple_basis_dict(
+            bool_array, meas_axis=meas_basis_axis, seed=seed
+        )
+
+        exp_vals = executor_expectation_values(
+            bool_array,
+            basis_dict,
+            meas_basis_axis,
+            avg_axis=avg_axis,
+            measurement_flips=measurement_flips,
+        )
+        exp_vals = list([val for (val, var) in exp_vals])
 
         ## Independent computation to check answer:
         if measurement_flips is not None:
             bool_array ^= measurement_flips
-        
+
         if avg_axis is not None:
             avg_axis = np.asarray(avg_axis)
 
@@ -635,7 +636,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             bool_array = np.reshape(bool_array, (1, *bool_array.shape))
             if avg_axis is not None:
                 avg_axis += 1
-        
+
         # Will consume meas_basis_axis in for loop below,
         # which may shift avg_axis:
         if avg_axis is not None:
@@ -645,182 +646,183 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         target_exp_vals = []
         for basis_idx, (_, spo_list) in enumerate(basis_dict.items()):
             spo = [x for x in spo_list if x is not None]
-            assert len(spo) == 1 # so far, support evaluation of only one observable w each basis
+            assert len(spo) == 1  # so far, support evaluation of only one observable w each basis
             spo = spo[0]
-            assert len(spo) == 1 # in this test, limit to one Pauli per observable
+            assert len(spo) == 1  # in this test, limit to one Pauli per observable
             pauli = spo.paulis[0]
             coeff = spo.coeffs[0].real
-            support = pauli.z|pauli.x
+            support = pauli.z | pauli.x
             bool_subarray = np.asarray(np.take(bool_array, basis_idx, axis=meas_basis_axis))
             if bool_subarray.shape:
                 bool_subarray = np.compress(support, bool_subarray, axis=-1)
             else:
                 bool_subarray = bool_subarray * support
-            result = (-1)**(np.sum(bool_subarray, axis=-1))
-            result = np.mean(result, axis=-1) # average shots
-            print(f'{result = }')
+            result = (-1) ** (np.sum(bool_subarray, axis=-1))
+            result = np.mean(result, axis=-1)  # average shots
+            print(f"{result = }")
             if avg_axis is not None:
-                result = np.mean(result, axis = avg_axis)
+                avg_axis = tuple(int(a) for a in np.atleast_1d(avg_axis).ravel())
+                result = np.mean(result, axis=tuple(int(a) for a in avg_axis))
             result *= coeff
-            print(f'{result = }')
+            print(f"{result = }")
             target_exp_vals.append(result.tolist())
-        
+
         return np.array(exp_vals), np.array(target_exp_vals)
 
     # def test_exp_val_job0D(self):
     #     evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-    #         job_shape=tuple(), 
+    #         job_shape=tuple(),
     #         num_shots=10,
-    #         num_bits=19, 
+    #         num_bits=19,
     #         meas_basis_axis=None,
     #         avg_axis=None,
     #         measurement_flips=None,
     #         seed=None,
     #         )
     #     self.assertAlmostEqual(evs, target_evs)
-    
+
     def test_exp_val_job1Da(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(1,), 
+            job_shape=(1,),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=None,
             avg_axis=None,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_job1Db(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(5,), 
+            job_shape=(5,),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=None,
             avg_axis=None,
             measurement_flips=None,
             seed=None,
-            )
-        print(f'{evs = }')
-        print(f'{target_evs = }')
+        )
+        print(f"{evs = }")
+        print(f"{target_evs = }")
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_job2Da(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(5,1), 
+            job_shape=(5, 1),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=None,
             avg_axis=None,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_job2Db(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(5,6), 
+            job_shape=(5, 6),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=None,
             avg_axis=None,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_jobManyD(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(1,1,1,1,1), 
+            job_shape=(1, 1, 1, 1, 1),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=None,
             avg_axis=None,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_jobGeneral(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(2,3,4), 
+            job_shape=(2, 3, 4),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=None,
             avg_axis=None,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_measBasis(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(1,2,3), 
+            job_shape=(1, 2, 3),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=0,
             avg_axis=None,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_measBases(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(1,2,3), 
+            job_shape=(1, 2, 3),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=1,
             avg_axis=None,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_avgAxisLo(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(1,2,3), 
+            job_shape=(1, 2, 3),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=1,
             avg_axis=0,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_avgAxisHi(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(1,2,3), 
+            job_shape=(1, 2, 3),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=1,
             avg_axis=2,
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_avgAxes(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(1,2,3), 
+            job_shape=(1, 2, 3),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=1,
-            avg_axis=(0,2),
+            avg_axis=(0, 2),
             measurement_flips=None,
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
-    
+
     def test_exp_val_measFlips(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
-            job_shape=(1,2,3), 
+            job_shape=(1, 2, 3),
             num_shots=10,
-            num_bits=19, 
+            num_bits=19,
             meas_basis_axis=1,
-            avg_axis=(0,2),
-            measurement_flips=np.ones((1,2,3,10,19),dtype=bool),
+            avg_axis=(0, 2),
+            measurement_flips=np.ones((1, 2, 3, 10, 19), dtype=bool),
             seed=None,
-            )
+        )
         self.assertTrue(np.allclose(evs, target_evs))
