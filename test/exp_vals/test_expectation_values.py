@@ -20,6 +20,7 @@ from qiskit.circuit import QuantumCircuit
 from qiskit.primitives import StatevectorSampler
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp
+from qiskit.quantum_info.random import random_pauli_list
 from qiskit.transpiler import generate_preset_pass_manager
 from qiskit_addon_utils.exp_vals.expectation_values import executor_expectation_values
 from qiskit_addon_utils.exp_vals.measurement_bases import _convert_basis_to_uint_representation
@@ -569,3 +570,250 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertIsInstance(result[0], tuple)
         self.assertEqual(len(result[0]), 2)
+
+class TestExecutorExpectationValuesSimple(unittest.TestCase):
+    """Test certain simple cases of executor_expectation_values function."""
+
+    def _synthesize_data(self, job_shape, num_shots, num_bits, seed=None):
+        rng = np.random.default_rng(seed=seed)
+        bool_array = rng.integers(2, size=(*job_shape, num_shots, num_bits), dtype=bool)
+        return bool_array
+
+    def _synthesize_simple_basis_dict(self, bool_array, meas_axis=None, seed=None):
+        if meas_axis is not None:
+            num_bases = bool_array.shape[meas_axis]
+        else:
+            num_bases = 1
+        num_bits = bool_array.shape[-1]
+        # will just evaluate a single Pauli with each basis:
+        pauli_each_basis = random_pauli_list(num_bits, size=num_bases, seed=seed, phase=False)
+        meas_bases = pauli_each_basis.copy()
+        is_id = np.logical_not(meas_bases.z|meas_bases.x)
+        meas_bases.z[is_id] = True # valid meas basis has no `I`, so changing to `Z`
+        meas_bases.phase = 0
+        obs_terms_each_basis = []
+        for i, p in enumerate(pauli_each_basis):
+            row = [None]*len(pauli_each_basis)
+            row[i] = SparsePauliOp(p)
+            obs_terms_each_basis.append(row)
+        basis_dict = dict(zip(meas_bases, obs_terms_each_basis))
+        return basis_dict
+
+    def _test_executor_expectation_values_noPEC_noPS_pauliObservables(
+        self,
+        job_shape, 
+        num_shots,
+        num_bits, 
+        meas_basis_axis=None,
+        avg_axis=None,
+        measurement_flips=None,
+        seed=None,
+        ):
+        """Test `executor_expectation_values` against a simplified, feature-light implementation"""
+
+        bool_array = self._synthesize_data(job_shape, num_shots, num_bits, seed=seed)
+        basis_dict = self._synthesize_simple_basis_dict(bool_array, meas_axis=meas_basis_axis, seed=seed)
+        
+        if measurement_flips is not None:
+            bool_array ^= measurement_flips
+        
+        if avg_axis is not None: 
+            _avg_axis = np.asarray(avg_axis)
+
+        if meas_basis_axis is None:
+            meas_basis_axis = 0
+            if avg_axis is not None:
+                _avg_axis += 1
+        
+        if avg_axis is not None:
+            _avg_axis = np.asarray(avg_axis)
+            _avg_axis[_avg_axis > meas_basis_axis] -= 1
+
+        target_exp_vals = []
+        for basis_idx, (_, spo_list) in enumerate(basis_dict.items()):
+            spo = [x for x in spo_list if x is not None]
+            assert len(spo) == 1 # so far, support evaluation of only one observable w each basis
+            spo = spo[0]
+            assert len(spo) == 1 # in this test, limit to one Pauli per observable
+            pauli = spo.paulis[0]
+            coeff = spo.coeffs[0]
+            support = pauli.z|pauli.x
+            print(f'{bool_array.shape = }')
+            bool_subarray = np.asarray(np.take(bool_array, basis_idx, axis=meas_basis_axis))
+            print(f'{support = }')
+            print(f'{bool_subarray.shape = }')
+            if bool_subarray.shape:
+                bool_subarray = np.compress(support, bool_subarray, axis=-1)
+            else:
+                bool_subarray = bool_subarray * support
+            print(f'{bool_subarray = }')
+            result = (-1)**(np.sum(bool_subarray, axis=-1))
+            result = np.mean(result, axis=-1) # average shots
+            result = coeff * np.mean(result, axis=_avg_axis)
+            target_exp_vals.append(result.tolist())
+        
+        exp_vals = executor_expectation_values(bool_array, 
+                                            basis_dict, 
+                                            meas_basis_axis, 
+                                            avg_axis=avg_axis, 
+                                            measurement_flips=measurement_flips
+                                            )
+        exp_vals = [val for (val,var) in exp_vals]
+
+        return exp_vals, target_exp_vals
+
+    # def test_exp_val_job0D(self):
+    #     evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+    #         job_shape=tuple(), 
+    #         num_shots=10,
+    #         num_bits=19, 
+    #         meas_basis_axis=None,
+    #         avg_axis=None,
+    #         measurement_flips=None,
+    #         seed=None,
+    #         )
+    #     self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_job1Da(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(1,), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=None,
+            avg_axis=None,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_job1Db(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(5,), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=None,
+            avg_axis=None,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_job2Da(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(5,1), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=None,
+            avg_axis=None,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_job2Db(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(5,6), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=None,
+            avg_axis=None,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_jobManyD(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(1,1,1,1,1), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=None,
+            avg_axis=None,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_jobGeneral(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(2,3,4), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=None,
+            avg_axis=None,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_measBasis(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(1,2,3), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=0,
+            avg_axis=None,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_measBases(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(1,2,3), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=1,
+            avg_axis=None,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_avgAxisLo(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(1,2,3), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=1,
+            avg_axis=0,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_avgAxisHi(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(1,2,3), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=1,
+            avg_axis=2,
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_avgAxes(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(1,2,3), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=1,
+            avg_axis=(0,2),
+            measurement_flips=None,
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
+    
+    def test_exp_val_measFlips(self):
+        evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
+            job_shape=(1,2,3), 
+            num_shots=10,
+            num_bits=19, 
+            meas_basis_axis=1,
+            avg_axis=(0,2),
+            measurement_flips=np.ones((1,2,3,10,19),dtype=bool),
+            seed=None,
+            )
+        self.assertAlmostEqual(evs, target_evs)
