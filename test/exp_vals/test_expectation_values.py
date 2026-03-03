@@ -583,7 +583,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         if meas_axis is not None:
             num_bases = bool_array.shape[meas_axis]
         else:
-            num_bases = bool_array.shape[0]
+            num_bases = 1
         num_bits = bool_array.shape[-1]
         # will just evaluate a single Pauli with each basis:
         pauli_each_basis = random_pauli_list(num_bits, size=num_bases, seed=seed, phase=False)
@@ -614,19 +614,33 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         bool_array = self._synthesize_data(job_shape, num_shots, num_bits, seed=seed)
         basis_dict = self._synthesize_simple_basis_dict(bool_array, meas_axis=meas_basis_axis, seed=seed)
         
+        exp_vals = executor_expectation_values(bool_array, 
+                                            basis_dict, 
+                                            meas_basis_axis, 
+                                            avg_axis=avg_axis, 
+                                            measurement_flips=measurement_flips
+                                            )
+        exp_vals = list([val for (val,var) in exp_vals])
+
+        ## Independent computation to check answer:
         if measurement_flips is not None:
             bool_array ^= measurement_flips
         
-        _avg_axis = np.asarray(avg_axis) if avg_axis is not None else avg_axis
+        if avg_axis is not None:
+            avg_axis = np.asarray(avg_axis)
 
         if meas_basis_axis is None:
+            # Prepending new length-1 axis, for single meas basis:
             meas_basis_axis = 0
+            bool_array = np.reshape(bool_array, (1, *bool_array.shape))
             if avg_axis is not None:
-                _avg_axis += 1
+                avg_axis += 1
         
+        # Will consume meas_basis_axis in for loop below,
+        # which may shift avg_axis:
         if avg_axis is not None:
-            _avg_axis = np.asarray(avg_axis)
-            _avg_axis[_avg_axis > meas_basis_axis] -= 1
+            avg_axis = np.asarray(avg_axis)
+            avg_axis[avg_axis > meas_basis_axis] -= 1
 
         target_exp_vals = []
         for basis_idx, (_, spo_list) in enumerate(basis_dict.items()):
@@ -635,7 +649,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             spo = spo[0]
             assert len(spo) == 1 # in this test, limit to one Pauli per observable
             pauli = spo.paulis[0]
-            coeff = spo.coeffs[0]
+            coeff = spo.coeffs[0].real
             support = pauli.z|pauli.x
             bool_subarray = np.asarray(np.take(bool_array, basis_idx, axis=meas_basis_axis))
             if bool_subarray.shape:
@@ -644,17 +658,13 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
                 bool_subarray = bool_subarray * support
             result = (-1)**(np.sum(bool_subarray, axis=-1))
             result = np.mean(result, axis=-1) # average shots
-            result = coeff * np.mean(result, axis=_avg_axis)
+            print(f'{result = }')
+            if avg_axis is not None:
+                result = np.mean(result, axis = avg_axis)
+            result *= coeff
+            print(f'{result = }')
             target_exp_vals.append(result.tolist())
         
-        exp_vals = executor_expectation_values(bool_array, 
-                                            basis_dict, 
-                                            meas_basis_axis, 
-                                            avg_axis=avg_axis, 
-                                            measurement_flips=measurement_flips
-                                            )
-        exp_vals = [val for (val,var) in exp_vals]
-
         return np.array(exp_vals), np.array(target_exp_vals)
 
     # def test_exp_val_job0D(self):
@@ -691,6 +701,8 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
+        print(f'{evs = }')
+        print(f'{target_evs = }')
         self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_job2Da(self):
