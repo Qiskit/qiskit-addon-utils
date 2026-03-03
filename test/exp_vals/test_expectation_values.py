@@ -628,7 +628,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             bool_array ^= measurement_flips
 
         if avg_axis is not None:
-            avg_axis = np.asarray(avg_axis)
+            avg_axis = np.atleast_1d(avg_axis)
 
         if meas_basis_axis is None:
             # Prepending new length-1 axis, for single meas basis:
@@ -637,11 +637,11 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             if avg_axis is not None:
                 avg_axis += 1
 
-        # Will consume meas_basis_axis in for loop below,
-        # which may shift avg_axis:
         if avg_axis is not None:
-            avg_axis = np.asarray(avg_axis)
+            # Will consume meas_basis_axis in for loop below,
+            # which may shift avg_axis:
             avg_axis[avg_axis > meas_basis_axis] -= 1
+            avg_axis = tuple(avg_axis.tolist())
 
         target_exp_vals = []
         for basis_idx, (_, spo_list) in enumerate(basis_dict.items()):
@@ -659,12 +659,9 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
                 bool_subarray = bool_subarray * support
             result = (-1) ** (np.sum(bool_subarray, axis=-1))
             result = np.mean(result, axis=-1)  # average shots
-            print(f"{result = }")
             if avg_axis is not None:
-                avg_axis = tuple(int(a) for a in np.atleast_1d(avg_axis).ravel())
-                result = np.mean(result, axis=tuple(int(a) for a in avg_axis))
+                result = np.mean(result, axis=avg_axis)
             result *= coeff
-            print(f"{result = }")
             target_exp_vals.append(result.tolist())
 
         return np.array(exp_vals), np.array(target_exp_vals)
