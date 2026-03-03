@@ -583,7 +583,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         if meas_axis is not None:
             num_bases = bool_array.shape[meas_axis]
         else:
-            num_bases = 1
+            num_bases = bool_array.shape[0]
         num_bits = bool_array.shape[-1]
         # will just evaluate a single Pauli with each basis:
         pauli_each_basis = random_pauli_list(num_bits, size=num_bases, seed=seed, phase=False)
@@ -617,8 +617,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         if measurement_flips is not None:
             bool_array ^= measurement_flips
         
-        if avg_axis is not None: 
-            _avg_axis = np.asarray(avg_axis)
+        _avg_axis = np.asarray(avg_axis) if avg_axis is not None else avg_axis
 
         if meas_basis_axis is None:
             meas_basis_axis = 0
@@ -638,15 +637,11 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             pauli = spo.paulis[0]
             coeff = spo.coeffs[0]
             support = pauli.z|pauli.x
-            print(f'{bool_array.shape = }')
             bool_subarray = np.asarray(np.take(bool_array, basis_idx, axis=meas_basis_axis))
-            print(f'{support = }')
-            print(f'{bool_subarray.shape = }')
             if bool_subarray.shape:
                 bool_subarray = np.compress(support, bool_subarray, axis=-1)
             else:
                 bool_subarray = bool_subarray * support
-            print(f'{bool_subarray = }')
             result = (-1)**(np.sum(bool_subarray, axis=-1))
             result = np.mean(result, axis=-1) # average shots
             result = coeff * np.mean(result, axis=_avg_axis)
@@ -660,7 +655,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
                                             )
         exp_vals = [val for (val,var) in exp_vals]
 
-        return exp_vals, target_exp_vals
+        return np.array(exp_vals), np.array(target_exp_vals)
 
     # def test_exp_val_job0D(self):
     #     evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -684,7 +679,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_job1Db(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -696,7 +691,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_job2Da(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -708,7 +703,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_job2Db(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -720,7 +715,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_jobManyD(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -732,7 +727,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_jobGeneral(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -744,7 +739,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_measBasis(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -756,7 +751,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_measBases(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -768,7 +763,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_avgAxisLo(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -780,7 +775,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_avgAxisHi(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -792,7 +787,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_avgAxes(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -804,7 +799,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=None,
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
     
     def test_exp_val_measFlips(self):
         evs, target_evs = self._test_executor_expectation_values_noPEC_noPS_pauliObservables(
@@ -816,4 +811,4 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             measurement_flips=np.ones((1,2,3,10,19),dtype=bool),
             seed=None,
             )
-        self.assertAlmostEqual(evs, target_evs)
+        self.assertTrue(np.allclose(evs, target_evs))
