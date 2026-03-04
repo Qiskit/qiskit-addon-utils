@@ -60,7 +60,7 @@ def executor_expectation_values(
             The jth observable is defined as the sum of the jth element of each dict value (contribution from each meas basis).
             - Note the order of dict entries is relied on here for indexing; the dict keys are never used.
             - Assumes each Pauli term (in dict values) is compatible with each measurement basis (in keys).
-            - Assumes each term in each observable appears for exactly one basis (TODO: remove this assumption).
+            - Assumes each term in each observable appears for exactly one basis.
         meas_basis_axis: Axis of bool_array that indexes measurement bases. Ordering must match ordering in `basis_dict`. If `None`,
             then `len(basis_dict)` must be 1, and `bool_array` is assumed to correspond to the only measurement basis.
         avg_axis: Optional axis or axes of bool_array to average over when computing expectation values. Usually this is the "twirling" axis.
@@ -93,15 +93,7 @@ def executor_expectation_values(
         ValueError if the number of entries in `basis_dict` does not equal the length of `bool_array` along `meas_basis_axis`.
     """
     ##### VALIDATE INPUTS:
-    if avg_axis is None:
-        avg_axis = tuple()
-    elif isinstance(avg_axis, int):
-        avg_axis = (avg_axis,)
-    else:
-        avg_axis = tuple(avg_axis)
-
-    if any(a < 0 for a in avg_axis):
-        raise ValueError("`avg_axis` must be nonnegative")
+    avg_axis = _validate_avg_axis(avg_axis, len(bool_array.shape))
 
     if meas_basis_axis is None:
         if len(basis_dict) != 1:
@@ -154,13 +146,19 @@ def executor_expectation_values(
     basis_dict = basis_dict_
 
     ##### POSTSELECTION:
-    bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(
-        bool_array, basis_dict, postselect_mask
-    )
+    if postselect_mask is not None:
+        bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(
+            bool_array, basis_dict, postselect_mask
+        )
+    else:
+        num_shots_kept = np.full(bool_array.shape[:-2], bool_array.shape[-2])
     # We will need to correct the shot counts later when computing expectation values.
 
     ##### PEC SIGNS:
-    bool_array, basis_dict, net_signs = _apply_pec_signs(bool_array, basis_dict, pauli_signs)
+    if pauli_signs is not None:
+        bool_array, basis_dict, net_signs = _apply_pec_signs(bool_array, basis_dict, pauli_signs)
+    else:
+        net_signs = np.zeros(bool_array.shape[:-2], dtype=bool)
     # For PEC, we will need to apply a rescaling factor gamma later when computing expectation values.
 
     ##### ACCUMULATE CONTRIBUTIONS FROM EACH MEAS BASIS:
@@ -169,6 +167,7 @@ def executor_expectation_values(
     mean_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
     var_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
 
+    # Programmatic way of indexing along `meas_basis_axis`:
     skip_axes = list([slice(None) for _ in range(meas_basis_axis)])
 
     for meas_basis_idx, (_, observables) in enumerate(basis_dict.items()):
@@ -197,7 +196,8 @@ def executor_expectation_values(
         avg_axis_ = tuple(a if a < meas_basis_axis else a - 1 for a in avg_axis)
 
         if gamma_factor is not None:
-            rescaling = gamma_factor
+            axes = tuple(ax for i, ax in enumerate(signs.shape) if i not in avg_axis_)
+            rescaling = np.full(axes, gamma_factor)
         else:
             num_minus = np.count_nonzero(signs, axis=avg_axis_)
             num_plus = np.count_nonzero(~signs, axis=avg_axis_)
@@ -206,13 +206,19 @@ def executor_expectation_values(
 
         # Will weight each twirl by its fraction of kept shots.
         # If no postselection, weighting reduces to dividing by num_twirls:
-        weights = num_kept[..., np.newaxis] / np.sum(num_kept, axis=avg_axis_)
+        num_kept_each_avg = np.sum(num_kept, axis=avg_axis_)
+        weights = num_kept / np.expand_dims(num_kept_each_avg, avg_axis_)
+        # Append axis for observables being evaluated (to match axis in `means`):
+        weights = weights[..., np.newaxis]
+        rescaling = rescaling[..., np.newaxis]
         means = rescaling * np.sum(means * weights, axis=avg_axis_)
         # Propagate uncertainties:
         variances = rescaling**2 * np.sum(variances * weights**2, axis=avg_axis_)
-        mean_each_observable += means
-        var_each_observable += variances
+        # Move observable axis from end to front:
+        mean_each_observable += np.moveaxis(means, -1, 0)
+        var_each_observable += np.moveaxis(variances, -1, 0)
 
+    # TODO: Return list of tuples of arrays, not list of tuples of list of list of list of ...
     mean_and_var_each_observable = list(
         zip(mean_each_observable.tolist(), var_each_observable.tolist())
     )
@@ -223,7 +229,7 @@ def executor_expectation_values(
 def _apply_postselect_mask(
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparseObservable]],
-    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
+    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
 ):
     """Applies postselection mask in preparation for computing expectation values.
 
@@ -242,29 +248,41 @@ def _apply_postselect_mask(
         - An array tabulating how many shots were kept for each circuit configuration. When computing expectation values,
             this must be used to correct for the number of shots included in each average.
     """
-    if postselect_mask is not None:
-        # Projector will ignore shots where ps bit is 0 when computing expectation
-        # (though we will need to correct the shot counts later on)
-        basis_dict = {
-            # Append a `1` projector to the observable, which will act on the postselection bit:
-            basis: [obs.expand("1") for obs in diag_obs_list]
-            for basis, diag_obs_list in basis_dict.items()
-        }
-        # Append ps bit to classical bits:
-        bool_array = np.concatenate((bool_array, postselect_mask[..., np.newaxis]), axis=-1)
-    else:
-        postselect_mask = np.ones(bool_array.shape[:-1], dtype=bool)
-        bool_array = bool_array.copy()
-
+    # Projector will ignore shots where ps bit is 0 when computing expectation
+    # (though we will need to correct the shot counts later on)
+    basis_dict = {
+        # Append a `1` projector to the observable, which will act on the postselection bit:
+        basis: [obs.expand("1") for obs in diag_obs_list]
+        for basis, diag_obs_list in basis_dict.items()
+    }
+    # Append ps bit to classical bits:
+    bool_array = np.concatenate((bool_array, postselect_mask[..., np.newaxis]), axis=-1)
     num_shots_kept = np.sum(postselect_mask, axis=-1)
 
     return bool_array, basis_dict, num_shots_kept
 
 
+def _validate_avg_axis(avg_axis: int | tuple[int, ...] | None, num_dims: int) -> tuple[int, ...]:
+    if avg_axis is None:
+        avg_axis = tuple()
+    elif isinstance(avg_axis, int):
+        avg_axis = (avg_axis,)
+    else:
+        avg_axis = tuple(avg_axis)
+    if any(a > (num_dims - 3) for a in avg_axis):
+        raise ValueError(
+            "Cannot average over the last two dimensions of `bool_array`, which are associated with shots and qubits."
+        )
+    if any(a < 0 for a in avg_axis):
+        raise ValueError("`avg_axis` must be nonnegative")
+
+    return avg_axis
+
+
 def _apply_pec_signs(
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
     basis_dict: dict[Pauli, list[SparseObservable | SparsePauliOp]],
-    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None,
+    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
 ):
     """Applies PEC signs in preparation for computing expectation values.
 
@@ -283,21 +301,17 @@ def _apply_pec_signs(
         - An array indicating the net sign of each circuit randomization. When computing expectation values,
             this may be used to compute an approximation of the PEC rescaling factor gamma.
     """
-    if pauli_signs is not None:
-        # signs axes are [..., error_generator]
-        # Append sign bit to classical bits:
-        net_signs = np.asarray(np.sum(pauli_signs, axis=-1) % 2, dtype=bool)
-        #   Broadcast signs over shots axis:
-        net_signs_bc = np.broadcast_to(net_signs[..., np.newaxis], shape=bool_array.shape[:-1])
-        bool_array = np.concatenate((bool_array, net_signs_bc[..., np.newaxis]), axis=-1)
-        # Pauli Z negates shots where sign bit is 1:
-        basis_dict = {
-            basis: [obs.expand("Z") for obs in diag_obs_list]
-            for basis, diag_obs_list in basis_dict.items()
-        }
-    else:
-        net_signs = np.zeros(bool_array.shape[:-2], dtype=bool)
-        bool_array = bool_array.copy()
+    # signs axes are [..., error_generator]
+    # Append sign bit to classical bits:
+    net_signs = np.asarray(np.sum(pauli_signs, axis=-1) % 2, dtype=bool)
+    #   Broadcast signs over shots axis:
+    net_signs_bc = np.broadcast_to(net_signs[..., np.newaxis], shape=bool_array.shape[:-1])
+    bool_array = np.concatenate((bool_array, net_signs_bc[..., np.newaxis]), axis=-1)
+    # Pauli Z negates shots where sign bit is 1:
+    basis_dict = {
+        basis: [obs.expand("Z") for obs in diag_obs_list]
+        for basis, diag_obs_list in basis_dict.items()
+    }
 
     return bool_array, basis_dict, net_signs
 
@@ -305,7 +319,7 @@ def _apply_pec_signs(
 def _bitarray_expectation_value(
     outcomes: BitArray,
     observables: list[SparseObservable],
-    shots: int | np.ndarray[tuple[int, ...], np.dtype[np.int64]] | None = None,
+    shots: np.ndarray[tuple[int, ...], np.dtype[np.int64]] | None = None,
     rescale_each_observable: Sequence[Sequence[float]] | None = None,
 ):
     """Calculate expectation value of observables on the BitArray data.
@@ -393,36 +407,25 @@ def _bitarray_expectation_value(
 
     # Divide by total shots. May be less than nominal number in array if
     # we are postselecting via projector in observable terms:
-    denom = np.asarray(outcomes.num_shots if shots is None else shots)
+    shots = np.asarray(outcomes.num_shots) if shots is None else shots[..., np.newaxis]
 
     # Edge case of counts dict containing outcomes but with total shots, eg {"0": 0}.
-    no_shots = denom == 0
+    with np.errstate(divide="ignore"):
+        expvals_each_term /= shots
+        sq_expvals_each_term /= shots
+        expvals_each_term[~np.isfinite(expvals_each_term)] = np.nan
+        sq_expvals_each_term[~np.isfinite(expvals_each_term)] = np.nan
+        variances_each_term = np.clip(sq_expvals_each_term - expvals_each_term**2, 0, None) / shots
 
-    # Ensure denom has the right shape for broadcasting with expvals_each_term
-    # expvals_each_term has shape (..., terms) where ... are the leading dimensions
-    # denom should have shape (..., 1) to broadcast properly, with handling the case of empty observable
-    denom_broadcast = denom[..., np.newaxis] if expvals_each_term.shape[-1] > 0 else denom
-    no_shots_broadcast = no_shots[..., np.newaxis] if expvals_each_term.shape[-1] > 0 else no_shots
-
-    expvals_each_term[~no_shots_broadcast] /= denom_broadcast[~no_shots_broadcast]
-    sq_expvals_each_term[~no_shots_broadcast] /= denom_broadcast[~no_shots_broadcast]
-    expvals_each_term[no_shots] = np.nan
-    sq_expvals_each_term[no_shots] = np.nan
-    variances_each_term = (
-        np.clip(sq_expvals_each_term - expvals_each_term**2, 0, None) / denom[..., np.newaxis]
-    )
-
-    # all_coeffs == number of bit terms == means.shape[-1], so broadcasts automatically:
+    # len(all_coeffs) == number of bit terms == expvals_each_term.shape[-1], so broadcasts:
+    # TODO: test case of empty observable
     expvals_each_term *= all_coeffs
     variances_each_term *= all_coeffs**2
 
     # Divide by rescale factors if supplied
     if rescale_each_observable is not None:
-        # combine the rescale factors of all the terms of all observables into a single array
-        rescale_each_term = np.array(
-            [term for observable in rescale_each_observable for term in observable]
-        )
-
+        # flatten rescale factors of all the terms of all observables into 1D array
+        rescale_each_term = np.reshape(rescale_each_observable, -1)
         expvals_each_term *= rescale_each_term
         variances_each_term *= rescale_each_term**2
 
