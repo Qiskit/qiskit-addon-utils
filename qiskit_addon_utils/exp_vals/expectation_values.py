@@ -262,7 +262,7 @@ def _apply_postselect_mask(
     return bool_array, basis_dict, num_shots_kept
 
 
-def _validate_avg_axis(avg_axis: int | tuple[int, ...] | None, num_dims: int) -> tuple[int]:
+def _validate_avg_axis(avg_axis: int | tuple[int, ...] | None, num_dims: int) -> tuple[int, ...]:
     if avg_axis is None:
         avg_axis = tuple()
     elif isinstance(avg_axis, int):
