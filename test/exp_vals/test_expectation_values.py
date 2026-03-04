@@ -19,7 +19,7 @@ import pytest
 from qiskit.circuit import QuantumCircuit
 from qiskit.primitives import StatevectorSampler
 from qiskit.providers.fake_provider import GenericBackendV2
-from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp
+from qiskit.quantum_info import Pauli, PauliList, SparseObservable, SparsePauliOp
 from qiskit.quantum_info.random import random_pauli_list
 from qiskit.transpiler import generate_preset_pass_manager
 from qiskit_addon_utils.exp_vals.expectation_values import executor_expectation_values
@@ -360,6 +360,20 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
             str(context.exception),
         )
 
+    def test_imaginary_observable(self):
+        """Test that negative avg_axis raises ValueError."""
+        bool_array, basis_dict = self._create_minimal_valid_inputs()
+        for v in basis_dict.values():
+            v[0] *= 1j
+            break
+
+        with self.assertRaises(ValueError) as context:
+            executor_expectation_values(
+                bool_array,
+                basis_dict,
+            )
+        self.assertIn("imaginary", str(context.exception))
+
     def test_basis_dict_length_mismatch(self):
         """Test that mismatched basis_dict length and bool_array shape raises ValueError."""
         bool_array, basis_dict = self._create_minimal_valid_inputs(num_bases=2)
@@ -580,7 +594,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         bool_array = rng.integers(2, size=(*job_shape, num_shots, num_bits), dtype=bool)
         return bool_array
 
-    def _synthesize_simple_basis_dict(self, bool_array, meas_axis=None, seed=None):
+    def _synthesize_simple_basis_dict(self, bool_array, meas_axis=None, seed=None, use_spo=True):
         num_bases = bool_array.shape[meas_axis] if meas_axis is not None else 1
         num_bits = bool_array.shape[-1]
         # will just evaluate a single Pauli with each basis:
@@ -592,7 +606,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         obs_terms_each_basis = []
         for i, p in enumerate(pauli_each_basis):
             row = [None] * len(pauli_each_basis)
-            row[i] = SparsePauliOp(p)
+            row[i] = SparsePauliOp(p) if use_spo else SparseObservable(p)
             obs_terms_each_basis.append(row)
         basis_dict = dict(zip(meas_bases, obs_terms_each_basis))
         return basis_dict
@@ -606,12 +620,16 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
         avg_axis=None,
         measurement_flips=None,
         seed=None,
+        use_spo=True,  # Whether to use SparsePauliOp or SparseObservable
     ):
         """Test `executor_expectation_values` against a simplified, feature-light implementation"""
 
         bool_array = self._synthesize_data(job_shape, num_shots, num_bits, seed=seed)
         basis_dict = self._synthesize_simple_basis_dict(
-            bool_array, meas_axis=meas_basis_axis, seed=seed
+            bool_array,
+            meas_axis=meas_basis_axis,
+            seed=seed,
+            use_spo=use_spo,
         )
 
         exp_vals = executor_expectation_values(
@@ -645,7 +663,11 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
 
         target_exp_vals = []
         for basis_idx, (_, spo_list) in enumerate(basis_dict.items()):
-            spo = [x for x in spo_list if x is not None]
+            spo = (
+                [SparsePauliOp.from_sparse_observable(x) for x in spo_list if x is not None]
+                if not use_spo
+                else [x for x in spo_list if x is not None]
+            )
             assert len(spo) == 1  # so far, support evaluation of only one observable w each basis
             spo = spo[0]
             assert len(spo) == 1  # in this test, limit to one Pauli per observable
@@ -699,6 +721,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             avg_axis=None,
             measurement_flips=None,
             seed=None,
+            use_spo=False,
         )
         print(f"{evs = }")
         print(f"{target_evs = }")
@@ -725,6 +748,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             avg_axis=None,
             measurement_flips=None,
             seed=None,
+            use_spo=False,
         )
         self.assertTrue(np.allclose(evs, target_evs))
 
@@ -749,6 +773,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             avg_axis=None,
             measurement_flips=None,
             seed=None,
+            use_spo=False,
         )
         self.assertTrue(np.allclose(evs, target_evs))
 
@@ -773,6 +798,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             avg_axis=None,
             measurement_flips=None,
             seed=None,
+            use_spo=False,
         )
         self.assertTrue(np.allclose(evs, target_evs))
 
@@ -797,6 +823,7 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             avg_axis=2,
             measurement_flips=None,
             seed=None,
+            use_spo=False,
         )
         self.assertTrue(np.allclose(evs, target_evs))
 
@@ -821,5 +848,6 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             avg_axis=(0, 2),
             measurement_flips=np.ones((1, 2, 3, 10, 19), dtype=bool),
             seed=None,
+            use_spo=False,
         )
         self.assertTrue(np.allclose(evs, target_evs))

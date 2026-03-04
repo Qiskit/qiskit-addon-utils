@@ -25,7 +25,7 @@ def executor_expectation_values(
     # positional-only arguments: these canNOT be specified as keyword arguments, meaning we can
     # rename them without breaking API
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
-    basis_dict: dict[Pauli, list[SparsePauliOp | None]],
+    basis_dict: dict[Pauli, list[SparsePauliOp | SparseObservable | None]],
     /,
     # positional or keyword arguments
     meas_basis_axis: int | None = None,
