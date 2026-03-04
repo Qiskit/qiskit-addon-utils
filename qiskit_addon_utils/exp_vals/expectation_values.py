@@ -25,7 +25,7 @@ def executor_expectation_values(
     # positional-only arguments: these canNOT be specified as keyword arguments, meaning we can
     # rename them without breaking API
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
-    basis_dict: dict[Pauli, list[SparsePauliOp | SparseObservable | None]],
+    basis_dict: dict[Pauli, list[SparsePauliOp | None]],
     /,
     # positional or keyword arguments
     meas_basis_axis: int | None = None,
@@ -60,7 +60,7 @@ def executor_expectation_values(
             The jth observable is defined as the sum of the jth element of each dict value (contribution from each meas basis).
             - Note the order of dict entries is relied on here for indexing; the dict keys are never used.
             - Assumes each Pauli term (in dict values) is compatible with each measurement basis (in keys).
-            - Assumes each term in each observable appears for exactly one basis (TODO: remove this assumption).
+            - Assumes each term in each observable appears for exactly one basis.
         meas_basis_axis: Axis of bool_array that indexes measurement bases. Ordering must match ordering in `basis_dict`. If `None`,
             then `len(basis_dict)` must be 1, and `bool_array` is assumed to correspond to the only measurement basis.
         avg_axis: Optional axis or axes of bool_array to average over when computing expectation values. Usually this is the "twirling" axis.
@@ -93,15 +93,7 @@ def executor_expectation_values(
         ValueError if the number of entries in `basis_dict` does not equal the length of `bool_array` along `meas_basis_axis`.
     """
     ##### VALIDATE INPUTS:
-    if avg_axis is None:
-        avg_axis = tuple()
-    elif isinstance(avg_axis, int):
-        avg_axis = (avg_axis,)
-    else:
-        avg_axis = tuple(avg_axis)
-
-    if any(a < 0 for a in avg_axis):
-        raise ValueError("`avg_axis` must be nonnegative")
+    avg_axis = _validate_avg_axis(avg_axis, len(bool_array.shape))
 
     if meas_basis_axis is None:
         if len(basis_dict) != 1:
@@ -268,6 +260,23 @@ def _apply_postselect_mask(
     num_shots_kept = np.sum(postselect_mask, axis=-1)
 
     return bool_array, basis_dict, num_shots_kept
+
+
+def _validate_avg_axis(avg_axis: int | tuple[int, ...] | None, num_dims: int) -> tuple[int]:
+    if avg_axis is None:
+        avg_axis = tuple()
+    elif isinstance(avg_axis, int):
+        avg_axis = (avg_axis,)
+    else:
+        avg_axis = tuple(avg_axis)
+    if any(a > (num_dims - 3) for a in avg_axis):
+        raise ValueError(
+            "Cannot average over the last two dimensions of `bool_array`, which are associated with shots and qubits."
+        )
+    if any(a < 0 for a in avg_axis):
+        raise ValueError("`avg_axis` must be nonnegative")
+
+    return avg_axis
 
 
 def _apply_pec_signs(

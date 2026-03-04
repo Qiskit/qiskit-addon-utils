@@ -341,7 +341,7 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
                 bool_array,
                 basis_dict,
                 meas_basis_axis=0,
-                avg_axis=(1, -1),
+                avg_axis=(0, -1),
             )
         self.assertIn("nonnegative", str(context.exception))
 
@@ -359,6 +359,19 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
             "`meas_basis_axis` cannot be `None` unless there is only one measurement basis",
             str(context.exception),
         )
+
+    def test_avg_over_shots(self):
+        """Test that negative value in avg_axis tuple raises ValueError."""
+        bool_array, basis_dict = self._create_minimal_valid_inputs(num_bases=2)
+
+        with self.assertRaises(ValueError) as context:
+            executor_expectation_values(
+                bool_array,
+                basis_dict,
+                meas_basis_axis=0,
+                avg_axis=1,
+            )
+        self.assertIn("Cannot average over the last two dimensions", str(context.exception))
 
     def test_imaginary_observable(self):
         """Test that negative avg_axis raises ValueError."""
