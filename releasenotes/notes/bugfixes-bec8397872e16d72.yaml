@@ -1,4 +1,4 @@
 ---
 fixes:
   - |
-    Fixed bugs in :func:`qiskit_addon_utils.exp_vals.executor_expectation_values`_ causing indexing errors when `bit_array` dimensions associated with twirling randomizations were not specified in `avg_axis`.
+    Fixed bugs in :func:`qiskit_addon_utils.exp_vals.executor_expectation_values` causing indexing errors when `bit_array` dimensions associated with twirling randomizations were not specified in `avg_axis`.
