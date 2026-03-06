@@ -25,7 +25,7 @@ jobs:
           name: pkg-sdist
           path: dist/*.tar.gz
 
-  build_wheel:
+  build_wheels:
     name: Build universal wheel
     runs-on: ubuntu-latest
     steps:
