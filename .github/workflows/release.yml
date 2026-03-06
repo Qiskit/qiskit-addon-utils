@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Build wheel
         run: |
-          pip run build --wheel
+          pipx run build --wheel
       - name: Store the wheel
         uses: actions/upload-artifact@v6
         with:
