@@ -25,22 +25,19 @@ jobs:
           name: pkg-sdist
           path: dist/*.tar.gz
 
-  build_wheels:
-    name: Build universal wheel on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-
+  build_wheel:
+    name: Build universal wheel
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - name: Build wheel
-        uses: pypa/cibuildwheel@v3.2.1
+        run: |
+          pip run build --wheel
       - name: Store the wheel
         uses: actions/upload-artifact@v6
         with:
-          name: pkg-wheel-${{ matrix.os }}
-          path: ./wheelhouse/*.whl
+          name: pkg-wheel
+          path: dist/*.whl
 
   github:
     name: Publish to GitHub
