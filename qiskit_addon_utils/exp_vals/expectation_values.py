@@ -210,7 +210,7 @@ def executor_expectation_values(
         )
 
         # Append axis for observables being evaluated (to match axis in `means`):
-        if np.iterable(gamma_factor):
+        if not isinstance(gamma_factor, float):
             gamma_factor = gamma_factor[..., np.newaxis]
         means = gamma_factor * means
         # Propagate uncertainties:
