@@ -93,7 +93,7 @@ def executor_expectation_values(
         ValueError if the number of entries in `basis_dict` does not equal the length of `bool_array` along `meas_basis_axis`.
     """
     ##### VALIDATE INPUTS:
-    avg_axis = _validate_avg_axis(avg_axis, len(bool_array.shape))
+    avg_axis: tuple(int) = _validate_avg_axis(avg_axis, len(bool_array.shape))
 
     if meas_basis_axis is None:
         if len(basis_dict) != 1:
@@ -109,6 +109,8 @@ def executor_expectation_values(
             postselect_mask = postselect_mask.reshape((1, *postselect_mask.shape))
         meas_basis_axis = 0
         avg_axis = tuple(a + 1 for a in avg_axis)
+    elif meas_basis_axis < 0:
+        raise ValueError("meas_basis_axis must be nonnegative.")
 
     if len(basis_dict) != bool_array.shape[meas_basis_axis]:
         raise ValueError(
@@ -157,13 +159,31 @@ def executor_expectation_values(
     ##### PEC SIGNS:
     if pauli_signs is not None:
         bool_array, basis_dict, net_signs = _apply_pec_signs(bool_array, basis_dict, pauli_signs)
-    else:
-        net_signs = np.zeros(bool_array.shape[:-2], dtype=bool)
-    # For PEC, we will need to apply a rescaling factor gamma later when computing expectation values.
+        # For PEC, we will need to multiply by gamma later when computing expectation values.
+        if gamma_factor is None:
+            # If gamma not provided, estimate it empirically, for each requested expectation value:
+            num_minus = np.count_nonzero(net_signs, axis=avg_axis)
+            num_plus = np.count_nonzero(~net_signs, axis=avg_axis)
+            num_twirls = num_plus + num_minus
+            gamma_factor = num_twirls / (num_plus - num_minus)
+    elif gamma_factor is None:
+        gamma_factor = 1
+
+    ##### If other axes are to be averaged over, do so by first absorbing them into the shots axis:
+    if avg_axis:
+        # move avg_axis just before shots axis (just before axis -2):
+        axis_positions_before_shots = -2 - np.arange(len(avg_axis))
+        bool_array = np.moveaxis(bool_array, avg_axis, axis_positions_before_shots)
+        # flatten into shots axis (preserve sizes of other axes, including bits axis):
+        bool_array = np.reshape(bool_array, (*bool_array.shape[:-2-len(avg_axis)], -1, bool_array.shape[-1]))
+
+        # update others to match:
+        num_shots_kept = np.sum(num_shots_kept, avg_axis)
+        meas_basis_axis -= np.sum(np.asarray(avg_axis) < meas_basis_axis)
 
     ##### ACCUMULATE CONTRIBUTIONS FROM EACH MEAS BASIS:
     barray = BitArray.from_bool_array(bool_array, "little")
-    output_shape_each_obs = np.delete(barray.shape, (meas_basis_axis, *avg_axis))
+    output_shape_each_obs = np.delete(barray.shape, meas_basis_axis)
     mean_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
     var_each_observable = np.zeros((num_observables, *output_shape_each_obs), dtype=float)
 
@@ -175,7 +195,6 @@ def executor_expectation_values(
         idx = tuple([*skip_axes, meas_basis_idx])
         barray_this_basis = barray[idx]
         num_kept = num_shots_kept[idx]
-        signs = net_signs[idx]
         basis_rescale_factors = (
             rescale_factors[meas_basis_idx] if rescale_factors is not None else None
         )
@@ -188,32 +207,12 @@ def executor_expectation_values(
             rescale_each_observable=basis_rescale_factors,
         )
 
-        variances = standard_errs**2
-        del standard_errs
-
-        ## AVERAGE OVER SPECIFIED AXES ("TWIRLS"):
-        # Update indexing since we already sliced away meas_basis axis:
-        avg_axis_ = tuple(a if a < meas_basis_axis else a - 1 for a in avg_axis)
-
-        if gamma_factor is not None:
-            axes = tuple(ax for i, ax in enumerate(signs.shape) if i not in avg_axis_)
-            rescaling = np.full(axes, gamma_factor)
-        else:
-            num_minus = np.count_nonzero(signs, axis=avg_axis_)
-            num_plus = np.count_nonzero(~signs, axis=avg_axis_)
-            num_twirls = num_plus + num_minus
-            rescaling = num_twirls / (num_plus - num_minus)
-
-        # Will weight each twirl by its fraction of kept shots.
-        # If no postselection, weighting reduces to dividing by num_twirls:
-        num_kept_each_avg = np.sum(num_kept, axis=avg_axis_)
-        weights = num_kept / np.expand_dims(num_kept_each_avg, avg_axis_)
         # Append axis for observables being evaluated (to match axis in `means`):
-        weights = weights[..., np.newaxis]
-        rescaling = rescaling[..., np.newaxis]
-        means = rescaling * np.sum(means * weights, axis=avg_axis_)
+        if np.shape(gamma_factor):
+            gamma_factor = gamma_factor[..., np.newaxis]
+        means = gamma_factor * means
         # Propagate uncertainties:
-        variances = rescaling**2 * np.sum(variances * weights**2, axis=avg_axis_)
+        variances = (gamma_factor*standard_errs)**2
         # Move observable axis from end to front:
         mean_each_observable += np.moveaxis(means, -1, 0)
         var_each_observable += np.moveaxis(variances, -1, 0)
