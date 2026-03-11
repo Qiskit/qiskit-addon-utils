@@ -109,7 +109,7 @@ def executor_expectation_values(
         if postselect_mask is not None:
             postselect_mask = postselect_mask.reshape((1, *postselect_mask.shape))
         meas_basis_axis = 0
-        avg_axis = tuple(a + 1 for a in avg_axis)
+        avg_ax = tuple(a + 1 for a in avg_ax)
     elif meas_basis_axis < 0:
         raise ValueError("meas_basis_axis must be nonnegative.")
 
@@ -163,26 +163,26 @@ def executor_expectation_values(
         # For PEC, we will need to multiply by gamma later when computing expectation values.
         if gamma_factor is None:
             # If gamma not provided, estimate it empirically, for each requested expectation value:
-            num_minus = np.count_nonzero(net_signs, axis=avg_axis)
-            num_plus = np.count_nonzero(~net_signs, axis=avg_axis)
+            num_minus = np.count_nonzero(net_signs, axis=avg_ax)
+            num_plus = np.count_nonzero(~net_signs, axis=avg_ax)
             num_twirls = num_plus + num_minus
             gamma_factor = num_twirls / (num_plus - num_minus)
     elif gamma_factor is None:
         gamma_factor = 1
 
     ##### If other axes are to be averaged over, do so by first absorbing them into the shots axis:
-    if avg_axis:
-        # move avg_axis just before shots axis (just before axis -2):
-        axis_positions_before_shots = -2 - np.arange(len(avg_axis))
-        bool_array = np.moveaxis(bool_array, avg_axis, axis_positions_before_shots)
+    if avg_ax:
+        # move avg_ax just before shots axis (just before axis -2):
+        axis_positions_before_shots = -2 - np.arange(len(avg_ax))
+        bool_array = np.moveaxis(bool_array, avg_ax, axis_positions_before_shots)
         # flatten into shots axis (preserve sizes of other axes, including bits axis):
         bool_array = np.reshape(
-            bool_array, (*bool_array.shape[: -2 - len(avg_axis)], -1, bool_array.shape[-1])
+            bool_array, (*bool_array.shape[: -2 - len(avg_ax)], -1, bool_array.shape[-1])
         )
 
         # update others to match:
-        num_shots_kept = np.sum(num_shots_kept, avg_axis)
-        meas_basis_axis -= np.sum(np.asarray(avg_axis) < meas_basis_axis)
+        num_shots_kept = np.sum(num_shots_kept, avg_ax)
+        meas_basis_axis -= np.sum(np.asarray(avg_ax) < meas_basis_axis)
 
     ##### ACCUMULATE CONTRIBUTIONS FROM EACH MEAS BASIS:
     barray = BitArray.from_bool_array(bool_array, "little")
