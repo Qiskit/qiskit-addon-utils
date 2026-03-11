@@ -412,9 +412,9 @@ def _bitarray_expectation_value(
     with np.errstate(divide="ignore"):
         expvals_each_term /= shots
         sq_expvals_each_term /= shots
-        expvals_each_term[~np.isfinite(expvals_each_term)] = np.nan
-        sq_expvals_each_term[~np.isfinite(expvals_each_term)] = np.nan
         variances_each_term = np.clip(sq_expvals_each_term - expvals_each_term**2, 0, None) / shots
+    expvals_each_term[~np.isfinite(expvals_each_term)] = np.nan
+    variances_each_term[~np.isfinite(variances_each_term)] = np.nan
 
     # len(all_coeffs) == number of bit terms == expvals_each_term.shape[-1], so broadcasts:
     # TODO: test case of empty observable
