@@ -385,9 +385,9 @@ def _bitarray_expectation_value(
     parities = (outcomes & mask_z).bitcount() % 2
 
     # Compute the coefficients of 0 and 1 components.
-    nulled_by_0_projector = np.any((outcomes & mask_0).array, axis=-1)
-    nulled_by_1_projector = np.any((~outcomes & mask_1).array, axis=-1)
-    coeffs_01 = ~np.logical_or(nulled_by_0_projector, nulled_by_1_projector)
+    nulled_by_projector = np.any((outcomes & mask_0).array, axis=-1)
+    nulled_by_projector |= np.any((~outcomes & mask_1).array, axis=-1)
+    coeffs_01 = ~nulled_by_projector
 
     # Compute expectation values
     shape = np.broadcast_shapes(outcomes.shape, mask_z.shape)
