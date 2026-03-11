@@ -385,8 +385,8 @@ def _bitarray_expectation_value(
     parities = (outcomes & mask_z).bitcount() % 2
 
     # Compute the coefficients of 0 and 1 components.
-    nulled_by_0_projector = np.logical_or.reduce((outcomes & mask_0).array, axis=-1)
-    nulled_by_1_projector = np.logical_or.reduce(((outcomes & mask_1) ^ mask_1).array, axis=-1)
+    nulled_by_0_projector = np.any((outcomes & mask_0).array, axis=-1)
+    nulled_by_1_projector = np.any(((outcomes & mask_1) ^ mask_1).array, axis=-1)
     coeffs_01 = ~np.logical_or(nulled_by_0_projector, nulled_by_1_projector)
 
     # Compute expectation values
@@ -406,7 +406,7 @@ def _bitarray_expectation_value(
 
     # Divide by total shots. May be less than nominal number in array if
     # we are postselecting via projector in observable terms:
-    shots = np.asarray(outcomes.num_shots) if shots is None else shots[..., np.newaxis]
+    shots = outcomes.num_shots if shots is None else shots[..., np.newaxis]
 
     # Edge case of counts dict containing outcomes but with total shots, eg {"0": 0}.
     with np.errstate(divide="ignore"):
