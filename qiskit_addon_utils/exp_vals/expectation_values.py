@@ -92,6 +92,8 @@ def executor_expectation_values(
         ValueError if `meas_basis_axis` is `None` but `len(basis_dict) != 1`.
         ValueError if the number of entries in `basis_dict` does not equal the length of `bool_array` along `meas_basis_axis`.
     """
+    if isinstance(gamma_factor, int):
+        _gamma_factor: np.ndarray | float = gamma_factor
     ##### VALIDATE INPUTS:
     avg_axis = _validate_avg_axis(avg_axis, len(bool_array.shape))
 
@@ -165,9 +167,9 @@ def executor_expectation_values(
             num_minus = np.count_nonzero(net_signs, axis=avg_axis)
             num_plus = np.count_nonzero(~net_signs, axis=avg_axis)
             num_twirls = num_plus + num_minus
-            gamma_factor = num_twirls / (num_plus - num_minus)
+            _gamma_factor = num_twirls / (num_plus - num_minus)
     elif gamma_factor is None:
-        gamma_factor = 1.0
+        _gamma_factor = 1.0
 
     ##### If other axes are to be averaged over, do so by first absorbing them into the shots axis:
     if avg_axis:
@@ -210,11 +212,12 @@ def executor_expectation_values(
         )
 
         # Append axis for observables being evaluated (to match axis in `means`):
-        if np.iterable(gamma_factor):
-            gamma_factor = gamma_factor[..., np.newaxis]
-        means = gamma_factor * means
+        if np.shape(_gamma_factor):
+            assert not isinstance(_gamma_factor, float)
+            _gamma_factor = _gamma_factor[..., np.newaxis]
+        means = _gamma_factor * means
         # Propagate uncertainties:
-        variances = (gamma_factor * standard_errs) ** 2
+        variances = (_gamma_factor * standard_errs) ** 2
         # Move observable axis from end to front:
         mean_each_observable += np.moveaxis(means, -1, 0)
         var_each_observable += np.moveaxis(variances, -1, 0)
