@@ -167,7 +167,7 @@ def executor_expectation_values(
             num_twirls = num_plus + num_minus
             gamma_factor = num_twirls / (num_plus - num_minus)
     elif gamma_factor is None:
-        gamma_factor = 1.
+        gamma_factor = 1.0
 
     ##### If other axes are to be averaged over, do so by first absorbing them into the shots axis:
     if avg_axis:
@@ -210,7 +210,7 @@ def executor_expectation_values(
         )
 
         # Append axis for observables being evaluated (to match axis in `means`):
-        if np.shape(gamma_factor):
+        if np.iterable(gamma_factor):
             gamma_factor = gamma_factor[..., np.newaxis]
         means = gamma_factor * means
         # Propagate uncertainties:
