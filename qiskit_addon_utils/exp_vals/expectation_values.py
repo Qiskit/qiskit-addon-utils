@@ -394,7 +394,6 @@ def _bitarray_expectation_value(
     expvals_each_term = np.zeros(shape, dtype=float)
     sq_expvals_each_term = np.zeros_like(expvals_each_term)
 
-    # Combine masks to get coeff for each shot (-1, 0, or 1)
     if np.all(coeffs_01):
         # We can do a faster computation of pure Pauli parities
         expvals_each_term += outcomes.num_shots - 2 * np.sum(parities, axis=-1, dtype=int)
