@@ -175,7 +175,9 @@ def executor_expectation_values(
         axis_positions_before_shots = -2 - np.arange(len(avg_axis))
         bool_array = np.moveaxis(bool_array, avg_axis, axis_positions_before_shots)
         # flatten into shots axis (preserve sizes of other axes, including bits axis):
-        bool_array = np.reshape(bool_array, (*bool_array.shape[:-2-len(avg_axis)], -1, bool_array.shape[-1]))
+        bool_array = np.reshape(
+            bool_array, (*bool_array.shape[: -2 - len(avg_axis)], -1, bool_array.shape[-1])
+        )
 
         # update others to match:
         num_shots_kept = np.sum(num_shots_kept, avg_axis)
@@ -212,7 +214,7 @@ def executor_expectation_values(
             gamma_factor = gamma_factor[..., np.newaxis]
         means = gamma_factor * means
         # Propagate uncertainties:
-        variances = (gamma_factor*standard_errs)**2
+        variances = (gamma_factor * standard_errs) ** 2
         # Move observable axis from end to front:
         mean_each_observable += np.moveaxis(means, -1, 0)
         var_each_observable += np.moveaxis(variances, -1, 0)
