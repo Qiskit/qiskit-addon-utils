@@ -386,7 +386,7 @@ def _bitarray_expectation_value(
 
     # Compute the coefficients of 0 and 1 components.
     nulled_by_0_projector = np.any((outcomes & mask_0).array, axis=-1)
-    nulled_by_1_projector = np.any(((outcomes & mask_1) ^ mask_1).array, axis=-1)
+    nulled_by_1_projector = np.any((~outcomes & mask_1).array, axis=-1)
     coeffs_01 = ~np.logical_or(nulled_by_0_projector, nulled_by_1_projector)
 
     # Compute expectation values
