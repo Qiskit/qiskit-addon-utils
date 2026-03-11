@@ -93,7 +93,8 @@ def executor_expectation_values(
         ValueError if the number of entries in `basis_dict` does not equal the length of `bool_array` along `meas_basis_axis`.
     """
     ##### VALIDATE INPUTS:
-    avg_axis: tuple(int) = _validate_avg_axis(avg_axis, len(bool_array.shape))
+    avg_ax: tuple[int] = _validate_avg_axis(avg_axis, len(bool_array.shape))
+    # change name to make linter happy
 
     if meas_basis_axis is None:
         if len(basis_dict) != 1:
