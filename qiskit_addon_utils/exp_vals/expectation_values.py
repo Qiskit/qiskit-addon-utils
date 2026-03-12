@@ -162,10 +162,7 @@ def executor_expectation_values(
         # For PEC, we will need to multiply by gamma later when computing expectation values.
         if gamma_factor is None:
             # If gamma not provided, estimate it empirically, for each requested expectation value:
-            num_minus = np.count_nonzero(net_signs, axis=avg_axis)
-            num_plus = np.count_nonzero(~net_signs, axis=avg_axis)
-            num_twirls = num_plus + num_minus
-            gamma_factor = num_twirls / (num_plus - num_minus)
+            gamma_factor = 1 / (1 - 2 * np.mean(net_signs, axis=avg_axis))
     elif gamma_factor is None:
         gamma_factor = 1.0
 
