@@ -11,31 +11,45 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add measurement on spectator qubits."""
+"""Transpiler pass to add pre-selection measurements on spectator qubits."""
 
 from __future__ import annotations
 
 from copy import deepcopy
+from enum import Enum
 
+import numpy as np
 from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
-from qiskit.circuit.library import Barrier, Measure
+from qiskit.circuit.library import Barrier, Measure, RXGate, XGate
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ....constants import DEFAULT_SPECTATOR_CREG_NAME
-from .utils import validate_op_is_supported
+from ....constants import DEFAULT_SPECTATOR_PRE_CREG_NAME
+from ....post_selection.transpiler.passes.utils import validate_op_is_supported
+from ....post_selection.transpiler.passes.xslow_gate import XSlowGate
 
 
-class AddSpectatorMeasures(TransformationPass):
-    """Add measurements on spectator qubits.
+class XPulseType(str, Enum):
+    """The type of X-pulse to apply for the pre-selection measurements."""
+
+    XSLOW = "xslow"
+    """An ``xslow`` gate."""
+
+    RX = "rx"
+    """Twenty ``rx`` gates with angles ``pi/20``."""
+
+
+class AddSpectatorMeasuresPreSelection(TransformationPass):
+    """Add pre-selection measurements on spectator qubits.
 
     An active qubit is a qubit acted on in the circuit by a non-barrier instruction. A terminated qubit is
     one whose last action is a measurement. A spectator qubit is a qubit that is inactive, but adjacent to
-    an active qubit under the coupling map. This pass adds a measurement to all spectator qubits and,
-    optionally via ``include_unmeasured``, to all active qubits that are not terminated qubits.
+    an active qubit under the coupling map. This pass adds a pre-selection measurement (xslow-X-measure) to 
+    all spectator qubits and, optionally via ``include_unmeasured``, to all active qubits that are not 
+    terminated qubits.
 
     The added measurements write to a new register that has one bit per spectator qubit and name
     ``spectator_creg_name``.
@@ -49,15 +63,17 @@ class AddSpectatorMeasures(TransformationPass):
     def __init__(
         self,
         coupling_map: CouplingMap | list[tuple[int, int]],
+        x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         include_unmeasured: bool = True,
-        spectator_creg_name: str = DEFAULT_SPECTATOR_CREG_NAME,
+        spectator_creg_name: str = DEFAULT_SPECTATOR_PRE_CREG_NAME,
         add_barrier: bool = True,
     ):
         """Initialize the pass.
 
         Args:
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
+            x_pulse_type: The type of X-pulse to apply for the pre-selection measurements.
             include_unmeasured: Whether the qubits that are active but are not terminated by a measurement should
                 also be treated as spectators. If ``True``, a terminal measurement is added on each of them.
             spectator_creg_name: The name of the classical register added for the measurements on the spectator qubits.
@@ -65,6 +81,7 @@ class AddSpectatorMeasures(TransformationPass):
                 measurements.
         """
         super().__init__()
+        self.x_pulse_type = XPulseType(x_pulse_type)
         self.spectator_creg_name = spectator_creg_name
         self.include_unmeasured = include_unmeasured
         self.coupling_map = (
@@ -74,6 +91,12 @@ class AddSpectatorMeasures(TransformationPass):
         )
         self.coupling_map.make_symmetric()
         self.add_barrier = add_barrier
+
+        # Pre-selection sequence: xslow (or rx pulses) + X gate
+        if self.x_pulse_type == XPulseType.XSLOW:
+            self.pulse_sequence = [XSlowGate(), XGate()]
+        else:
+            self.pulse_sequence = [RXGate(np.pi / 20)] * 20 + [XGate()]
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         active_qubits, terminated_qubits = self._find_active_and_terminated_qubits(dag)
@@ -91,20 +114,50 @@ class AddSpectatorMeasures(TransformationPass):
             unterminated_qubits = active_qubits.difference(terminated_qubits)
             spectator_qubits = spectator_qubits.union(unterminated_qubits)
 
-        if (num_spectators := len(spectator_qubits)) != 0:
-            # sort the spectator qubits, so that qubit `i` writes to clbit `i`
-            spectator_qubits_ls = list(spectator_qubits)
-            spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
+        if (num_spectators := len(spectator_qubits)) == 0:
+            return dag
 
-            if self.add_barrier is True:
-                qubits = active_qubits.union(spectator_qubits_ls)
-                dag.apply_operation_back(Barrier(len(qubits)), qubits)
+        # sort the spectator qubits, so that qubit `i` writes to clbit `i`
+        spectator_qubits_ls = list(spectator_qubits)
+        spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
 
-            dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
-            for qubit, clbit in zip(spectator_qubits_ls, new_reg):
-                dag.apply_operation_back(Measure(), [qubit], [clbit])
+        # Create a new DAG to build the circuit with pre-selection at the front
+        new_dag = DAGCircuit()
+        for qreg in dag.qregs.values():
+            new_dag.add_qreg(qreg)
+        for creg in dag.cregs.values():
+            new_dag.add_creg(creg)
+        
+        # Add the new spectator register
+        new_dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
 
-        return dag
+        # Add the pre-selection measurements at the front for spectator qubits
+        for qubit, clbit in zip(spectator_qubits_ls, new_reg):
+            for gate in self.pulse_sequence:
+                new_dag.apply_operation_back(gate, [qubit])
+            new_dag.apply_operation_back(Measure(), [qubit], [clbit])
+
+        # Add a barrier to separate the pre-selection measurements from the rest of the circuit
+        # Only add barrier on spectator qubits, not active qubits (to avoid blocking pre-selection on active qubits)
+        if self.add_barrier and len(spectator_qubits_ls) > 0:
+            new_dag.apply_operation_back(Barrier(len(spectator_qubits_ls)), spectator_qubits_ls)
+
+        # Find which classical bit each qubit measures into by scanning the circuit
+        qubit_to_clbit_map = {}
+        for node in dag.topological_op_nodes():
+            if node.op.name == "measure" and len(node.qargs) == 1 and len(node.cargs) == 1:
+                qubit_to_clbit_map[node.qargs[0]] = node.cargs[0]
+        
+        # Copy all operations from the original DAG to the new DAG
+        for node in dag.topological_op_nodes():
+            # # do this to preserve meas ordering
+            # if node.op.name == "measure" and len(node.qargs) == 1:
+            #     qubit = node.qargs[0]
+            #     clbit = qubit_to_clbit_map[qubit]
+            #     new_dag.apply_operation_back(Measure(), [qubit], [clbit])
+            # else:
+            new_dag.apply_operation_back(node.op, node.qargs, node.cargs)
+        return new_dag
 
     def _find_active_and_terminated_qubits(self, dag: DAGCircuit) -> tuple[set[Qubit], set[Qubit]]:
         """Helper function to find the sets of active qubits and of qubits terminated with measurements.
@@ -116,58 +169,18 @@ class AddSpectatorMeasures(TransformationPass):
 
         # The qubits whose last action is a measurement
         terminated_qubits: set[Qubit] = set()
-        
-        # Track measurements into pre-selection registers to handle them specially
-        preselection_measurements: dict[Qubit, bool] = {}
 
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            # Skip xslow and rx gates - they are part of pre/post-selection protocol
-            if ('xslow' in node.op.name) or ('rx' in node.op.name):
-                continue
-            elif node.is_standard_gate():
-                # Check if this is an X gate that's part of a pre-selection sequence
-                # (X gate immediately before a measurement into a _pre register)
-                if node.op.name == "x" and len(node.qargs) == 1:
-                    # Look ahead to see if next operation on this qubit is a measurement into _pre
-                    qubit = node.qargs[0]
-                    successors = list(dag.successors(node))
-                    is_preselection_x = False
-                    for succ in successors:
-                        if (succ.op.name == "measure" and
-                            len(succ.qargs) == 1 and succ.qargs[0] == qubit and
-                            len(succ.cargs) == 1):
-                            # Check if measuring into a pre-selection register
-                            clbit = succ.cargs[0]
-                            for creg in dag.cregs.values():
-                                if clbit in creg and creg.name.endswith("_pre"):
-                                    is_preselection_x = True
-                                    break
-                            break
-                    
-                    if not is_preselection_x:
-                        active_qubits.update(node.qargs)
-                        terminated_qubits.difference_update(node.qargs)
-                else:
-                    active_qubits.update(node.qargs)
-                    terminated_qubits.difference_update(node.qargs)
+            if node.is_standard_gate():
+                active_qubits.update(node.qargs)
+                terminated_qubits.difference_update(node.qargs)
             elif (name := node.op.name) == "barrier":
                 continue
             elif name == "measure":
-                # Check if this is a measurement into a pre-selection register
-                if len(node.cargs) == 1:
-                    clbit = node.cargs[0]
-                    is_preselection = False
-                    for creg in dag.cregs.values():
-                        if clbit in creg and creg.name.endswith("_pre"):
-                            is_preselection = True
-                            preselection_measurements[node.qargs[0]] = True
-                            break
-                    
-                    if not is_preselection:
-                        active_qubits.add(node.qargs[0])
-                        terminated_qubits.add(node.qargs[0])
+                active_qubits.add(node.qargs[0])
+                terminated_qubits.add(node.qargs[0])
             elif isinstance(node.op, ControlFlowOp):
                 # The qubits whose last action is a measurement, block by block
                 all_terminated_qubits: list[set[Qubit]] = []
@@ -191,7 +204,13 @@ class AddSpectatorMeasures(TransformationPass):
                     )
 
                 terminated_qubits.update(set.intersection(*all_terminated_qubits))
+            elif 'xslow' in node.op.name:
+                # xslow gates (from pre/post-selection) don't make a qubit "active"
+                # They are just part of the measurement protocol
+                continue
             else:  # pragma: no cover
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")
 
         return active_qubits, terminated_qubits
+
+# Made with Bob
