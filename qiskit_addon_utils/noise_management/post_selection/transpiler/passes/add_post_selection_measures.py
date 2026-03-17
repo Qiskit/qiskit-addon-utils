@@ -81,19 +81,29 @@ class AddPostSelectionMeasures(TransformationPass):
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Find what qubits have a terminal measurement
-        terminal_measurements: dict[Qubit, Clbit] = {
-            qubit: clbit for qubit, clbit in self._find_terminal_measurements(dag).items() if clbit
-        }
-        if not terminal_measurements:
-            return dag
-
+        all_terminal_measurements = self._find_terminal_measurements(dag)
+        
         # Add the new registers and create a map between the original clbit and the new ones
+        # Skip pre-selection registers (those ending with _pre) as they don't need post-selection
         clbits_map = {}
         for name, creg in dag.cregs.items():
+            if name.endswith("_pre"):
+                # Skip pre-selection registers - they don't get post-selection
+                continue
             dag.add_creg(
                 new_creg := ClassicalRegister(creg.size, name + self.post_selection_suffix)
             )
             clbits_map.update({clbit: clbit_ps for clbit, clbit_ps in zip(creg, new_creg)})
+        
+        # Filter terminal measurements to only include those with clbits in clbits_map
+        # This excludes measurements into pre-selection registers
+        terminal_measurements: dict[Qubit, Clbit] = {
+            qubit: clbit
+            for qubit, clbit in all_terminal_measurements.items()
+            if clbit and clbit in clbits_map
+        }
+        if not terminal_measurements:
+            return dag
 
         # Add a barrier to separate the post selection measurements from the rest of the circuit
         qubits = tuple(terminal_measurements)
@@ -123,6 +133,9 @@ class AddPostSelectionMeasures(TransformationPass):
             validate_op_is_supported(node)
 
             if node.is_standard_gate():
+                for qarg in node.qargs:
+                    terminal_measurements[qarg] = None
+            elif (name := node.op.name) == "xslow":
                 for qarg in node.qargs:
                     terminal_measurements[qarg] = None
             elif (name := node.op.name) == "barrier":
