@@ -106,13 +106,6 @@ class PreSelector:
         else:
             _compute_mask = _compute_mask_by_edge
 
-        # summary = self.summary
-        # mask = _compute_mask(result,summary)
-        # print(f"DEBUG: measure_map_pre = {summary.measure_map_pre}")
-        # print(f"DEBUG: Number of True in mask: {mask.sum()}/{len(mask)}")
-        # for name_pre, clbit_idx_pre in summary.measure_map_pre.values():
-        #     vals = result[name_pre][..., clbit_idx_pre]
-        #     print(f"DEBUG: {name_pre}[{clbit_idx_pre}]: {vals.sum()} ones out of {len(vals)}")
         return _compute_mask(result, self.summary)
 
 
