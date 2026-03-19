@@ -43,22 +43,55 @@ class XPulseType(str, Enum):
 
 
 class AddPreSelectionMeasures(TransformationPass):
-    """Add a pre selection measurement at the beginning of the circuit.
+    """Add a pre-selection measurement at the beginning of the circuit.
 
-    A pre selection measurement is a measurement that precedes the main circuit operations. It
-    consists of a narrowband X-pulse (xslow), followed by an X gate, followed by a measurement.
-    In the absence of noise, it is expected to return ``1``. Shots where the pre-selection
-    measurement returns ``0`` indicate that the qubit was not properly initialized and should
-    be discarded.
+    A pre-selection measurement is a measurement that precedes the main circuit operations. It
+    consists of a narrowband X-pulse (e.g. a sequence of N rx(pi/N) gates), followed by an X gate,
+    followed by a measurement. In the absence of noise, it is expected to return ``0`` (since
+    the qubit starts in |0⟩, gets flipped to |1⟩ by the two X gate applications, then measured). Shots where the
+    pre-selection measurement returns ``1`` indicate that the qubit was not properly initialized
+    to |0⟩ and should be discarded.
 
-    This pass adds pre selection measurements at the beginning of the circuit for all active qubits
-    and optionally spectator qubits (qubits adjacent to active qubits under the coupling map).
+    This pass adds pre-selection measurements at the beginning of the circuit for all qubits that:
+    1. Are active in the circuit (have gates applied to them)
+    2. Have terminal measurements
+
     The added measurements write to new classical registers that are copies of the DAG's registers,
-    with modified names.
+    with modified names (by default, appending ``"_pre"`` to the register name).
 
-    .. note::
-        When this pass encounters a control flow operation, it iterates through all of its blocks to
-        determine which qubits are active in the circuit.
+    The pre-selection protocol works as follows:
+
+    1. **xslow pulse (or rx sequence)**: A narrowband X-pulse that slowly rotates the qubit.
+       This can be either a single ``xslow`` gate or 20 ``rx(π/20)`` gates.
+    2. **X gate**: A standard X gate to complete the flip from |0⟩ to |1⟩.
+    3. **Measurement**: Measures the qubit state. Should return ``0`` if initialization was good.
+    4. **Barrier**: Separates pre-selection measurements from the main circuit.
+    5. **Main circuit**: The original circuit operations proceed.
+
+    Example:
+        .. code-block:: python
+
+            from qiskit import QuantumCircuit
+            from qiskit.transpiler import PassManager
+            from qiskit_addon_utils.noise_management.pre_selection.transpiler.passes import (
+                AddPreSelectionMeasures,
+            )
+
+            # Create a simple circuit
+            qc = QuantumCircuit(2, 2)
+            qc.h(0)
+            qc.cx(0, 1)
+            qc.measure([0, 1], [0, 1])
+
+            # Add pre-selection measurements
+            coupling_map = [(0, 1)]
+            pm = PassManager([AddPreSelectionMeasures(coupling_map)])
+            qc_with_pre = pm.run(qc)
+
+            # The resulting circuit will have:
+            # 1. Pre-selection measurements at the start (xslow + X + measure to c_pre)
+            # 2. A barrier
+            # 3. The original circuit (H, CX, measure to c)
     """
 
     def __init__(
@@ -99,10 +132,8 @@ class AddPreSelectionMeasures(TransformationPass):
             return dag
 
         # Find which classical bit each qubit measures into by scanning the circuit
-        qubit_to_clbit_map = {}
-        for node in dag.topological_op_nodes():
-            if node.op.name == "measure" and len(node.qargs) == 1 and len(node.cargs) == 1:
-                qubit_to_clbit_map[node.qargs[0]] = node.cargs[0]
+        # This needs to handle measurements inside control flow operations (boxes, if/else, etc.)
+        qubit_to_clbit_map = self._find_measurements(dag)
 
         # Only pre-select qubits that have measurements
         qubits_to_preselect = set(qubit_to_clbit_map.keys()) & active_qubits
@@ -128,19 +159,16 @@ class AddPreSelectionMeasures(TransformationPass):
             new_dag.add_creg(creg)
 
         # Add the pre-selection measurements at the front
-        # Iterate through measurements in the order they appear in the original circuit
-        # to preserve the qubit-to-clbit mapping
-        qubits_list = []
-        for node in dag.topological_op_nodes():
-            if node.op.name == "measure" and len(node.qargs) == 1:
-                qubit = node.qargs[0]
-                if qubit in qubits_to_preselect:
-                    qubits_list.append(qubit)
-                    for gate in self.pulse_sequence:
-                        new_dag.apply_operation_back(gate, [qubit])
-                    # Measure to the corresponding clbit in the pre-selection registers
-                    clbit = qubit_to_clbit_map[qubit]
-                    new_dag.apply_operation_back(Measure(), [qubit], [clbits_map[clbit]])
+        # We need to add them in a consistent order based on the qubit-to-clbit mapping
+        # Sort by clbit index to ensure consistent ordering
+        qubits_list = sorted(qubits_to_preselect, key=lambda q: qubit_to_clbit_map[q]._index)
+        
+        for qubit in qubits_list:
+            for gate in self.pulse_sequence:
+                new_dag.apply_operation_back(gate, [qubit])
+            # Measure to the corresponding clbit in the pre-selection registers
+            clbit = qubit_to_clbit_map[qubit]
+            new_dag.apply_operation_back(Measure(), [qubit], [clbits_map[clbit]])
 
         # Add a barrier to separate the pre-selection measurements from the rest of the circuit
         if qubits_list:
@@ -193,5 +221,42 @@ class AddPreSelectionMeasures(TransformationPass):
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")
 
         return active_qubits
+
+    def _find_measurements(self, dag: DAGCircuit) -> dict[Qubit, any]:
+        """Helper function to find all measurements in the circuit, including those in control flow.
+
+        This function returns a map from qubits to the classical bits they measure into.
+        It recursively searches through control flow operations to find measurements.
+
+        Args:
+            dag: The dag to iterate over.
+        """
+        qubit_to_clbit_map = {}
+
+        for node in dag.topological_op_nodes():
+            if node.op.name == "measure" and len(node.qargs) == 1 and len(node.cargs) == 1:
+                qubit_to_clbit_map[node.qargs[0]] = node.cargs[0]
+            elif isinstance(node.op, ControlFlowOp):
+                # Recursively search for measurements in control flow blocks
+                for block in node.op.blocks:
+                    block_dag = circuit_to_dag(block)
+                    
+                    # Create mappings from block qubits/clbits to parent qubits/clbits
+                    qubit_map = {
+                        block_qubit: qubit
+                        for block_qubit, qubit in zip(block_dag.qubits, node.qargs)
+                    }
+                    clbit_map = {
+                        block_clbit: clbit
+                        for block_clbit, clbit in zip(block_dag.clbits, node.cargs)
+                    }
+                    
+                    # Find measurements in the block and map them back to parent circuit
+                    block_measurements = self._find_measurements(block_dag)
+                    for block_qubit, block_clbit in block_measurements.items():
+                        if block_qubit in qubit_map and block_clbit in clbit_map:
+                            qubit_to_clbit_map[qubit_map[block_qubit]] = clbit_map[block_clbit]
+
+        return qubit_to_clbit_map
 
 # Made with Bob

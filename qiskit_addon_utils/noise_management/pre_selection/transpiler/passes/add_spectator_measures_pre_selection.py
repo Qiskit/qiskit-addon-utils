@@ -45,19 +45,53 @@ class XPulseType(str, Enum):
 class AddSpectatorMeasuresPreSelection(TransformationPass):
     """Add pre-selection measurements on spectator qubits.
 
-    An active qubit is a qubit acted on in the circuit by a non-barrier instruction. A terminated qubit is
-    one whose last action is a measurement. A spectator qubit is a qubit that is inactive, but adjacent to
-    an active qubit under the coupling map. This pass adds a pre-selection measurement (xslow-X-measure) to 
-    all spectator qubits and, optionally via ``include_unmeasured``, to all active qubits that are not 
-    terminated qubits.
+    An **active qubit** is a qubit acted on in the circuit by a non-barrier instruction. A **terminated qubit**
+    is one whose last action is a measurement. A **spectator qubit** is a qubit that is inactive, but adjacent
+    to an active qubit under the coupling map.
 
-    The added measurements write to a new register that has one bit per spectator qubit and name
-    ``spectator_creg_name``.
+    This pass adds a pre-selection measurement to all spectator qubits and,
+    optionally via ``include_unmeasured``, to all active qubits that are not terminated qubits.
+
+    
+    The added measurements write to a new classical register with one bit per spectator qubit and name
+    ``spectator_creg_name`` (default: ``"spectator_pre"``).
 
     .. note::
-        When this pass encounters a control flow operation, it iterates through all of its blocks. It marks
-        as "active" every qubit that is active within at least one of the blocks, and as "terminated" every
-        qubit that is terminated in every one of the blocks.
+        This pass is designed to work in conjunction with :class:`.AddPreSelectionMeasures`. Typically,
+        you would use both passes together to add pre-selection measurements on both active and spectator qubits.
+
+    Example:
+        .. code-block:: python
+
+            from qiskit import QuantumCircuit
+            from qiskit.transpiler import PassManager, CouplingMap
+            from qiskit_addon_utils.noise_management.pre_selection.transpiler.passes import (
+                AddPreSelectionMeasures,
+                AddSpectatorMeasuresPreSelection,
+            )
+
+            # Create a circuit that uses qubits 0, 1, 2
+            qc = QuantumCircuit(5, 3)  # 5 qubits total, 3 classical bits
+            qc.h(0)
+            qc.cx(0, 1)
+            qc.cx(1, 2)
+            qc.measure([0, 1, 2], [0, 1, 2])
+
+            # Define coupling map (qubits 3 and 4 are spectators adjacent to active qubits)
+            coupling_map = CouplingMap([(0, 1), (1, 2), (2, 3), (1, 4)])
+
+            # Add pre-selection measurements on both active and spectator qubits
+            pm = PassManager([
+                AddPreSelectionMeasures(coupling_map),
+                AddSpectatorMeasuresPreSelection(coupling_map),
+            ])
+            qc_with_pre = pm.run(qc)
+
+            # The resulting circuit will have:
+            # 1. Pre-selection measurements on active qubits 0, 1, 2 (to c_pre register)
+            # 2. Pre-selection measurements on spectator qubits 3, 4 (to spectator_pre register)
+            # 3. A barrier
+            # 4. The original circuit operations
     """
 
     def __init__(
