@@ -48,9 +48,9 @@ class AddPreSelectionMeasures(TransformationPass):
     A pre-selection measurement is a measurement that precedes the main circuit operations. It
     consists of a narrowband X-pulse (e.g. a sequence of N rx(pi/N) gates), followed by an X gate,
     followed by a measurement. In the absence of noise, it is expected to return ``0`` (since
-    the qubit starts in |0⟩, gets flipped to |1⟩ by the two X gate applications, then measured). Shots where the
-    pre-selection measurement returns ``1`` indicate that the qubit was not properly initialized
-    to |0⟩ and should be discarded.
+    the qubit starts in the ground state, gets flipped to the excited state by the two X gate
+    applications, then measured). Shots where the pre-selection measurement returns ``1`` indicate
+    that the qubit was not properly initialized to the ground state and should be discarded.
 
     This pass adds pre-selection measurements at the beginning of the circuit for all qubits that:
     1. Are active in the circuit (have gates applied to them)
@@ -63,7 +63,7 @@ class AddPreSelectionMeasures(TransformationPass):
 
     1. **xslow pulse (or rx sequence)**: A narrowband X-pulse that slowly rotates the qubit.
        This can be either a single ``xslow`` gate or 20 ``rx(π/20)`` gates.
-    2. **X gate**: A standard X gate to complete the flip from |0⟩ to |1⟩.
+    2. **X gate**: A standard X gate to complete the flip from ground to excited state.
     3. **Measurement**: Measures the qubit state. Should return ``0`` if initialization was good.
     4. **Barrier**: Separates pre-selection measurements from the main circuit.
     5. **Main circuit**: The original circuit operations proceed.
