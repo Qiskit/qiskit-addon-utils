@@ -99,85 +99,99 @@ class AddSpectatorMeasures(TransformationPass):
         # Map spectator qubits to their classical bits
         spectator_clbit_map = {qubit: spec_reg[i] for i, qubit in enumerate(spectator_qubits_ls)}
 
-        # Find which spectator qubits have entangling gates with which terminal qubits
-        spectator_entangled_with = {}  # spectator -> terminal qubit it's entangled with (or None)
-        for spectator_qubit in spectator_qubits:
-            spectator_entangled_with[spectator_qubit] = None
-            # Check all nodes for multi-qubit gates involving this spectator
-            for node in dag.topological_op_nodes():
-                if len(node.qargs) >= 2 and spectator_qubit in node.qargs:
-                    # This is a multi-qubit gate involving the spectator
-                    other_qubit = (
-                        node.qargs[0] if node.qargs[1] == spectator_qubit else node.qargs[1]
-                    )
-                    if other_qubit in terminated_qubits:
-                        spectator_entangled_with[spectator_qubit] = other_qubit
-                        break  # Assumption: at most one entangling gate per spectator
+        # Build adjacency graph: spectators <-> terminals
+        # Find connected components where all qubits should be measured together
+        spectator_to_terminals = {}
+        terminal_to_spectators = {}
 
-        # Find adjacent terminal qubits for each spectator (for Case B)
-        spectator_adjacent_terminals = {}
         for spectator_qubit in spectator_qubits:
-            adjacent = [
+            adjacent_terminals = [
                 dag.qubits[neighbor_idx]
                 for neighbor_idx in self.coupling_map.neighbors(qubit_map[spectator_qubit])
                 if neighbor_idx < dag.num_qubits() and dag.qubits[neighbor_idx] in terminated_qubits
             ]
-            spectator_adjacent_terminals[spectator_qubit] = adjacent
+            spectator_to_terminals[spectator_qubit] = set(adjacent_terminals)
 
-        # Track which terminals and spectators have been synced
-        synced_terminals = set()
-        synced_spectators = set()
+            for terminal_qubit in adjacent_terminals:
+                if terminal_qubit not in terminal_to_spectators:
+                    terminal_to_spectators[terminal_qubit] = set()
+                terminal_to_spectators[terminal_qubit].add(spectator_qubit)
 
-        # Process nodes in topological order, syncing spectators with terminals
-        for node in list(dag.topological_op_nodes()):
-            # If this is a terminal measurement, sync it with associated spectators
+        # Find connected components using DFS
+        visited_spectators = set()
+        visited_terminals = set()
+        measurement_groups = []  # Each group is (spectators, terminals) to measure together
+
+        def dfs_find_component(start_spectator):
+            """Find all spectators and terminals connected to start_spectator."""
+            component_spectators = set()
+            component_terminals = set()
+            stack = [("spectator", start_spectator)]
+
+            while stack:
+                node_type, node = stack.pop()
+
+                if node_type == "spectator":
+                    if node in visited_spectators:
+                        continue
+                    visited_spectators.add(node)
+                    component_spectators.add(node)
+
+                    # Add all adjacent terminals to explore
+                    for terminal in spectator_to_terminals.get(node, []):
+                        if terminal not in visited_terminals:
+                            stack.append(("terminal", terminal))
+
+                else:  # node_type == 'terminal'
+                    if node in visited_terminals:
+                        continue
+                    visited_terminals.add(node)
+                    component_terminals.add(node)
+
+                    # Add all adjacent spectators to explore
+                    for spectator in terminal_to_spectators.get(node, []):
+                        if spectator not in visited_spectators:
+                            stack.append(("spectator", spectator))
+
+            return component_spectators, component_terminals
+
+        # Find all connected components
+        for spectator_qubit in spectator_qubits:
+            if spectator_qubit not in visited_spectators:
+                spec_group, term_group = dfs_find_component(spectator_qubit)
+                if term_group:  # Only add if there are terminals
+                    measurement_groups.append((spec_group, term_group))
+
+        # Map terminal measurement nodes for removal
+        terminal_measurement_nodes = {}
+        for node in dag.topological_op_nodes():
             if node.op.name == "measure" and node.qargs[0] in terminated_qubits:
-                terminal_qubit = node.qargs[0]
+                terminal_measurement_nodes[node.qargs[0]] = node
 
-                # Find spectators that should be synced with this terminal
-                spectators_for_this_terminal = []
-                for spectator_qubit in spectator_qubits:
-                    if spectator_qubit in synced_spectators:
-                        continue  # Already synced
+        # Process each measurement group
+        for spectators, terminals in measurement_groups:
+            # Remove terminal measurement nodes
+            terminal_clbits = {}
+            for terminal_qubit in terminals:
+                node = terminal_measurement_nodes[terminal_qubit]
+                terminal_clbits[terminal_qubit] = node.cargs[0]
+                dag.remove_op_node(node)
 
-                    # Case A: Spectator has entangling gate with this terminal
-                    # Case B: Spectator has no entangling gate and this terminal is available
-                    if spectator_entangled_with[spectator_qubit] == terminal_qubit or (
-                        spectator_entangled_with[spectator_qubit] is None
-                        and terminal_qubit in spectator_adjacent_terminals[spectator_qubit]
-                        and terminal_qubit not in synced_terminals
-                    ):
-                        spectators_for_this_terminal.append(spectator_qubit)
+            # Add barrier across ALL qubits in this component
+            barrier_qubits = list(spectators) + list(terminals)
+            dag.apply_operation_back(Barrier(len(barrier_qubits)), qargs=barrier_qubits)
 
-                # If there are spectators, sync them with this terminal
-                if spectators_for_this_terminal:
-                    # Remove the terminal measurement node (we'll add it back with barriers)
-                    dag.remove_op_node(node)
+            # Add measurements for all terminals
+            for terminal_qubit in terminals:
+                dag.apply_operation_back(
+                    Measure(), qargs=[terminal_qubit], cargs=[terminal_clbits[terminal_qubit]]
+                )
 
-                    # For each spectator: add barrier + terminal measurement (once) + spectator measurement
-                    for i, spectator_qubit in enumerate(spectators_for_this_terminal):
-                        # Add barrier between terminal and this spectator
-                        barrier_node = dag.apply_operation_back(
-                            Barrier(2), qargs=[terminal_qubit, spectator_qubit]
-                        )
-
-                        # Add terminal measurement (only on first spectator)
-                        if i == 0:
-                            dag.apply_operation_back(
-                                Measure(), qargs=[terminal_qubit], cargs=[node.cargs[0]]
-                            )
-                            synced_terminals.add(terminal_qubit)
-
-                        # Add spectator measurement
-                        dag.apply_operation_back(
-                            Measure(),
-                            qargs=[spectator_qubit],
-                            cargs=[spectator_clbit_map[spectator_qubit]],
-                        )
-                        synced_spectators.add(spectator_qubit)
-                else:
-                    # No spectators for this terminal, mark as synced
-                    synced_terminals.add(terminal_qubit)
+            # Add measurements for all spectators
+            for spectator_qubit in spectators:
+                dag.apply_operation_back(
+                    Measure(), qargs=[spectator_qubit], cargs=[spectator_clbit_map[spectator_qubit]]
+                )
 
         return dag
 
