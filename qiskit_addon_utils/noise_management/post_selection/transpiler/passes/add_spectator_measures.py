@@ -18,6 +18,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
+from qiskit.circuit.library import Barrier, Measure
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler import CouplingMap
@@ -89,17 +90,11 @@ class AddSpectatorMeasures(TransformationPass):
         if len(spectator_qubits) == 0:
             return dag
 
-        # Convert DAG to circuit for easier manipulation
-        from qiskit import QuantumCircuit
-        from qiskit.converters import dag_to_circuit
-
-        circuit = dag_to_circuit(dag)
-
-        # Create spectator register and new circuit
+        # Create spectator register
         spectator_qubits_ls = list(spectator_qubits)
         spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
         spec_reg = ClassicalRegister(len(spectator_qubits_ls), self.spectator_creg_name)
-        new_circuit = QuantumCircuit(*circuit.qregs, *circuit.cregs, spec_reg)
+        dag.add_creg(spec_reg)
 
         # Map spectator qubits to their classical bits
         spectator_clbit_map = {qubit: spec_reg[i] for i, qubit in enumerate(spectator_qubits_ls)}
@@ -108,14 +103,12 @@ class AddSpectatorMeasures(TransformationPass):
         spectator_entangled_with = {}  # spectator -> terminal qubit it's entangled with (or None)
         for spectator_qubit in spectator_qubits:
             spectator_entangled_with[spectator_qubit] = None
-            # Check all instructions for multi-qubit gates involving this spectator
-            for instruction in circuit.data:
-                if len(instruction.qubits) >= 2 and spectator_qubit in instruction.qubits:
+            # Check all nodes for multi-qubit gates involving this spectator
+            for node in dag.topological_op_nodes():
+                if len(node.qargs) >= 2 and spectator_qubit in node.qargs:
                     # This is a multi-qubit gate involving the spectator
                     other_qubit = (
-                        instruction.qubits[0]
-                        if instruction.qubits[1] == spectator_qubit
-                        else instruction.qubits[1]
+                        node.qargs[0] if node.qargs[1] == spectator_qubit else node.qargs[1]
                     )
                     if other_qubit in terminated_qubits:
                         spectator_entangled_with[spectator_qubit] = other_qubit
@@ -135,14 +128,11 @@ class AddSpectatorMeasures(TransformationPass):
         synced_terminals = set()
         synced_spectators = set()
 
-        # Rebuild circuit, syncing spectators with terminals as we encounter terminal measurements
-        for instruction in circuit.data:
+        # Process nodes in topological order, syncing spectators with terminals
+        for node in list(dag.topological_op_nodes()):
             # If this is a terminal measurement, sync it with associated spectators
-            if (
-                instruction.operation.name == "measure"
-                and instruction.qubits[0] in terminated_qubits
-            ):
-                terminal_qubit = instruction.qubits[0]
+            if node.op.name == "measure" and node.qargs[0] in terminated_qubits:
+                terminal_qubit = node.qargs[0]
 
                 # Find spectators that should be synced with this terminal
                 spectators_for_this_terminal = []
@@ -151,6 +141,7 @@ class AddSpectatorMeasures(TransformationPass):
                         continue  # Already synced
 
                     # Case A: Spectator has entangling gate with this terminal
+                    # Case B: Spectator has no entangling gate and this terminal is available
                     if spectator_entangled_with[spectator_qubit] == terminal_qubit or (
                         spectator_entangled_with[spectator_qubit] is None
                         and terminal_qubit in spectator_adjacent_terminals[spectator_qubit]
@@ -160,28 +151,35 @@ class AddSpectatorMeasures(TransformationPass):
 
                 # If there are spectators, sync them with this terminal
                 if spectators_for_this_terminal:
-                    # For each spectator: barrier + terminal measurement (once) + spectator measurement
+                    # Remove the terminal measurement node (we'll add it back with barriers)
+                    dag.remove_op_node(node)
+
+                    # For each spectator: add barrier + terminal measurement (once) + spectator measurement
                     for i, spectator_qubit in enumerate(spectators_for_this_terminal):
-                        # Add barrier between terminal and this spectator ONLY
-                        new_circuit.barrier(terminal_qubit, spectator_qubit)
+                        # Add barrier between terminal and this spectator
+                        barrier_node = dag.apply_operation_back(
+                            Barrier(2), qargs=[terminal_qubit, spectator_qubit]
+                        )
 
                         # Add terminal measurement (only on first spectator)
                         if i == 0:
-                            new_circuit.append(instruction)
+                            dag.apply_operation_back(
+                                Measure(), qargs=[terminal_qubit], cargs=[node.cargs[0]]
+                            )
                             synced_terminals.add(terminal_qubit)
 
                         # Add spectator measurement
-                        new_circuit.measure(spectator_qubit, spectator_clbit_map[spectator_qubit])
+                        dag.apply_operation_back(
+                            Measure(),
+                            qargs=[spectator_qubit],
+                            cargs=[spectator_clbit_map[spectator_qubit]],
+                        )
                         synced_spectators.add(spectator_qubit)
                 else:
-                    # No spectators for this terminal, just add the measurement
-                    new_circuit.append(instruction)
+                    # No spectators for this terminal, mark as synced
                     synced_terminals.add(terminal_qubit)
-            else:
-                # Not a terminal measurement, just add the instruction
-                new_circuit.append(instruction)
 
-        return circuit_to_dag(new_circuit)
+        return dag
 
     def _find_active_and_terminated_qubits(self, dag: DAGCircuit) -> tuple[set[Qubit], set[Qubit]]:
         """Helper function to find the sets of active qubits and of qubits terminated with measurements.
