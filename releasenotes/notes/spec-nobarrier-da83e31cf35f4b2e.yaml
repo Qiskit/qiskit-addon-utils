@@ -1,0 +1,4 @@
+---
+upgrade:
+  - |
+    The :class:`.AddSpectatorMeasures` transpiler pass no longer accepts an ``add_barrier`` kwarg. Barriers will now always be used to synchronize spectator measurements with the adjacent qubit measurements they are meant to spectate. If a spectator qubit is adjacent to more than one terminal qubit, or if a terminal qubit is adjacent to more than one spectator qubit, all measurements will be performed simultaneously.
