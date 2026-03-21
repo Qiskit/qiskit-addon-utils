@@ -73,125 +73,96 @@ class AddSpectatorMeasures(TransformationPass):
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         active_qubits, terminated_qubits = self._find_active_and_terminated_qubits(dag)
-
         qubit_map = {qubit: idx for idx, qubit in enumerate(dag.qubits)}
-        spectator_qubits = set(
-            dag.qubits[neighbor_idx]
-            for qubit in active_qubits
-            for neighbor_idx in self.coupling_map.neighbors(qubit_map[qubit])
-            if neighbor_idx < dag.num_qubits()
-        )
-        spectator_qubits.difference_update(terminated_qubits)
+
+        # Find spectator qubits (neighbors of active qubits that aren't terminated)
+        spectator_qubits = {
+            dag.qubits[n]
+            for q in active_qubits
+            for n in self.coupling_map.neighbors(qubit_map[q])
+            if n < dag.num_qubits()
+        } - terminated_qubits
 
         if self.include_unmeasured:
-            unterminated_qubits = active_qubits.difference(terminated_qubits)
-            spectator_qubits = spectator_qubits.union(unterminated_qubits)
+            spectator_qubits |= active_qubits - terminated_qubits
 
-        if len(spectator_qubits) == 0:
+        if not spectator_qubits:
             return dag
 
-        # Create spectator register
-        spectator_qubits_ls = list(spectator_qubits)
-        spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
+        # Create spectator register and classical bit mapping
+        spectator_qubits_ls = sorted(spectator_qubits, key=lambda q: qubit_map[q])
         spec_reg = ClassicalRegister(len(spectator_qubits_ls), self.spectator_creg_name)
         dag.add_creg(spec_reg)
+        spectator_clbit_map = dict(zip(spectator_qubits_ls, spec_reg))
 
-        # Map spectator qubits to their classical bits
-        spectator_clbit_map = {qubit: spec_reg[i] for i, qubit in enumerate(spectator_qubits_ls)}
-
-        # Build adjacency graph: spectators <-> terminals
-        # Find connected components where all qubits should be measured together
-        spectator_to_terminals = {}
+        # Build adjacency: spectator -> terminals and terminal -> spectators
+        spectator_to_terminals = {
+            s: {
+                dag.qubits[n]
+                for n in self.coupling_map.neighbors(qubit_map[s])
+                if n < dag.num_qubits() and dag.qubits[n] in terminated_qubits
+            }
+            for s in spectator_qubits
+        }
         terminal_to_spectators = {}
+        for s, terminals in spectator_to_terminals.items():
+            for t in terminals:
+                terminal_to_spectators.setdefault(t, set()).add(s)
 
-        for spectator_qubit in spectator_qubits:
-            adjacent_terminals = [
-                dag.qubits[neighbor_idx]
-                for neighbor_idx in self.coupling_map.neighbors(qubit_map[spectator_qubit])
-                if neighbor_idx < dag.num_qubits() and dag.qubits[neighbor_idx] in terminated_qubits
-            ]
-            spectator_to_terminals[spectator_qubit] = set(adjacent_terminals)
+        # Find connected components via DFS
+        visited = set()
+        measurement_groups = []
 
-            for terminal_qubit in adjacent_terminals:
-                if terminal_qubit not in terminal_to_spectators:
-                    terminal_to_spectators[terminal_qubit] = set()
-                terminal_to_spectators[terminal_qubit].add(spectator_qubit)
+        for start_spec in spectator_qubits:
+            if start_spec in visited:
+                continue
 
-        # Find connected components using DFS
-        visited_spectators = set()
-        visited_terminals = set()
-        measurement_groups = []  # Each group is (spectators, terminals) to measure together
-
-        def dfs_find_component(start_spectator):
-            """Find all spectators and terminals connected to start_spectator."""
-            component_spectators = set()
-            component_terminals = set()
-            stack = [("spectator", start_spectator)]
+            # DFS to find component
+            component_specs, component_terms = set(), set()
+            stack = [("s", start_spec)]
 
             while stack:
                 node_type, node = stack.pop()
+                if node in visited:
+                    continue
+                visited.add(node)
 
-                if node_type == "spectator":
-                    if node in visited_spectators:
-                        continue
-                    visited_spectators.add(node)
-                    component_spectators.add(node)
+                if node_type == "s":
+                    component_specs.add(node)
+                    stack.extend(
+                        ("t", t) for t in spectator_to_terminals.get(node, []) if t not in visited
+                    )
+                else:  # terminal
+                    component_terms.add(node)
+                    stack.extend(
+                        ("s", s) for s in terminal_to_spectators.get(node, []) if s not in visited
+                    )
 
-                    # Add all adjacent terminals to explore
-                    for terminal in spectator_to_terminals.get(node, []):
-                        if terminal not in visited_terminals:
-                            stack.append(("terminal", terminal))
+            if component_terms:
+                measurement_groups.append((component_specs, component_terms))
 
-                else:  # node_type == 'terminal'
-                    if node in visited_terminals:
-                        continue
-                    visited_terminals.add(node)
-                    component_terminals.add(node)
+        # Get terminal measurement nodes
+        terminal_meas_nodes = {
+            node.qargs[0]: node
+            for node in dag.topological_op_nodes()
+            if node.op.name == "measure" and node.qargs[0] in terminated_qubits
+        }
 
-                    # Add all adjacent spectators to explore
-                    for spectator in terminal_to_spectators.get(node, []):
-                        if spectator not in visited_spectators:
-                            stack.append(("spectator", spectator))
-
-            return component_spectators, component_terminals
-
-        # Find all connected components
-        for spectator_qubit in spectator_qubits:
-            if spectator_qubit not in visited_spectators:
-                spec_group, term_group = dfs_find_component(spectator_qubit)
-                if term_group:  # Only add if there are terminals
-                    measurement_groups.append((spec_group, term_group))
-
-        # Map terminal measurement nodes for removal
-        terminal_measurement_nodes = {}
-        for node in dag.topological_op_nodes():
-            if node.op.name == "measure" and node.qargs[0] in terminated_qubits:
-                terminal_measurement_nodes[node.qargs[0]] = node
-
-        # Process each measurement group
+        # Process each measurement group: remove terminals, add barrier, re-add all measurements
         for spectators, terminals in measurement_groups:
-            # Remove terminal measurement nodes
-            terminal_clbits = {}
-            for terminal_qubit in terminals:
-                node = terminal_measurement_nodes[terminal_qubit]
-                terminal_clbits[terminal_qubit] = node.cargs[0]
-                dag.remove_op_node(node)
+            # Remove and save terminal measurements
+            terminal_clbits = {t: terminal_meas_nodes[t].cargs[0] for t in terminals}
+            for node in terminal_clbits:
+                dag.remove_op_node(terminal_meas_nodes[node])
 
-            # Add barrier across ALL qubits in this component
-            barrier_qubits = list(spectators) + list(terminals)
-            dag.apply_operation_back(Barrier(len(barrier_qubits)), qargs=barrier_qubits)
+            # Add barrier and measurements for all qubits in component
+            all_qubits = list(spectators | terminals)
+            dag.apply_operation_back(Barrier(len(all_qubits)), qargs=all_qubits)
 
-            # Add measurements for all terminals
-            for terminal_qubit in terminals:
-                dag.apply_operation_back(
-                    Measure(), qargs=[terminal_qubit], cargs=[terminal_clbits[terminal_qubit]]
-                )
-
-            # Add measurements for all spectators
-            for spectator_qubit in spectators:
-                dag.apply_operation_back(
-                    Measure(), qargs=[spectator_qubit], cargs=[spectator_clbit_map[spectator_qubit]]
-                )
+            for t in terminals:
+                dag.apply_operation_back(Measure(), qargs=[t], cargs=[terminal_clbits[t]])
+            for s in spectators:
+                dag.apply_operation_back(Measure(), qargs=[s], cargs=[spectator_clbit_map[s]])
 
         return dag
 
