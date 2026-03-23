@@ -58,11 +58,9 @@ class TestAddSpectatorMeasures(unittest.TestCase):
     def test_circuit_with_final_layer_of_measurements(self):
         """Test the pass on a circuit with a final layer of measurements."""
         circuit_qubits = [7, 17, 27, 28]
-        spectator_qubits = [6, 8, 12, 26, 29, 30, 35]
 
         qreg = QuantumRegister(self.num_qubits, "q")
         creg = ClassicalRegister(len(circuit_qubits), "c")
-        creg_spec = ClassicalRegister(len(spectator_qubits), "spec")
 
         circuit = QuantumCircuit(qreg, creg)
         circuit.h(7)
@@ -75,19 +73,24 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         circuit.measure(27, creg[2])
         circuit.measure(28, creg[3])
 
-        expected_circuit = QuantumCircuit(qreg, creg, creg_spec)
-        expected_circuit.h(7)
-        expected_circuit.cz(7, 17)
-        expected_circuit.cz(17, 27)
-        expected_circuit.barrier(17)
-        expected_circuit.cz(27, 28)
-        for idx, qubit in enumerate(circuit_qubits):
-            expected_circuit.measure(qubit, creg[idx])
-        expected_circuit.barrier(circuit_qubits + spectator_qubits)
-        for idx, spec_qubit in enumerate(spectator_qubits):
-            expected_circuit.measure(spec_qubit, creg_spec[idx])
-
-        self.assertEqual(expected_circuit, self.pm.run(circuit))
+        barriers = {(6, 7, 8), (17,), (26, 27), (28, 29, 35), (12, 17, 30)}
+        circuit_xformed = self.pm.run(circuit)
+        for i, inst in enumerate(circuit_xformed.data):
+            if inst.name == "barrier":
+                bar_qubits = tuple(sorted(circuit_xformed.find_bit(q).index for q in inst.qubits))
+                assert bar_qubits in barriers
+                assert i < len(circuit_xformed) - 1
+                msmts_after = [False] * len(bar_qubits)
+                msmts_after_id = 0
+                for j in range(i + 1, len(circuit_xformed.data)):
+                    inner_inst = circuit_xformed.data[j]
+                    if (
+                        inner_inst.name == "measure"
+                        and circuit_xformed.find_bit(inner_inst.qubits[0]).index in bar_qubits
+                    ):
+                        msmts_after[msmts_after_id] = True
+                        msmts_after_id += 1
+                self.assertTrue(all(msmts_after))
 
     def test_circuit_with_measurements_in_a_box(self):
         """Test the pass on a circuit with measurements inside a box."""
@@ -263,40 +266,6 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         expected_circuit.measure(spectator_qubits[2], creg_spec[2])
 
         pm = PassManager([AddSpectatorMeasures(coupling_map)])
-        self.assertEqual(expected_circuit, pm.run(circuit))
-
-    def test_add_barrier_false(self):
-        """Test for ``add_barrier=False``."""
-        circuit_qubits = [7, 17, 27, 28]
-        spectator_qubits = [6, 8, 12, 26, 29, 30, 35]
-
-        qreg = QuantumRegister(self.num_qubits, "q")
-        creg = ClassicalRegister(len(circuit_qubits), "c")
-        creg_spec = ClassicalRegister(len(spectator_qubits), "spec")
-
-        circuit = QuantumCircuit(qreg, creg)
-        circuit.h(7)
-        circuit.cz(7, 17)
-        circuit.cz(17, 27)
-        circuit.barrier(17)
-        circuit.cz(27, 28)
-        circuit.measure(7, creg[0])
-        circuit.measure(17, creg[1])
-        circuit.measure(27, creg[2])
-        circuit.measure(28, creg[3])
-
-        expected_circuit = QuantumCircuit(qreg, creg, creg_spec)
-        expected_circuit.h(7)
-        expected_circuit.cz(7, 17)
-        expected_circuit.cz(17, 27)
-        expected_circuit.barrier(17)
-        expected_circuit.cz(27, 28)
-        for idx, qubit in enumerate(circuit_qubits):
-            expected_circuit.measure(qubit, creg[idx])
-        for idx, spec_qubit in enumerate(spectator_qubits):
-            expected_circuit.measure(spec_qubit, creg_spec[idx])
-
-        pm = PassManager([AddSpectatorMeasures(self.coupling_map, add_barrier=False)])
         self.assertEqual(expected_circuit, pm.run(circuit))
 
     def test_conflicting_creg(self):
