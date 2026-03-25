@@ -9,21 +9,6 @@
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
+"""Tests for pre-selection transpiler passes."""
 
-# Reminder: update the RST file in docs/apidocs when adding new interfaces.
-
-"""Noise management tools."""
-
-from .gamma_factor import gamma_from_noisy_boxes
-from .post_selection import PostSelectionSummary, PostSelector
-from .pre_selection import PreSelectionSummary, PreSelector
-from .trex_factors import trex_factors
-
-__all__ = [
-    "PostSelectionSummary",
-    "PostSelector",
-    "PreSelectionSummary",
-    "PreSelector",
-    "gamma_from_noisy_boxes",
-    "trex_factors",
-]
+# Made with Bob
