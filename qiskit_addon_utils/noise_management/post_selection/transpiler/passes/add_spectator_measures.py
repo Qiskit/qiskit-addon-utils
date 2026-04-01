@@ -116,18 +116,58 @@ class AddSpectatorMeasures(TransformationPass):
 
         # The qubits whose last action is a measurement
         terminated_qubits: set[Qubit] = set()
+        
+        # Track measurements into pre-selection registers to handle them specially
+        preselection_measurements: dict[Qubit, bool] = {}
 
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            if node.is_standard_gate():
-                active_qubits.update(node.qargs)
-                terminated_qubits.difference_update(node.qargs)
+            # Skip xslow and rx gates - they are part of pre/post-selection protocol
+            if ('xslow' in node.op.name) or ('rx' in node.op.name):
+                continue
+            elif node.is_standard_gate():
+                # Check if this is an X gate that's part of a pre-selection sequence
+                # (X gate immediately before a measurement into a _pre register)
+                if node.op.name == "x" and len(node.qargs) == 1:
+                    # Look ahead to see if next operation on this qubit is a measurement into _pre
+                    qubit = node.qargs[0]
+                    successors = list(dag.successors(node))
+                    is_preselection_x = False
+                    for succ in successors:
+                        if (succ.op.name == "measure" and
+                            len(succ.qargs) == 1 and succ.qargs[0] == qubit and
+                            len(succ.cargs) == 1):
+                            # Check if measuring into a pre-selection register
+                            clbit = succ.cargs[0]
+                            for creg in dag.cregs.values():
+                                if clbit in creg and creg.name.endswith("_pre"):
+                                    is_preselection_x = True
+                                    break
+                            break
+                    
+                    if not is_preselection_x:
+                        active_qubits.update(node.qargs)
+                        terminated_qubits.difference_update(node.qargs)
+                else:
+                    active_qubits.update(node.qargs)
+                    terminated_qubits.difference_update(node.qargs)
             elif (name := node.op.name) == "barrier":
                 continue
             elif name == "measure":
-                active_qubits.add(node.qargs[0])
-                terminated_qubits.add(node.qargs[0])
+                # Check if this is a measurement into a pre-selection register
+                if len(node.cargs) == 1:
+                    clbit = node.cargs[0]
+                    is_preselection = False
+                    for creg in dag.cregs.values():
+                        if clbit in creg and creg.name.endswith("_pre"):
+                            is_preselection = True
+                            preselection_measurements[node.qargs[0]] = True
+                            break
+                    
+                    if not is_preselection:
+                        active_qubits.add(node.qargs[0])
+                        terminated_qubits.add(node.qargs[0])
             elif isinstance(node.op, ControlFlowOp):
                 # The qubits whose last action is a measurement, block by block
                 all_terminated_qubits: list[set[Qubit]] = []

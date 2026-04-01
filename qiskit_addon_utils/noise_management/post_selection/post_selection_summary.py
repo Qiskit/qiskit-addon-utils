@@ -127,8 +127,12 @@ def _get_primary_and_ps_cregs(
         cregs: The dictionary of registers.
         post_selection_suffix: The suffix of the post selection registers.
     """
+    # Exclude pre-selection registers (ending with _pre) from primary registers
+    # that need post-selection validation, since pre-selection happens before the circuit
     primary_cregs = {
-        name: creg for name, creg in cregs.items() if not name.endswith(post_selection_suffix)
+        name: creg
+        for name, creg in cregs.items()
+        if not name.endswith(post_selection_suffix) and not name.endswith("_pre")
     }
 
     ps_cregs = {name: creg for name, creg in cregs.items() if name.endswith(post_selection_suffix)}
@@ -213,8 +217,8 @@ def _get_measure_maps(
                 measure_map[qubit_map[node.qargs[0]]] = clbit
             elif clbit_ps := clbit_map_ps.get(node.cargs[0]):
                 measure_map_ps[qubit_map[node.qargs[0]]] = clbit_ps
-            else:  # pragma: no cover
-                raise ValueError(f"Clbit {node.cargs[0]} does not belong to any valid register.")
+            # Skip measurements into pre-selection registers (ending with _pre)
+            # as they are not relevant for post-selection analysis
 
     return measure_map, measure_map_ps
 

@@ -36,6 +36,7 @@ def executor_expectation_values(
     measurement_flips: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
+    preselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
     gamma_factor: float | None = None,
     rescale_factors: Sequence[Sequence[Sequence[float]]] | None = None,
 ):
@@ -45,7 +46,7 @@ def executor_expectation_values(
 
     Optionally allows averaging over additional axes of `bool_array`, as when twirling.
 
-    Optionally supports measurement twirling, PEC, and postselection.
+    Optionally supports measurement twirling, PEC, pre-selection, and post-selection.
 
     Args:
         bool_array: Boolean array, presumably representing data from measured qubits.
@@ -69,8 +70,11 @@ def executor_expectation_values(
             Data processing will use the result of `xor`ing this array with `bool_array`. Must be same shape as `bool_array`.
         pauli_signs: Optional boolean array used with probabilistic error cancellation (PEC). Final axis is assumed to index all noisy boxes in circuit. Value of `True` indicates an overall sign of `-1` should be associated with the noisy box, typically because an odd number of inverse-noise errors were inserted in that box for the specified circuit randomization. The final axis is immediately collapsed as a sum mod 2 to obtain the overall sign associated with each circuit randomization.
             Remaining shape must be `pauli_signs.shape[:-1] == bool_array.shape[:-2]`. Note this array does not have a shots axis.
-        postselect_mask: Optional boolean array used for postselection. `True` (`False`) indicates a shot accepted (rejected) by postselection.
-            Shape must be `bool_array.shape[:-1]`.
+        postselect_mask: Optional boolean array used for post-selection. `True` (`False`) indicates a shot accepted (rejected) by post-selection.
+            Shape must be `bool_array.shape[:-1]`. Can be obtained from ``PostSelector.compute_mask()``.
+        preselect_mask: Optional boolean array used for pre-selection. `True` (`False`) indicates a shot accepted (rejected) by pre-selection.
+            Shape must be `bool_array.shape[:-1]`. Can be obtained from ``PreSelector.compute_mask()``.
+            If both `preselect_mask` and `postselect_mask` are provided, they will be combined with a logical AND operation.
         gamma_factor: Rescaling factor gamma to be applied to PEC mitigated expectation values. If `None`, rescaling factors will be computed as the
             number of positive samples minus the number of negative samples, computed as `1/(np.sum(~pauli_signs, axis=avg_axis) - np.sum(pauli_signs, axis=avg_axis))`.
             This can fail due to division by zero if there are an equal number of positive and negative samples. Also note this rescales each expectation value
@@ -107,6 +111,8 @@ def executor_expectation_values(
             pauli_signs = pauli_signs.reshape((1, *pauli_signs.shape))
         if postselect_mask is not None:
             postselect_mask = postselect_mask.reshape((1, *postselect_mask.shape))
+        if preselect_mask is not None:
+            preselect_mask = preselect_mask.reshape((1, *preselect_mask.shape))
         meas_basis_axis = 0
         avg_axis = tuple(a + 1 for a in avg_axis)
 
@@ -145,10 +151,19 @@ def executor_expectation_values(
         basis_dict_[basis] = diag_obs_list
     basis_dict = basis_dict_
 
-    ##### POSTSELECTION:
-    if postselect_mask is not None:
+    ##### PRE-SELECTION AND POST-SELECTION:
+    # Combine pre-selection and post-selection masks if both are provided
+    combined_mask = None
+    if preselect_mask is not None and postselect_mask is not None:
+        combined_mask = np.logical_and(preselect_mask, postselect_mask)
+    elif preselect_mask is not None:
+        combined_mask = preselect_mask
+    elif postselect_mask is not None:
+        combined_mask = postselect_mask
+    
+    if combined_mask is not None:
         bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(
-            bool_array, basis_dict, postselect_mask
+            bool_array, basis_dict, combined_mask
         )
     else:
         num_shots_kept = np.full(bool_array.shape[:-2], bool_array.shape[-2])

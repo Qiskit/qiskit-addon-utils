@@ -10,20 +10,6 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# Reminder: update the RST file in docs/apidocs when adding new interfaces.
+"""Transpiler passes for pre-selection."""
 
-"""Noise management tools."""
-
-from .gamma_factor import gamma_from_noisy_boxes
-from .post_selection import PostSelectionSummary, PostSelector
-from .pre_selection import PreSelectionSummary, PreSelector
-from .trex_factors import trex_factors
-
-__all__ = [
-    "PostSelectionSummary",
-    "PostSelector",
-    "PreSelectionSummary",
-    "PreSelector",
-    "gamma_from_noisy_boxes",
-    "trex_factors",
-]
+# Made with Bob

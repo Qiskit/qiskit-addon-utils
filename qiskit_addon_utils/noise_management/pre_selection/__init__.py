@@ -11,19 +11,15 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
+"""Functions and classes to perform Pre Selection."""
 
-"""Noise management tools."""
-
-from .gamma_factor import gamma_from_noisy_boxes
-from .post_selection import PostSelectionSummary, PostSelector
-from .pre_selection import PreSelectionSummary, PreSelector
-from .trex_factors import trex_factors
+from .pre_selection_summary import PreSelectionSummary
+from .pre_selector import PreSelectionStrategy, PreSelector
 
 __all__ = [
-    "PostSelectionSummary",
-    "PostSelector",
+    "PreSelectionStrategy",
     "PreSelectionSummary",
     "PreSelector",
-    "gamma_from_noisy_boxes",
-    "trex_factors",
 ]
+
+# Made with Bob

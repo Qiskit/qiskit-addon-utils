@@ -22,3 +22,13 @@ DEFAULT_SPECTATOR_CREG_NAME = "spec"
 """
 The default name of the classical register used for measuring spectator qubits.
 """
+
+DEFAULT_PRE_SELECTION_SUFFIX = "_pre"
+"""
+The default suffix to append to the names of the classical registers used for pre selection measurements.
+"""
+
+DEFAULT_SPECTATOR_PRE_CREG_NAME = "spec_pre"
+"""
+The default name of the classical register used for measuring spectator qubits in pre-selection.
+"""

@@ -11,19 +11,15 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
+"""Transpiler passes for pre-selection."""
 
-"""Noise management tools."""
-
-from .gamma_factor import gamma_from_noisy_boxes
-from .post_selection import PostSelectionSummary, PostSelector
-from .pre_selection import PreSelectionSummary, PreSelector
-from .trex_factors import trex_factors
+from .add_pre_selection_measures import AddPreSelectionMeasures, XPulseType
+from .add_spectator_measures_pre_selection import AddSpectatorMeasuresPreSelection
 
 __all__ = [
-    "PostSelectionSummary",
-    "PostSelector",
-    "PreSelectionSummary",
-    "PreSelector",
-    "gamma_from_noisy_boxes",
-    "trex_factors",
+    "AddPreSelectionMeasures",
+    "AddSpectatorMeasuresPreSelection",
+    "XPulseType",
 ]
+
+# Made with Bob
