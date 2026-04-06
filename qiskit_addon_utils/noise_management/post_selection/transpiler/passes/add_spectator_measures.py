@@ -135,16 +135,17 @@ class AddSpectatorMeasures(TransformationPass):
                     successors = list(dag.successors(node))
                     is_preselection_x = False
                     for succ in successors:
-                        if (succ.op.name == "measure" and
-                            len(succ.qargs) == 1 and succ.qargs[0] == qubit and
-                            len(succ.cargs) == 1):
-                            # Check if measuring into a pre-selection register
-                            clbit = succ.cargs[0]
-                            for creg in dag.cregs.values():
-                                if clbit in creg and creg.name.endswith("_pre"):
-                                    is_preselection_x = True
-                                    break
-                            break
+                        if hasattr(succ, 'op') and hasattr(succ.op, 'name'):
+                            if (succ.op.name == "measure" and
+                                len(succ.qargs) == 1 and succ.qargs[0] == qubit and
+                                len(succ.cargs) == 1):
+                                # Check if measuring into a pre-selection register
+                                clbit = succ.cargs[0]
+                                for creg in dag.cregs.values():
+                                    if clbit in creg and creg.name.endswith("_pre"):
+                                        is_preselection_x = True
+                                        break
+                                break
                     
                     if not is_preselection_x:
                         active_qubits.update(node.qargs)
