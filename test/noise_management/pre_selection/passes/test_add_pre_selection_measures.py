@@ -14,13 +14,13 @@
 import numpy as np
 import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
-from qiskit.circuit.library import RXGate, XGate
+from qiskit.circuit.library import RXGate
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.passmanager import PassManager
+from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import XSlowGate
 from qiskit_addon_utils.noise_management.pre_selection.transpiler.passes import (
     AddPreSelectionMeasures,
 )
-from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import XSlowGate
 
 
 def test_empty_circuit():
@@ -116,7 +116,6 @@ def test_if_else():
     """Test the pass for circuits with if/else statements."""
     qreg = QuantumRegister(5, "q")
     creg = ClassicalRegister(2, "c")
-    creg_pre = ClassicalRegister(2, "c_pre")
 
     circuit = QuantumCircuit(qreg, creg)
     circuit.barrier(0)
@@ -138,11 +137,11 @@ def test_if_else():
     # - Qubit 2 is only measured in the first else branch
     # - Qubit 3 is measured in both branches of the second if/else (always measured)
     # Therefore, only qubits 0 and 3 should get pre-selection measurements
-    
+
     # For now, the implementation adds pre-selection for ALL qubits that are measured anywhere
     # This is a known limitation - it's conservative (pre-selects more than necessary)
     # but doesn't break correctness
-    
+
     # Skip this test for now as it requires implementing terminal measurement detection
     # which matches the post-selection pass behavior
     pytest.skip("Terminal measurement detection in control flow not yet implemented")
@@ -275,5 +274,6 @@ def test_raises():
     circuit.reset(0)
     with pytest.raises(TranspilerError, match="``'reset'`` is not supported"):
         pm.run(circuit)
+
 
 # Made with Bob

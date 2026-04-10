@@ -82,7 +82,7 @@ class AddPostSelectionMeasures(TransformationPass):
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Find what qubits have a terminal measurement
         all_terminal_measurements = self._find_terminal_measurements(dag)
-        
+
         # Add the new registers and create a map between the original clbit and the new ones
         # Skip pre-selection registers (those ending with _pre) as they don't need post-selection
         clbits_map = {}
@@ -94,7 +94,7 @@ class AddPostSelectionMeasures(TransformationPass):
                 new_creg := ClassicalRegister(creg.size, name + self.post_selection_suffix)
             )
             clbits_map.update({clbit: clbit_ps for clbit, clbit_ps in zip(creg, new_creg)})
-        
+
         # Filter terminal measurements to only include those with clbits in clbits_map
         # This excludes measurements into pre-selection registers
         terminal_measurements: dict[Qubit, Clbit] = {
@@ -132,10 +132,7 @@ class AddPostSelectionMeasures(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            if node.is_standard_gate():
-                for qarg in node.qargs:
-                    terminal_measurements[qarg] = None
-            elif (name := node.op.name) == "xslow":
+            if node.is_standard_gate() or (name := node.op.name) == "xslow":
                 for qarg in node.qargs:
                     terminal_measurements[qarg] = None
             elif (name := node.op.name) == "barrier":

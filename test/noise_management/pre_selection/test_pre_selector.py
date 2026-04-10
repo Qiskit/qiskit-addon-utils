@@ -198,4 +198,5 @@ def test_raises():
     with pytest.raises(ValueError, match="Result does not contain creg"):
         pre_selector.compute_mask(result, strategy="node")
 
+
 # Made with Bob

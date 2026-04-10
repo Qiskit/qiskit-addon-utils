@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from enum import Enum
+from typing import Any
 
 import numpy as np
 from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
@@ -127,7 +128,7 @@ class AddPreSelectionMeasures(TransformationPass):
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Find what qubits are active in the circuit
         active_qubits = self._find_active_qubits(dag)
-        
+
         if not active_qubits:
             return dag
 
@@ -145,9 +146,7 @@ class AddPreSelectionMeasures(TransformationPass):
         clbits_map = {}
         for name, creg in dag.cregs.items():
             # Create a pre-selection register with the same size as the original
-            dag.add_creg(
-                new_creg := ClassicalRegister(creg.size, name + self.pre_selection_suffix)
-            )
+            dag.add_creg(new_creg := ClassicalRegister(creg.size, name + self.pre_selection_suffix))
             # Map existing clbits to the new register
             clbits_map.update({clbit: new_clbit for clbit, new_clbit in zip(creg, new_creg)})
 
@@ -162,7 +161,7 @@ class AddPreSelectionMeasures(TransformationPass):
         # We need to add them in a consistent order based on the qubit-to-clbit mapping
         # Sort by clbit index to ensure consistent ordering
         qubits_list = sorted(qubits_to_preselect, key=lambda q: qubit_to_clbit_map[q]._index)
-        
+
         for qubit in qubits_list:
             for gate in self.pulse_sequence:
                 new_dag.apply_operation_back(gate, [qubit])
@@ -202,9 +201,7 @@ class AddPreSelectionMeasures(TransformationPass):
 
             if node.is_standard_gate():
                 active_qubits.update(node.qargs)
-            elif (name := node.op.name) == "xslow":
-                continue
-            elif (name := node.op.name) == "barrier":
+            elif (name := node.op.name) == "xslow" or (name := node.op.name) == "barrier":
                 continue
             elif name == "measure":
                 active_qubits.add(node.qargs[0])
@@ -222,7 +219,7 @@ class AddPreSelectionMeasures(TransformationPass):
 
         return active_qubits
 
-    def _find_measurements(self, dag: DAGCircuit) -> dict[Qubit, any]:
+    def _find_measurements(self, dag: DAGCircuit) -> dict[Qubit, Any]:
         """Helper function to find all measurements in the circuit, including those in control flow.
 
         This function returns a map from qubits to the classical bits they measure into.
@@ -240,7 +237,7 @@ class AddPreSelectionMeasures(TransformationPass):
                 # Recursively search for measurements in control flow blocks
                 for block in node.op.blocks:
                     block_dag = circuit_to_dag(block)
-                    
+
                     # Create mappings from block qubits/clbits to parent qubits/clbits
                     qubit_map = {
                         block_qubit: qubit
@@ -250,7 +247,7 @@ class AddPreSelectionMeasures(TransformationPass):
                         block_clbit: clbit
                         for block_clbit, clbit in zip(block_dag.clbits, node.cargs)
                     }
-                    
+
                     # Find measurements in the block and map them back to parent circuit
                     block_measurements = self._find_measurements(block_dag)
                     for block_qubit, block_clbit in block_measurements.items():
@@ -258,5 +255,6 @@ class AddPreSelectionMeasures(TransformationPass):
                             qubit_to_clbit_map[qubit_map[block_qubit]] = clbit_map[block_clbit]
 
         return qubit_to_clbit_map
+
 
 # Made with Bob
