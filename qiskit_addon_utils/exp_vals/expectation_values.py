@@ -160,7 +160,7 @@ def executor_expectation_values(
         combined_mask = preselect_mask
     elif postselect_mask is not None:
         combined_mask = postselect_mask
-    
+
     if combined_mask is not None:
         bool_array, basis_dict, num_shots_kept = _apply_postselect_mask(
             bool_array, basis_dict, combined_mask

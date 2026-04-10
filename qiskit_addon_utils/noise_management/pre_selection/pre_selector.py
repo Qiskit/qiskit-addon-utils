@@ -122,19 +122,17 @@ def _compute_mask_by_node(
     # Get shape from any primary register
     shape = result[next(iter(summary.primary_cregs))].shape[:-1]
     mask = np.ones(shape, dtype=bool)
-        
+
     # For pre-selection, we expect the measurements to return 0 (good initialization)
     # Discard shots where any pre-selection measurement is 1 (bad initialization)
     for name_pre, clbit_idx_pre in summary.measure_map_pre.values():
         # Keep shots where pre-selection measurement is 0
         mask &= result[name_pre][..., clbit_idx_pre] == 0
-    
+
     return mask
 
 
-def _compute_mask_by_edge(
-    result: dict[str, Any], summary: PreSelectionSummary
-) -> NDArray[np.bool]:
+def _compute_mask_by_edge(result: dict[str, Any], summary: PreSelectionSummary) -> NDArray[np.bool]:
     """Compute the mask using an edge-based pre selection strategy.
 
     Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
@@ -145,7 +143,7 @@ def _compute_mask_by_edge(
     # Get shape from any primary register
     shape = result[next(iter(summary.primary_cregs))].shape[:-1]
     mask = np.ones(shape, dtype=bool)
-    
+
     # For each edge, discard shots where both qubits have pre-selection measurement of 1 (bad initialization)
     for qubit0_idx, qubit1_idx in summary.edges:
         # Use measure_map_pre to get the correct register and clbit index for pre-selection measurements
@@ -156,7 +154,7 @@ def _compute_mask_by_edge(
         mask &= (result[name0_pre][..., clbit0_idx_pre] == 0) | (
             result[name1_pre][..., clbit1_idx_pre] == 0
         )
-    
+
     return mask
 
 
@@ -182,5 +180,6 @@ def _validate_result(result: dict[str, NDArray[np.bool]], summary: PreSelectionS
 
     if len(set(result[name].shape[:-1] for name in cregs)) > 1:
         raise ValueError("Result contains arrays of inconsistent shapes.")
+
 
 # Made with Bob

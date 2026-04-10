@@ -52,7 +52,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
     This pass adds a pre-selection measurement to all spectator qubits and,
     optionally via ``include_unmeasured``, to all active qubits that are not terminated qubits.
 
-    
+
     The added measurements write to a new classical register with one bit per spectator qubit and name
     ``spectator_creg_name`` (default: ``"spectator_pre"``).
 
@@ -161,7 +161,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
             new_dag.add_qreg(qreg)
         for creg in dag.cregs.values():
             new_dag.add_creg(creg)
-        
+
         # Add the new spectator register
         new_dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
 
@@ -181,7 +181,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
         for node in dag.topological_op_nodes():
             if node.op.name == "measure" and len(node.qargs) == 1 and len(node.cargs) == 1:
                 qubit_to_clbit_map[node.qargs[0]] = node.cargs[0]
-        
+
         # Copy all operations from the original DAG to the new DAG
         for node in dag.topological_op_nodes():
             # # do this to preserve meas ordering
@@ -238,7 +238,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
                     )
 
                 terminated_qubits.update(set.intersection(*all_terminated_qubits))
-            elif 'xslow' in node.op.name:
+            elif "xslow" in node.op.name:
                 # xslow gates (from pre/post-selection) don't make a qubit "active"
                 # They are just part of the measurement protocol
                 continue
@@ -246,5 +246,6 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")
 
         return active_qubits, terminated_qubits
+
 
 # Made with Bob
