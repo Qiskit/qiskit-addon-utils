@@ -600,13 +600,13 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
         self.assertIsInstance(result[0], tuple)
         self.assertEqual(len(result[0]), 2)
 
-    def test_preselect_mask_shape_mismatch(self):
-        """Test that preselect_mask with wrong shape causes issues."""
+    def test_postselect_mask_shape_mismatch(self):
+        """Test that postselect_mask with wrong shape causes issues."""
         bool_array, basis_dict = self._create_minimal_valid_inputs()
 
-        # preselect_mask.shape should equal bool_array.shape[:-1]
+        # postselect_mask.shape should equal bool_array.shape[:-1]
         wrong_shape = (bool_array.shape[0] + 1,)
-        preselect_mask = np.ones(wrong_shape, dtype=bool)
+        postselect_mask = np.ones(wrong_shape, dtype=bool)
 
         # This should fail during execution
         with self.assertRaises((ValueError, IndexError, RuntimeError)):
@@ -614,33 +614,33 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
                 bool_array,
                 basis_dict,
                 meas_basis_axis=None,
-                preselect_mask=preselect_mask,
+                postselect_mask=postselect_mask,
             )
 
-    def test_valid_preselect_mask(self):
-        """Test valid case with preselect_mask."""
+    def test_valid_postselect_mask(self):
+        """Test valid case with postselect_mask."""
         num_shots = 100
         num_qubits = 2
         bool_array = np.random.randint(0, 2, size=(num_shots, num_qubits), dtype=bool)
         basis_dict = {Pauli("ZZ"): [SparsePauliOp("ZZ", coeffs=[1.0])]}
 
-        # Create correctly shaped preselect_mask
-        preselect_mask = np.ones((num_shots,), dtype=bool)
-        preselect_mask[::2] = False  # Reject every other shot
+        # Create correctly shaped postselect_mask
+        postselect_mask = np.ones((num_shots,), dtype=bool)
+        postselect_mask[::2] = False  # Reject every other shot
 
         result = executor_expectation_values(
             bool_array,
             basis_dict,
             meas_basis_axis=None,
-            preselect_mask=preselect_mask,
+            postselect_mask=postselect_mask,
         )
 
         self.assertEqual(len(result), 1)
         self.assertIsInstance(result[0], tuple)
         self.assertEqual(len(result[0]), 2)
 
-    def test_valid_both_preselect_and_postselect_masks(self):
-        """Test valid case with both preselect_mask and postselect_mask."""
+    def test_valid_combined_preselect_and_postselect_masks(self):
+        """Test valid case with combined pre-selection and post-selection masks."""
         num_shots = 100
         num_qubits = 2
         bool_array = np.random.randint(0, 2, size=(num_shots, num_qubits), dtype=bool)
@@ -653,12 +653,14 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
         postselect_mask = np.ones((num_shots,), dtype=bool)
         postselect_mask[::2] = False  # Reject every other shot
 
+        # Combine masks with logical AND before passing to function
+        combined_mask = np.logical_and(preselect_mask, postselect_mask)
+
         result = executor_expectation_values(
             bool_array,
             basis_dict,
             meas_basis_axis=None,
-            preselect_mask=preselect_mask,
-            postselect_mask=postselect_mask,
+            postselect_mask=combined_mask,
         )
 
         self.assertEqual(len(result), 1)
