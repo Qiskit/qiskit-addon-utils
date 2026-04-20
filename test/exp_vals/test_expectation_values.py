@@ -403,7 +403,7 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
                 basis_dict,
                 meas_basis_axis=0,
             )
-        self.assertIn("len(basis_dict)", str(context.exception))
+        self.assertIn("len(basis_mapping)", str(context.exception))
         self.assertIn("does not match", str(context.exception))
 
     def test_inconsistent_observable_counts(self):
@@ -428,7 +428,7 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
                 basis_dict,
                 meas_basis_axis=0,
             )
-        self.assertIn("`basis_dict` indicates 2 observables, but entry", str(context.exception))
+        self.assertIn("`basis_mapping` indicates 2 observables, but entry", str(context.exception))
 
     def test_measurement_flips_shape_mismatch(self):
         """Test that measurement_flips with wrong shape causes issues."""
@@ -854,3 +854,208 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             seed=None,
         )
         self.assertTrue(np.allclose(evs, target_evs))
+
+
+class TestExecutorExpectationValuesTupleInput(unittest.TestCase):
+    """Test executor_expectation_values with tuple input for basis_mapping."""
+
+    def test_tuple_input_single_observable_string_bases(self):
+        """Test tuple input with a single observable and string measurement bases."""
+        # Create a simple observable
+        observable = SparsePauliOp("ZZ", coeffs=[1.0])
+        observables = [observable]
+
+        # Define measurement bases as strings
+        measurement_bases = ["ZZ"]
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], tuple)
+        self.assertEqual(len(result[0]), 2)  # (mean, variance)
+
+    def test_tuple_input_single_observable_paulilist_bases(self):
+        """Test tuple input with a single observable and PauliList measurement bases."""
+        # Create a simple observable
+        observable = SparsePauliOp("XX", coeffs=[1.0])
+        observables = [observable]
+
+        # Define measurement bases as PauliList
+        measurement_bases = PauliList(["XX"])
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], tuple)
+        self.assertEqual(len(result[0]), 2)  # (mean, variance)
+
+    def test_tuple_input_multiple_observables_multiple_bases(self):
+        """Test tuple input with multiple observables and multiple measurement bases."""
+        # Create multiple observables
+        obs1 = SparsePauliOp("ZZ", coeffs=[1.0])
+        obs2 = SparsePauliOp("XX", coeffs=[1.0])
+        observables = [obs1, obs2]
+
+        # Define measurement bases as strings
+        measurement_bases = ["ZZ", "XX"]
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(2, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 2)
+        for res in result:
+            self.assertIsInstance(res, tuple)
+            self.assertEqual(len(res), 2)  # (mean, variance)
+
+    def test_tuple_input_observable_with_multiple_terms(self):
+        """Test tuple input with an observable containing multiple terms."""
+        # Create an observable with multiple terms
+        observable = SparsePauliOp(["ZZ", "XX"], coeffs=[1.0, 0.5])
+        observables = [observable]
+
+        # Define measurement bases - need two bases for the two terms
+        measurement_bases = ["ZZ", "XX"]
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(2, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], tuple)
+        self.assertEqual(len(result[0]), 2)  # (mean, variance)
+
+    def test_tuple_input_with_identity_terms(self):
+        """Test tuple input with observables containing identity terms."""
+        # Create observables with identity terms
+        obs1 = SparsePauliOp("ZI", coeffs=[1.0])
+        obs2 = SparsePauliOp("IZ", coeffs=[1.0])
+        observables = [obs1, obs2]
+
+        # Define measurement bases - identities are measured as Z
+        measurement_bases = ["ZZ", "ZZ"]
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(2, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 2)
+        for res in result:
+            self.assertIsInstance(res, tuple)
+            self.assertEqual(len(res), 2)  # (mean, variance)
+
+    def test_tuple_input_mismatched_bases_length(self):
+        """Test that mismatched number of bases raises ValueError."""
+        observable = SparsePauliOp("ZZ", coeffs=[1.0])
+        observables = [observable]
+
+        # Define measurement bases with wrong length
+        measurement_bases = ["ZZ", "XX"]  # 2 bases
+
+        # Create bool_array with only 1 basis
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, num_shots, num_qubits), dtype=bool)
+
+        # Should raise ValueError due to mismatch
+        with self.assertRaises(ValueError) as context:
+            executor_expectation_values(
+                bool_array,
+                (observables, measurement_bases),
+                meas_basis_axis=0,
+            )
+        self.assertIn("does not match", str(context.exception))
+
+    def test_tuple_input_incompatible_observable_and_basis(self):
+        """Test that incompatible observable and measurement basis raises ValueError."""
+        # Create an observable that doesn't qubit-wise commute with the measurement basis
+        # XZ doesn't qubit-wise commute with ZX (X doesn't commute with Z on first qubit)
+        observable = SparsePauliOp("XZ", coeffs=[1.0])
+        observables = [observable]
+
+        # Define a measurement basis that doesn't qubit-wise commute with the observable
+        measurement_bases = ["ZX"]  # ZX doesn't qubit-wise commute with XZ
+
+        # Create bool_array
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, num_shots, num_qubits), dtype=bool)
+
+        # Should raise ValueError because no compatible basis found
+        with self.assertRaises(ValueError) as context:
+            executor_expectation_values(
+                bool_array,
+                (observables, measurement_bases),
+                meas_basis_axis=0,
+            )
+        self.assertIn("The observables and measurement bases in", str(context.exception))
+
+    def test_tuple_input_with_avg_axis(self):
+        """Test tuple input with averaging over additional axes."""
+        observable = SparsePauliOp("ZZ", coeffs=[1.0])
+        observables = [observable]
+        measurement_bases = ["ZZ"]
+
+        # Create bool_array with extra dimension for averaging
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, 3, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input and avg_axis
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+            avg_axis=1,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], tuple)
+        self.assertEqual(len(result[0]), 2)  # (mean, variance)
+
+
+# Made with Bob

@@ -18,14 +18,17 @@ from collections.abc import Sequence
 
 import numpy as np
 from qiskit.primitives import BitArray
-from qiskit.quantum_info import Pauli, SparseObservable, SparsePauliOp
+from qiskit.quantum_info import Pauli, PauliList, SparseObservable, SparsePauliOp
+
+from qiskit_addon_utils.exp_vals.measurement_bases import find_measure_basis_to_observable_mapping
 
 
 def executor_expectation_values(
     # positional-only arguments: these canNOT be specified as keyword arguments, meaning we can
     # rename them without breaking API
     bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
-    basis_dict: dict[Pauli, list[SparsePauliOp | None]],
+    basis_mapping: dict[Pauli, list[SparsePauliOp | None]]
+    | tuple[Sequence[SparsePauliOp], Sequence[str | PauliList]],
     /,
     # positional or keyword arguments
     meas_basis_axis: int | None = None,
@@ -51,8 +54,8 @@ def executor_expectation_values(
         bool_array: Boolean array, presumably representing data from measured qubits.
             The last two axes are the number of shots and number of classical bits, respectively.
             The least significant bit is assumed to be at index `0` of the bits axis.
-            If `meas_basis_axis` is given, that axis of `bool_array` indexes the measurement bases, with length `len(basis_dict)`.
-        basis_dict: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
+            If `meas_basis_axis` is given, that axis of `bool_array` indexes the measurement bases, with length `len(basis_mapping)`.
+        basis_mapping: This dict encodes how the data in `bool_array` should be used to estimate the desired list of Pauli observables.
             The ith key is a measurement basis assumed to correspond to the ith slice of `bool_array` along the `meas_basis_axis` axis.
             Each dict value is a list of length equal to the number of desired observables.
             The jth element of this list is a `SparsePauliOp` assumed to be compatible (qubit-wise commuting) with the measurement-basis key.
@@ -61,8 +64,12 @@ def executor_expectation_values(
             - Note the order of dict entries is relied on here for indexing; the dict keys are never used.
             - Assumes each Pauli term (in dict values) is compatible with each measurement basis (in keys).
             - Assumes each term in each observable appears for exactly one basis.
-        meas_basis_axis: Axis of bool_array that indexes measurement bases. Ordering must match ordering in `basis_dict`. If `None`,
-            then `len(basis_dict)` must be 1, and `bool_array` is assumed to correspond to the only measurement basis.
+            Alternatively, a tuple of (observables, measurement_bases) can be passed. A mapping between the measurement bases and the observables
+            will be computed. For each term in each observable, the first qubit-wise commuting basis from the bases list will be used as its measurement basis.
+            If no qubit-wise commuting basis is found for at least one of the terms in one of the observables, an error will be raised.
+            The number of bases in `measurement_bases` must be the same as the length of the meas_basis_axis in bool_array, and the order must match the order in bool_array.
+        meas_basis_axis: Axis of bool_array that indexes measurement bases. Ordering must match ordering in `basis_mapping`. If `None`,
+            then `len(basis_mapping)` must be 1, and `bool_array` is assumed to correspond to the only measurement basis.
         avg_axis: Optional axis or axes of bool_array to average over when computing expectation values. Usually this is the "twirling" axis.
             Must be nonnegative. (The shots axis, assumed to be at index -2 in the boolean array, is always averaged over).
         measurement_flips: Optional boolean array used with measurement twirling. Indicates which bits were acquired with measurements preceded by bit-flip gates.
@@ -75,10 +82,10 @@ def executor_expectation_values(
             number of positive samples minus the number of negative samples, computed as `1/(np.sum(~pauli_signs, axis=avg_axis) - np.sum(pauli_signs, axis=avg_axis))`.
             This can fail due to division by zero if there are an equal number of positive and negative samples. Also note this rescales each expectation value
             by a different factor. (TODO: allow specifying an array of gamma values).
-        rescale_factors: Scale factor for each Pauli term in each observable in each basis in the given ``basis_dict``.
+        rescale_factors: Scale factor for each Pauli term in each observable in each basis in the given ``basis_mapping``.
             Typically used for readout mitigation ("TREX") correction factors.
             Each item in the list corresponds to a different basis, and contains a list of lists of factors for each term in each observable related to that basis.
-            The order of the bases and the observables inside each basis should be the same as in `basis_dict`.
+            The order of the bases and the observables inside each basis should be the same as in `basis_mapping`.
             For empty observables for some of the bases, keep an empty list. If `None`, scaling factor will not be applied.
 
     Returns:
@@ -89,16 +96,17 @@ def executor_expectation_values(
 
     Raises:
         ValueError if `avg_axis` contains negative values.
-        ValueError if `meas_basis_axis` is `None` but `len(basis_dict) != 1`.
-        ValueError if the number of entries in `basis_dict` does not equal the length of `bool_array` along `meas_basis_axis`.
+        ValueError if `meas_basis_axis` is `None` but `len(basis_mapping) != 1`.
+        ValueError if the number of entries in `basis_mapping` does not equal the length of `bool_array` along `meas_basis_axis`.
+        ValueError if the given measurement_basis can not cover all of the terms in al lof the observables.
     """
     ##### VALIDATE INPUTS:
     avg_axis = _validate_avg_axis(avg_axis, len(bool_array.shape))
 
     if meas_basis_axis is None:
-        if len(basis_dict) != 1:
+        if len(basis_mapping) != 1:
             raise ValueError(
-                f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_dict) = }. "
+                f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_mapping) = }. "
             )
         bool_array = bool_array.reshape((1, *bool_array.shape))
         if measurement_flips is not None:
@@ -112,18 +120,39 @@ def executor_expectation_values(
     elif meas_basis_axis < 0:
         raise ValueError("meas_basis_axis must be nonnegative.")
 
-    if len(basis_dict) != bool_array.shape[meas_basis_axis]:
-        raise ValueError(
-            f"{len(basis_dict) = } does not match {bool_array.shape[meas_basis_axis] = }."
-        )
+    if isinstance(basis_mapping, dict):
+        if len(basis_mapping) != bool_array.shape[meas_basis_axis]:
+            raise ValueError(
+                f"{len(basis_mapping) = } does not match {bool_array.shape[meas_basis_axis] = }."
+            )
+    elif isinstance(basis_mapping, tuple):
+        if len(basis_mapping) != 2:
+            raise ValueError(
+                "if basis_mapping is a tuple, it must contain observables element and measurement_bases element."
+            )
+        if len(basis_mapping[1]) != bool_array.shape[meas_basis_axis]:
+            raise ValueError(
+                f"{len(basis_mapping[1]) = } does not match {bool_array.shape[meas_basis_axis] = }."
+            )
+        try:
+            basis_mapping = find_measure_basis_to_observable_mapping(
+                basis_mapping[0], basis_mapping[1]
+            )
+        except ValueError as err:
+            raise ValueError(
+                "The observables and measurement bases in `basis_mapping` do not match. "
+                "Please check the values of `basis_mapping` and try again."
+            ) from err
+    else:
+        raise ValueError("basis_mapping must be either a dict or a tuple")
 
-    for i, v in enumerate(basis_dict.values()):
+    for i, v in enumerate(basis_mapping.values()):
         if i == 0:
             num_observables = len(v)
             continue
         if len(v) != num_observables:
             raise ValueError(
-                f"Entry 0 in `basis_dict` indicates {num_observables} observables, but entry {i} indicates {len(v)} observables."
+                f"Entry 0 in `basis_mapping` indicates {num_observables} observables, but entry {i} indicates {len(v)} observables."
             )
 
     ##### APPLY MEAS FLIPS:
@@ -134,8 +163,8 @@ def executor_expectation_values(
     original_num_bits = bool_array.shape[-1]
 
     # Convert SparsePauliOps to SparseObservables
-    basis_dict_ = {}
-    for basis, spo_list in basis_dict.items():
+    basis_mapping_ = {}
+    for basis, spo_list in basis_mapping.items():
         diag_obs_list = []
         for spo in spo_list:
             if isinstance(spo, SparseObservable):
@@ -144,8 +173,8 @@ def executor_expectation_values(
                 diag_obs_list.append(SparseObservable.zero(original_num_bits))
             else:
                 diag_obs_list.append(SparseObservable(spo))
-        basis_dict_[basis] = diag_obs_list
-    basis_dict = basis_dict_
+        basis_mapping_[basis] = diag_obs_list
+    basis_dict = basis_mapping_
 
     ##### POSTSELECTION:
     if postselect_mask is not None:
