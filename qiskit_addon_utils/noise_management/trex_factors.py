@@ -28,20 +28,19 @@ def trex_factors(
     basis_dict: dict[Pauli, list[SparsePauliOp | None]],
     /,
 ):
-    """Calculates TREX mitigation algorithm's expectation value scale factor for each Pauli term in ``basis_dict``.
+    r"""Calculates TREX mitigation algorithm's expectation value scale factor for each Pauli term in ``basis_dict``.
 
-    Calculates <Z^n> for each Pauli term in each observable, where n is the non identity indices in the Pauli term.
-    The calculation is done using learned measurement noise.
+    Calculates :math:`\langle Z^N \rangle` for each non-identity Pauli term in each observable using learned
+    measurement noise, where :math:`N` are the non-identity indices in the term.
 
     Args:
         measurement_noise_map: Learned measurement noise in PauliLindbladMap format.
         basis_dict: Mapping between measure bases and observables in which the TREX algorithm mitigates their
-        expectation value calculation.
+            expectation value calculation.
 
     Returns:
         A list of numpy array of floats that represent the TREX mitigation algorithm's expectation value scale factor
         for each Pauli term in each observable in each basis in the given basis_dict.
-
     """
     num_qubits = measurement_noise_map.num_qubits
     scales_each_basis = []
