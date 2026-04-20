@@ -59,10 +59,10 @@ def executor_expectation_values(
             ``dict``, ``{basis: commuting_observables}``.
 
             - **tuple**: A length-2 tuple containing ``(observables, msmt_bases)``, where ``observables`` is a sequence of ``SparsePauliOp`` instances for
-              which individual expectation values should be calculated, and ``msmt_bases`` is a sequence of Pauli observables. The ``i``th Pauli in
-              ``msmt_bases`` is expected to correspond to the ``i``th slice of ``bool_array`` along the ``meas_basis_axis``.
+              which individual expectation values should be calculated, and ``msmt_bases`` is a sequence of Pauli observables. The ``i`` th Pauli in
+              ``msmt_bases`` is expected to correspond to the ``i`` th slice of ``bool_array`` along the ``meas_basis_axis``.
 
-            - **dict**: The ``i``th key is a measurement basis assumed to correspond to the ``i``th slice of ``bool_array`` along the ``meas_basis_axis`` axis.
+            - **dict**: The ``i`` th key is a measurement basis assumed to correspond to the ``i`` th slice of ``bool_array`` along the ``meas_basis_axis`` axis.
               The values are lists of observables (``SparsePauliOp``) with length equal to the number of observables. ``None`` values are used
               when an observable does not qubit-wise commute with the basis. This method assumes each observable appears only once in the values, even if it
               commutes with more than one basis.
@@ -97,7 +97,7 @@ def executor_expectation_values(
         ValueError: ``avg_axis`` contains negative values.
         ValueError: ``meas_basis_axis`` is ``None`` but ``len(basis_mapping) != 1``.
         ValueError: The number of entries in ``basis_mapping`` does not equal the length of ``bool_array`` along ``meas_basis_axis``.
-        ValueError if the given measurement_basis can not cover all of the terms in all of the observables.
+        ValueError: An observable is not covered by the measurement bases.
     """
     ##### VALIDATE INPUTS:
     avg_axis = _validate_avg_axis(avg_axis, len(bool_array.shape))
