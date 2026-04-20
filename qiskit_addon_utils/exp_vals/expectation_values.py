@@ -26,7 +26,7 @@ from qiskit_addon_utils.exp_vals.measurement_bases import find_measure_basis_to_
 def executor_expectation_values(
     # positional-only arguments: these canNOT be specified as keyword arguments, meaning we can
     # rename them without breaking API
-    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
+    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool_]],
     basis_mapping: dict[Pauli, list[SparsePauliOp | None]]
     | tuple[Sequence[SparsePauliOp], Sequence[str | PauliList]],
     /,
@@ -36,9 +36,9 @@ def executor_expectation_values(
     # keyword-only arguments: these can ONLY be specified as keyword arguments. Renaming them breaks
     # API, but their order does not matter.
     avg_axis: int | tuple[int, ...] | None = None,
-    measurement_flips: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
-    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
-    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]] | None = None,
+    measurement_flips: np.ndarray[tuple[int, ...], np.dtype[np.bool_]] | None = None,
+    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool_]] | None = None,
+    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool_]] | None = None,
     gamma_factor: float | None = None,
     rescale_factors: Sequence[Sequence[Sequence[float]]] | None = None,
 ):
@@ -254,9 +254,9 @@ def executor_expectation_values(
 
 
 def _apply_postselect_mask(
-    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
+    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool_]],
     basis_dict: dict[Pauli, list[SparseObservable]],
-    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
+    postselect_mask: np.ndarray[tuple[int, ...], np.dtype[np.bool_]],
 ):
     """Applies postselection mask in preparation for computing expectation values.
 
@@ -307,9 +307,9 @@ def _validate_avg_axis(avg_axis: int | tuple[int, ...] | None, num_dims: int) ->
 
 
 def _apply_pec_signs(
-    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
+    bool_array: np.ndarray[tuple[int, ...], np.dtype[np.bool_]],
     basis_dict: dict[Pauli, list[SparseObservable | SparsePauliOp]],
-    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool]],
+    pauli_signs: np.ndarray[tuple[int, ...], np.dtype[np.bool_]],
 ):
     """Applies PEC signs in preparation for computing expectation values.
 

@@ -158,7 +158,7 @@ def find_measure_basis_to_observable_mapping(
         measurement_dict[basis] = [[] for _ in range(len(observables))]
 
     for observable_index, observable in enumerate(observables):
-        observables_elements_basis_found.append(np.zeros((len(observable)), dtype=np.bool))
+        observables_elements_basis_found.append(np.zeros((len(observable)), dtype=np.bool_))
         for basis in measure_paulis:
             basis_paulis = []
             basis_coeffs = []
