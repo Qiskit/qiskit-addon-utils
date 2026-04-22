@@ -74,7 +74,7 @@ class AddPreSelectionMeasures(TransformationPass):
 
             from qiskit import QuantumCircuit
             from qiskit.transpiler import PassManager
-            from qiskit_addon_utils.noise_management.pre_selection.transpiler.passes import (
+            from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
                 AddPreSelectionMeasures,
             )
 
