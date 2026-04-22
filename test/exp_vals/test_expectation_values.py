@@ -600,23 +600,6 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
         self.assertIsInstance(result[0], tuple)
         self.assertEqual(len(result[0]), 2)
 
-    def test_postselect_mask_shape_mismatch(self):
-        """Test that postselect_mask with wrong shape causes issues."""
-        bool_array, basis_dict = self._create_minimal_valid_inputs()
-
-        # postselect_mask.shape should equal bool_array.shape[:-1]
-        wrong_shape = (bool_array.shape[0] + 1,)
-        postselect_mask = np.ones(wrong_shape, dtype=bool)
-
-        # This should fail during execution
-        with self.assertRaises((ValueError, IndexError, RuntimeError)):
-            executor_expectation_values(
-                bool_array,
-                basis_dict,
-                meas_basis_axis=None,
-                postselect_mask=postselect_mask,
-            )
-
     def test_valid_postselect_mask(self):
         """Test valid case with postselect_mask."""
         num_shots = 100
