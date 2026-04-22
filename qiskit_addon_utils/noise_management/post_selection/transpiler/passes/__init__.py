@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""A submodule with transpilation passes for post selection and pre selection."""
+"""A submodule with transpilation passes for post selection."""
 
 from .add_post_selection_measures import AddPostSelectionMeasures, XPulseType
 from .add_spectator_measures import AddSpectatorMeasures
