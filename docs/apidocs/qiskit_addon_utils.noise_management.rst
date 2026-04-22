@@ -13,5 +13,4 @@ noise_management (:mod:`qiskit_addon_utils.noise_management`)
 .. autofunction:: gamma_from_noisy_boxes
 .. autoclass:: PostSelectionSummary
 .. autoclass:: PostSelector
-.. autoclass:: PreSelectionSummary
-.. autoclass:: PreSelector
+.. autoclass:: SelectionStrategy

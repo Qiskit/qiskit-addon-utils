@@ -317,7 +317,7 @@ def test_eq_with_all_properties():
         post_selection_suffix="_ps",
         pre_selection_suffix="_pre",
     )
-    
+
     summary2 = PostSelectionSummary(
         {"alpha"},
         {0: ("alpha", 0)},
@@ -327,9 +327,9 @@ def test_eq_with_all_properties():
         post_selection_suffix="_ps",
         pre_selection_suffix="_pre",
     )
-    
+
     assert summary1 == summary2
-    
+
     # Different measure_map_ps
     summary3 = PostSelectionSummary(
         {"alpha"},
@@ -341,7 +341,7 @@ def test_eq_with_all_properties():
         pre_selection_suffix="_pre",
     )
     assert summary1 != summary3
-    
+
     # Different measure_map_pre
     summary4 = PostSelectionSummary(
         {"alpha"},
@@ -353,7 +353,7 @@ def test_eq_with_all_properties():
         pre_selection_suffix="_pre",
     )
     assert summary1 != summary4
-    
+
     # Different pre_selection_suffix
     summary5 = PostSelectionSummary(
         {"alpha"},
@@ -379,7 +379,9 @@ def test_pre_selection_invalid_measure_map_raises():
     circuit.barrier()
     circuit.measure(qreg[0], creg[0])
 
-    with pytest.raises(ValueError, match="Pre selection measurement on qubit 0 writes to bit 1 of creg alpha_pre"):
+    with pytest.raises(
+        ValueError, match="Pre selection measurement on qubit 0 writes to bit 1 of creg alpha_pre"
+    ):
         PostSelectionSummary.from_circuit(
             circuit, [], pre_selection_suffix="_pre", validation_mode="lenient"
         )
@@ -395,7 +397,9 @@ def test_pre_selection_invalid_measure_map_raises():
     circuit2.measure(qreg[0], creg[0])  # Primary measurement to alpha
     circuit2.measure(qreg[1], creg_beta[0])  # Another primary measurement to beta
 
-    with pytest.raises(ValueError, match="Pre selection measurement on qubit 0 writes to bit 0 of creg beta_pre"):
+    with pytest.raises(
+        ValueError, match="Pre selection measurement on qubit 0 writes to bit 0 of creg beta_pre"
+    ):
         PostSelectionSummary.from_circuit(
             circuit2, [], pre_selection_suffix="_pre", validation_mode="lenient"
         )
