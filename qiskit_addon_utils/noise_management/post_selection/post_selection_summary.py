@@ -29,8 +29,7 @@ class PostSelectionSummary:
     """A helper class to store the properties of a quantum circuit required to post select the results.
 
     This class handles both traditional post-selection (measurements at the end of the circuit) and
-    pre-selection (measurements at the beginning of the circuit to verify initialization). Both are
-    technically post-selection techniques as they filter sampled bitstrings based on measurement outcomes.
+    pre-selection (measurements at the beginning of the circuit to verify initialization).
     """
 
     def __init__(
