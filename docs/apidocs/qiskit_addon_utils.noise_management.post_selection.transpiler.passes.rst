@@ -16,3 +16,5 @@ post_selection_transpiler_passes (:mod:`qiskit_addon_utils.noise_management.post
    AddSpectatorMeasures
    AddPostSelectionMeasures
    XSlowGate
+   AddPreSelectionMeasures
+   AddSpectatorMeasuresPreSelection
