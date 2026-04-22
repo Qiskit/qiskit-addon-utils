@@ -14,7 +14,7 @@
 import numpy as np
 import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
-from qiskit_addon_utils.noise_management.pre_selection import PreSelectionSummary, PreSelector
+from qiskit_addon_utils.noise_management.post_selection import PreSelectionSummary, PreSelector
 
 
 def test_constructors():
