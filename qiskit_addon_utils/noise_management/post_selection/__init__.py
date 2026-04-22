@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Functions and classes to perform Post Selection and Pre Selection."""
+"""Functions and classes to perform post-selection."""
 
 from .post_selection_summary import PostSelectionSummary
 from .post_selector import PostSelectionStrategy, PostSelector
