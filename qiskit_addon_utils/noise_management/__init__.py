@@ -18,7 +18,6 @@ from .gamma_factor import gamma_from_noisy_boxes
 from .post_selection import (
     PostSelectionSummary,
     PostSelector,
-    PreSelectionSummary,
     PreSelector,
 )
 from .trex_factors import trex_factors
@@ -26,7 +25,6 @@ from .trex_factors import trex_factors
 __all__ = [
     "PostSelectionSummary",
     "PostSelector",
-    "PreSelectionSummary",
     "PreSelector",
     "gamma_from_noisy_boxes",
     "trex_factors",

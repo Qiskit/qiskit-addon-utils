@@ -15,7 +15,6 @@
 
 from .post_selection_summary import PostSelectionSummary
 from .post_selector import PostSelectionStrategy, PostSelector
-from .pre_selection_summary import PreSelectionSummary
 from .pre_selector import PreSelectionStrategy, PreSelector
 
 __all__ = [
@@ -23,6 +22,5 @@ __all__ = [
     "PostSelectionSummary",
     "PostSelector",
     "PreSelectionStrategy",
-    "PreSelectionSummary",
     "PreSelector",
 ]

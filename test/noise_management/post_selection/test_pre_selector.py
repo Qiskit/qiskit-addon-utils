@@ -14,7 +14,7 @@
 import numpy as np
 import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
-from qiskit_addon_utils.noise_management.post_selection import PreSelectionSummary, PreSelector
+from qiskit_addon_utils.noise_management.post_selection import PostSelectionSummary, PreSelector
 
 
 def test_constructors():
@@ -30,7 +30,9 @@ def test_constructors():
 
     coupling_map = [(0, 1), (1, 2), (2, 3)]
 
-    summary = PreSelectionSummary.from_circuit(circuit, coupling_map)
+    summary = PostSelectionSummary.from_circuit(
+        circuit, coupling_map, pre_selection_suffix="_pre", validation_mode="lenient"
+    )
     pre_selector = PreSelector(summary)
     assert pre_selector.summary == summary
 

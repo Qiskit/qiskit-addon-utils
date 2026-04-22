@@ -24,7 +24,7 @@ from qiskit import QuantumCircuit
 from qiskit.transpiler import CouplingMap
 
 from ..constants import DEFAULT_PRE_SELECTION_SUFFIX
-from .pre_selection_summary import PreSelectionSummary
+from .post_selection_summary import PostSelectionSummary
 
 
 class PreSelectionStrategy(str, Enum):
@@ -41,7 +41,7 @@ class PreSelectionStrategy(str, Enum):
 class PreSelector:
     """A class to process the results of quantum programs based on the outcome of pre selection measurements."""
 
-    def __init__(self, summary: PreSelectionSummary):
+    def __init__(self, summary: PostSelectionSummary):
         """Initialize a ``PreSelector`` object.
 
         Args:
@@ -50,7 +50,7 @@ class PreSelector:
         self._summary = summary
 
     @property
-    def summary(self) -> PreSelectionSummary:
+    def summary(self) -> PostSelectionSummary:
         """A summary of the circuit being pre selected."""
         return self._summary
 
@@ -76,8 +76,11 @@ class PreSelector:
             else CouplingMap(couplinglist=coupling_map)
         )
 
-        summary = PreSelectionSummary.from_circuit(
-            circuit, coupling_map, pre_selection_suffix=pre_selection_suffix
+        summary = PostSelectionSummary.from_circuit(
+            circuit,
+            coupling_map,
+            pre_selection_suffix=pre_selection_suffix,
+            validation_mode="lenient",
         )
         return PreSelector(summary)
 
@@ -110,7 +113,7 @@ class PreSelector:
 
 
 def _compute_mask_by_node(
-    result: dict[str, NDArray[np.bool]], summary: PreSelectionSummary
+    result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary
 ) -> NDArray[np.bool]:
     """Compute the mask using a node-based pre selection strategy.
 
@@ -132,7 +135,9 @@ def _compute_mask_by_node(
     return mask
 
 
-def _compute_mask_by_edge(result: dict[str, Any], summary: PreSelectionSummary) -> NDArray[np.bool]:
+def _compute_mask_by_edge(
+    result: dict[str, Any], summary: PostSelectionSummary
+) -> NDArray[np.bool]:
     """Compute the mask using an edge-based pre selection strategy.
 
     Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
@@ -158,7 +163,7 @@ def _compute_mask_by_edge(result: dict[str, Any], summary: PreSelectionSummary) 
     return mask
 
 
-def _validate_result(result: dict[str, NDArray[np.bool]], summary: PreSelectionSummary):
+def _validate_result(result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary):
     """Validate a result against a summary.
 
     Args:
