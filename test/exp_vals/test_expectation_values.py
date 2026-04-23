@@ -1392,7 +1392,7 @@ class TestValidateAndFormatBasisMapping(unittest.TestCase):
         self.assertEqual(num_obs, 2)
         self.assertEqual(len(result_dict), 2)
         # Check that observables were converted to SparseObservable
-        for basis, obs_list in result_dict.items():
+        for _basis, obs_list in result_dict.items():
             self.assertEqual(len(obs_list), 2)
             for obs in obs_list:
                 self.assertIsInstance(obs, type(obs))  # SparseObservable
@@ -1439,7 +1439,7 @@ class TestValidateAndFormatBasisMapping(unittest.TestCase):
 
         self.assertEqual(num_obs, 2)
         # Check that None was converted to zero observable
-        for basis, obs_list in result_dict.items():
+        for _, obs_list in result_dict.items():
             self.assertEqual(len(obs_list), 2)
 
     def test_tuple_input_valid(self):
@@ -1469,7 +1469,9 @@ class TestValidateAndFormatBasisMapping(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             _validate_and_format_basis_mapping(basis_mapping, bool_array, meas_basis_axis)
-        self.assertIn("must contain observables element and measurement_bases element", str(context.exception))
+        self.assertIn(
+            "must contain observables element and measurement_bases element", str(context.exception)
+        )
 
     def test_tuple_input_bases_length_mismatch(self):
         """Test tuple input where bases length doesn't match bool_array dimension."""
@@ -1612,9 +1614,7 @@ class TestValidateAndFormatBasisMapping(unittest.TestCase):
         basis_dict = {Pauli("ZZ"): [obs]}
         meas_basis_axis = 0
 
-        result_dict, num_obs = _validate_and_format_basis_mapping(
-            basis_dict, bool_array, meas_basis_axis
-        )
+        _, num_obs = _validate_and_format_basis_mapping(basis_dict, bool_array, meas_basis_axis)
 
         self.assertEqual(num_obs, 1)
         # Complex coefficients should be preserved
@@ -1627,9 +1627,7 @@ class TestValidateAndFormatBasisMapping(unittest.TestCase):
         basis_mapping = (observables, bases)
         meas_basis_axis = 0
 
-        result_dict, num_obs = _validate_and_format_basis_mapping(
-            basis_mapping, bool_array, meas_basis_axis
-        )
+        _, num_obs = _validate_and_format_basis_mapping(basis_mapping, bool_array, meas_basis_axis)
 
         self.assertEqual(num_obs, 1)
         # Identity should commute with any basis
