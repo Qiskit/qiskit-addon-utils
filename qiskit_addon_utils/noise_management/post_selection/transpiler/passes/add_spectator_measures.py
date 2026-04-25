@@ -53,6 +53,7 @@ class AddSpectatorMeasures(TransformationPass):
         include_unmeasured: bool = True,
         spectator_creg_name: str = DEFAULT_SPECTATOR_CREG_NAME,
         add_barrier: bool = True,
+        ignore_creg_suffixes: list[str] | None = None,
     ):
         """Initialize the pass.
 
@@ -63,6 +64,9 @@ class AddSpectatorMeasures(TransformationPass):
             spectator_creg_name: The name of the classical register added for the measurements on the spectator qubits.
             add_barrier: Whether to add a barrier acting on all active and spectator qubits prior to the spectator
                 measurements.
+            ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored when determining
+                active/terminated qubits. By default, registers ending with "_pre" are ignored to avoid treating
+                pre-selection measurements as regular measurements.
         """
         super().__init__()
         self.spectator_creg_name = spectator_creg_name
@@ -74,6 +78,9 @@ class AddSpectatorMeasures(TransformationPass):
         )
         self.coupling_map.make_symmetric()
         self.add_barrier = add_barrier
+        self.ignore_creg_suffixes = (
+            ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_pre"]
+        )
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         active_qubits, terminated_qubits = self._find_active_and_terminated_qubits(dag)
@@ -143,10 +150,13 @@ class AddSpectatorMeasures(TransformationPass):
                             and succ.qargs[0] == qubit
                             and len(succ.cargs) == 1
                         ):
-                            # Check if measuring into a pre-selection register
+                            # Check if measuring into an ignored register
                             clbit = succ.cargs[0]
                             for creg in dag.cregs.values():
-                                if clbit in creg and creg.name.endswith("_pre"):
+                                if clbit in creg and any(
+                                    creg.name.endswith(suffix)
+                                    for suffix in self.ignore_creg_suffixes
+                                ):
                                     is_preselection_x = True
                                     break
                             break
@@ -160,17 +170,19 @@ class AddSpectatorMeasures(TransformationPass):
             elif (name := node.op.name) == "barrier":
                 continue
             elif name == "measure":
-                # Check if this is a measurement into a pre-selection register
+                # Check if this is a measurement into an ignored register
                 if len(node.cargs) == 1:
                     clbit = node.cargs[0]
-                    is_preselection = False
+                    is_ignored = False
                     for creg in dag.cregs.values():
-                        if clbit in creg and creg.name.endswith("_pre"):
-                            is_preselection = True
+                        if clbit in creg and any(
+                            creg.name.endswith(suffix) for suffix in self.ignore_creg_suffixes
+                        ):
+                            is_ignored = True
                             preselection_measurements[node.qargs[0]] = True
                             break
 
-                    if not is_preselection:
+                    if not is_ignored:
                         active_qubits.add(node.qargs[0])
                         terminated_qubits.add(node.qargs[0])
             elif isinstance(node.op, ControlFlowOp):

@@ -248,3 +248,168 @@ def test_raises():
     circuit.reset(0)
     with pytest.raises(TranspilerError, match="``'reset'`` is not supported"):
         pm.run(circuit)
+
+
+def test_ignore_creg_suffixes_with_pre_selection():
+    """Test that post-selection ignores pre-selection registers."""
+    from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
+        AddPreSelectionMeasures,
+    )
+
+    qreg = QuantumRegister(2, "q")
+    creg = ClassicalRegister(2, "c")
+
+    # Create circuit with measurements
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.h(0)
+    circuit.cx(0, 1)
+    circuit.measure([0, 1], [0, 1])
+
+    # Apply pre-selection first, then post-selection
+    coupling_map = [(0, 1)]
+    pm = PassManager([AddPreSelectionMeasures(coupling_map), AddPostSelectionMeasures()])
+    result = pm.run(circuit)
+
+    # Should have c, c_pre, and c_ps registers (but NOT c_pre_ps)
+    creg_names = [creg.name for creg in result.cregs]
+    assert "c" in creg_names
+    assert "c_pre" in creg_names
+    assert "c_ps" in creg_names
+    assert "c_pre_ps" not in creg_names
+
+    # Verify the c_pre register was ignored (not copied to c_pre_ps)
+    assert len(result.cregs) == 3
+
+
+def test_ignore_creg_suffixes_custom():
+    """Test custom ignore_creg_suffixes parameter."""
+    qreg = QuantumRegister(2, "q")
+    creg = ClassicalRegister(2, "c")
+    creg_custom = ClassicalRegister(2, "c_custom")
+
+    circuit = QuantumCircuit(qreg, creg, creg_custom)
+    circuit.h(0)
+    circuit.measure(0, creg[0])
+    circuit.measure(1, creg_custom[0])
+
+    # Ignore registers ending with "_custom"
+    pm = PassManager([AddPostSelectionMeasures(ignore_creg_suffixes=["_custom"])])
+    result = pm.run(circuit)
+
+    # Should have c_ps but NOT c_custom_ps
+    creg_names = [creg.name for creg in result.cregs]
+    assert "c_ps" in creg_names
+    assert "c_custom_ps" not in creg_names
+
+
+def test_ignore_creg_suffixes_empty_list():
+    """Test with empty ignore list - all registers should be copied."""
+    qreg = QuantumRegister(2, "q")
+    creg = ClassicalRegister(2, "c")
+    creg_pre = ClassicalRegister(2, "c_pre")
+
+    circuit = QuantumCircuit(qreg, creg, creg_pre)
+    circuit.measure(0, creg[0])
+    circuit.measure(1, creg_pre[0])
+
+    # Don't ignore any registers
+    pm = PassManager([AddPostSelectionMeasures(ignore_creg_suffixes=[])])
+    result = pm.run(circuit)
+
+    # Should have both c_ps and c_pre_ps
+    creg_names = [creg.name for creg in result.cregs]
+    assert "c_ps" in creg_names
+    assert "c_pre_ps" in creg_names
+
+
+def test_pre_then_post_selection():
+    """Test applying pre-selection then post-selection passes."""
+    from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
+        AddPreSelectionMeasures,
+    )
+
+    qreg = QuantumRegister(2, "q")
+    creg = ClassicalRegister(2, "c")
+
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.h(0)
+    circuit.cx(0, 1)
+    circuit.measure([0, 1], [0, 1])
+
+    coupling_map = [(0, 1)]
+    pm = PassManager([AddPreSelectionMeasures(coupling_map), AddPostSelectionMeasures()])
+    result = pm.run(circuit)
+
+    # Check structure: pre-selection measurements, barrier, main circuit, barrier, post-selection
+    ops = [inst.operation.name for inst in result.data]
+
+    # Should have xslow and x gates at the start (pre-selection)
+    assert "xslow" in ops[:5]
+    assert "x" in ops[:5]
+
+    # Should have xslow gates at the end (post-selection, no x gate)
+    assert "xslow" in ops[-5:]
+    assert ops.count("barrier") >= 2  # At least 2 barriers
+
+
+def test_post_then_pre_selection():
+    """Test applying post-selection then pre-selection passes (different order)."""
+    from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
+        AddPreSelectionMeasures,
+    )
+
+    qreg = QuantumRegister(2, "q")
+    creg = ClassicalRegister(2, "c")
+
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.h(0)
+    circuit.cx(0, 1)
+    circuit.measure([0, 1], [0, 1])
+
+    # Apply post-selection first
+    pm_post = PassManager([AddPostSelectionMeasures()])
+    circuit_with_post = pm_post.run(circuit)
+
+    # Then apply pre-selection
+    coupling_map = [(0, 1)]
+    pm_pre = PassManager([AddPreSelectionMeasures(coupling_map)])
+    result = pm_pre.run(circuit_with_post)
+
+    # Should have c, c_ps, and c_pre registers
+    creg_names = [creg.name for creg in result.cregs]
+    assert "c" in creg_names
+    assert "c_ps" in creg_names
+    assert "c_pre" in creg_names
+
+
+def test_custom_suffixes_both_passes():
+    """Test using custom suffixes for both pre and post selection."""
+    from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
+        AddPreSelectionMeasures,
+    )
+
+    qreg = QuantumRegister(2, "q")
+    creg = ClassicalRegister(2, "c")
+
+    circuit = QuantumCircuit(qreg, creg)
+    circuit.h(0)
+    circuit.cx(0, 1)
+    circuit.measure([0, 1], [0, 1])
+
+    coupling_map = [(0, 1)]
+    pm = PassManager(
+        [
+            AddPreSelectionMeasures(coupling_map, pre_selection_suffix="_init"),
+            AddPostSelectionMeasures(
+                post_selection_suffix="_check", ignore_creg_suffixes=["_init"]
+            ),
+        ]
+    )
+    result = pm.run(circuit)
+
+    # Should have c, c_init, and c_check registers
+    creg_names = [creg.name for creg in result.cregs]
+    assert "c" in creg_names
+    assert "c_init" in creg_names
+    assert "c_check" in creg_names
+    assert "c_init_check" not in creg_names

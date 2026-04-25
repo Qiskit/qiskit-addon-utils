@@ -63,16 +63,22 @@ class AddPostSelectionMeasures(TransformationPass):
         x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
+        ignore_creg_suffixes: list[str] | None = None,
     ):
         """Initialize the pass.
 
         Args:
             x_pulse_type: The type of X-pulse to apply for the post-selection measurements.
             post_selection_suffix: A fixed suffix to append to the names of the classical registers when copying them.
+            ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
+                By default, registers ending with "_pre" are ignored to avoid adding post-selection to pre-selection registers.
         """
         super().__init__()
         self.x_pulse_type = XPulseType(x_pulse_type)
         self.post_selection_suffix = post_selection_suffix
+        self.ignore_creg_suffixes = (
+            ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_pre"]
+        )
 
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate()]
@@ -84,11 +90,11 @@ class AddPostSelectionMeasures(TransformationPass):
         all_terminal_measurements = self._find_terminal_measurements(dag)
 
         # Add the new registers and create a map between the original clbit and the new ones
-        # Skip pre-selection registers (those ending with _pre) as they don't need post-selection
+        # Skip registers with ignored suffixes (e.g., pre-selection registers)
         clbits_map = {}
         for name, creg in dag.cregs.items():
-            if name.endswith("_pre"):
-                # Skip pre-selection registers - they don't get post-selection
+            if any(name.endswith(suffix) for suffix in self.ignore_creg_suffixes):
+                # Skip registers with ignored suffixes
                 continue
             dag.add_creg(
                 new_creg := ClassicalRegister(creg.size, name + self.post_selection_suffix)

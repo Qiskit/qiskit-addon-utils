@@ -101,6 +101,8 @@ class AddPreSelectionMeasures(TransformationPass):
         x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
+        ignore_creg_suffixes: list[str] | None = None,
+        ignore_creg_names: list[str] | None = None,
     ):
         """Initialize the pass.
 
@@ -108,10 +110,18 @@ class AddPreSelectionMeasures(TransformationPass):
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
             x_pulse_type: The type of X-pulse to apply for the pre-selection measurements.
             pre_selection_suffix: A fixed suffix to append to the names of the classical registers when copying them.
+            ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
+                By default, registers ending with "_ps" are ignored to avoid adding pre-selection to post-selection registers.
+            ignore_creg_names: A list of exact classical register names that should be ignored (not copied).
+                By default, registers named "spec" are ignored to avoid adding pre-selection to spectator registers.
         """
         super().__init__()
         self.x_pulse_type = XPulseType(x_pulse_type)
         self.pre_selection_suffix = pre_selection_suffix
+        self.ignore_creg_suffixes = (
+            ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_ps"]
+        )
+        self.ignore_creg_names = ignore_creg_names if ignore_creg_names is not None else ["spec"]
         self.coupling_map = (
             deepcopy(coupling_map)
             if isinstance(coupling_map, CouplingMap)
@@ -143,12 +153,27 @@ class AddPreSelectionMeasures(TransformationPass):
             return dag
 
         # Add the new registers and create a map between the original clbit and the new ones
+        # Skip registers with ignored suffixes or names (e.g., post-selection or spectator registers)
         clbits_map = {}
         for name, creg in dag.cregs.items():
+            if any(name.endswith(suffix) for suffix in self.ignore_creg_suffixes):
+                # Skip registers with ignored suffixes
+                continue
+            if name in self.ignore_creg_names:
+                # Skip registers with ignored names
+                continue
             # Create a pre-selection register with the same size as the original
             dag.add_creg(new_creg := ClassicalRegister(creg.size, name + self.pre_selection_suffix))
             # Map existing clbits to the new register
             clbits_map.update({clbit: new_clbit for clbit, new_clbit in zip(creg, new_creg)})
+
+        # Filter qubits to only include those that measure into non-ignored registers
+        qubits_to_preselect = {
+            qubit for qubit in qubits_to_preselect if qubit_to_clbit_map[qubit] in clbits_map
+        }
+
+        if not qubits_to_preselect:
+            return dag
 
         # Create a new DAG to build the pre-selection circuit
         new_dag = DAGCircuit()
@@ -199,9 +224,12 @@ class AddPreSelectionMeasures(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            if node.is_standard_gate():
+            # Skip xslow and rx gates - they are part of pre/post-selection protocol
+            if ("xslow" in node.op.name) or ("rx" in node.op.name):
+                continue
+            elif node.is_standard_gate():
                 active_qubits.update(node.qargs)
-            elif (name := node.op.name) == "xslow" or (name := node.op.name) == "barrier":
+            elif (name := node.op.name) == "barrier":
                 continue
             elif name == "measure":
                 active_qubits.add(node.qargs[0])
@@ -220,9 +248,10 @@ class AddPreSelectionMeasures(TransformationPass):
         return active_qubits
 
     def _find_measurements(self, dag: DAGCircuit) -> dict[Qubit, Any]:
-        """Helper function to find all measurements in the circuit, including those in control flow.
+        """Helper function to find measurements in the circuit to non-ignored registers.
 
-        This function returns a map from qubits to the classical bits they measure into.
+        This function returns a map from qubits to the classical bits they measure into,
+        but only for measurements into registers that are not in the ignore list.
         It recursively searches through control flow operations to find measurements.
 
         Args:
@@ -232,7 +261,19 @@ class AddPreSelectionMeasures(TransformationPass):
 
         for node in dag.topological_op_nodes():
             if node.op.name == "measure" and len(node.qargs) == 1 and len(node.cargs) == 1:
-                qubit_to_clbit_map[node.qargs[0]] = node.cargs[0]
+                # Check if this measurement is to an ignored register
+                clbit = node.cargs[0]
+                is_ignored = False
+                for creg in dag.cregs.values():
+                    if clbit in creg and any(
+                        creg.name.endswith(suffix) for suffix in self.ignore_creg_suffixes
+                    ):
+                        is_ignored = True
+                        break
+
+                # Only record measurements to non-ignored registers
+                if not is_ignored:
+                    qubit_to_clbit_map[node.qargs[0]] = node.cargs[0]
             elif isinstance(node.op, ControlFlowOp):
                 # Recursively search for measurements in control flow blocks
                 for block in node.op.blocks:

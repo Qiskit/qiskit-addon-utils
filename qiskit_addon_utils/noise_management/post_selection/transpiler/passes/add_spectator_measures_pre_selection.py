@@ -102,6 +102,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
         include_unmeasured: bool = True,
         spectator_creg_name: str = DEFAULT_SPECTATOR_PRE_CREG_NAME,
         add_barrier: bool = True,
+        ignore_spectator_creg_names: list[str] | None = None,
     ):
         """Initialize the pass.
 
@@ -113,11 +114,17 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
             spectator_creg_name: The name of the classical register added for the measurements on the spectator qubits.
             add_barrier: Whether to add a barrier acting on all active and spectator qubits prior to the spectator
                 measurements.
+            ignore_spectator_creg_names: List of classical register names to ignore when determining active qubits.
+                Qubits that only have measurements to these registers are not considered active, preventing cascading
+                spectator selection. Defaults to ``["spec"]`` (the default name used by :class:`.AddSpectatorMeasures`).
         """
         super().__init__()
         self.x_pulse_type = XPulseType(x_pulse_type)
         self.spectator_creg_name = spectator_creg_name
         self.include_unmeasured = include_unmeasured
+        self.ignore_spectator_creg_names = (
+            ignore_spectator_creg_names if ignore_spectator_creg_names is not None else ["spec"]
+        )
         self.coupling_map = (
             deepcopy(coupling_map)
             if isinstance(coupling_map, CouplingMap)
@@ -162,8 +169,16 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
         for creg in dag.cregs.values():
             new_dag.add_creg(creg)
 
-        # Add the new spectator register
-        new_dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
+        # Add the new spectator register (or use existing one if it already exists)
+        if self.spectator_creg_name in dag.cregs:
+            new_reg = dag.cregs[self.spectator_creg_name]
+            if new_reg.size != num_spectators:
+                raise TranspilerError(
+                    f"Classical register '{self.spectator_creg_name}' already exists with size "
+                    f"{new_reg.size}, but {num_spectators} spectator qubits were found."
+                )
+        else:
+            new_dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
 
         # Add the pre-selection measurements at the front for spectator qubits
         for qubit, clbit in zip(spectator_qubits_ls, new_reg):
@@ -207,14 +222,35 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            if node.is_standard_gate():
+            # Skip xslow and rx gates - they are part of pre/post-selection protocol
+            if ("xslow" in node.op.name) or ("rx" in node.op.name):
+                continue
+            elif node.is_standard_gate():
                 active_qubits.update(node.qargs)
                 terminated_qubits.difference_update(node.qargs)
             elif (name := node.op.name) == "barrier":
                 continue
             elif name == "measure":
-                active_qubits.add(node.qargs[0])
-                terminated_qubits.add(node.qargs[0])
+                # Check if this is a measurement into an ignored spectator register
+                if len(node.cargs) == 1:
+                    clbit = node.cargs[0]
+                    is_ignored_measurement = False
+                    for creg in dag.cregs.values():
+                        # Check if measuring into an ignored spectator register
+                        if clbit in creg and creg.name in self.ignore_spectator_creg_names:
+                            is_ignored_measurement = True
+                            break
+
+                    # Only add to active qubits if NOT measuring into an ignored register
+                    if not is_ignored_measurement:
+                        active_qubits.add(node.qargs[0])
+                        terminated_qubits.add(node.qargs[0])
+                    # If it IS an ignored measurement, still add to terminated (but not active)
+                    else:
+                        terminated_qubits.add(node.qargs[0])
+                else:
+                    active_qubits.add(node.qargs[0])
+                    terminated_qubits.add(node.qargs[0])
             elif isinstance(node.op, ControlFlowOp):
                 # The qubits whose last action is a measurement, block by block
                 all_terminated_qubits: list[set[Qubit]] = []
