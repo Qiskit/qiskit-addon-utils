@@ -111,14 +111,20 @@ class AddPostSelectionMeasures(TransformationPass):
         if not terminal_measurements:
             return dag
 
-        # Add a barrier to separate the post selection measurements from the rest of the circuit
+        # Add a barrier before post-selection to ensure all terminal measurements finish
         qubits = tuple(terminal_measurements)
         dag.apply_operation_back(Barrier(len(qubits)), qubits)
 
-        # Append the post selection measurements
-        for qubit, clbit in terminal_measurements.items():
+        # Apply all pulse sequences
+        for qubit in terminal_measurements:
             for gate in self.pulse_sequence:
                 dag.apply_operation_back(gate, [qubit])
+
+        # Add a barrier before measurements - AddSpectatorMeasures will extend it
+        dag.apply_operation_back(Barrier(len(qubits)), qubits)
+
+        # Then add all measurements
+        for qubit, clbit in terminal_measurements.items():
             dag.apply_operation_back(Measure(), [qubit], [clbits_map[clbit]])
 
         return dag
@@ -138,7 +144,10 @@ class AddPostSelectionMeasures(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            if node.is_standard_gate() or (name := node.op.name) == "xslow":
+            # Skip reset operations - they are part of pre-selection protocol
+            if node.op.name == "reset":
+                continue
+            elif node.is_standard_gate() or (name := node.op.name) == "xslow":
                 for qarg in node.qargs:
                     terminal_measurements[qarg] = None
             elif (name := node.op.name) == "barrier":

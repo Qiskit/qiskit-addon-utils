@@ -54,6 +54,7 @@ class AddSpectatorMeasures(TransformationPass):
         spectator_creg_name: str = DEFAULT_SPECTATOR_CREG_NAME,
         add_barrier: bool = True,
         ignore_creg_suffixes: list[str] | None = None,
+        post_selection_suffix: str = "_ps",
     ):
         """Initialize the pass.
 
@@ -67,6 +68,8 @@ class AddSpectatorMeasures(TransformationPass):
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored when determining
                 active/terminated qubits. By default, registers ending with "_pre" are ignored to avoid treating
                 pre-selection measurements as regular measurements.
+            post_selection_suffix: The suffix used for post-selection classical registers. Used to identify which
+                qubits have post-selection measurements for barrier extension. Defaults to "_ps".
         """
         super().__init__()
         self.spectator_creg_name = spectator_creg_name
@@ -81,6 +84,7 @@ class AddSpectatorMeasures(TransformationPass):
         self.ignore_creg_suffixes = (
             ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_pre"]
         )
+        self.post_selection_suffix = post_selection_suffix
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         active_qubits, terminated_qubits = self._find_active_and_terminated_qubits(dag)
@@ -103,10 +107,70 @@ class AddSpectatorMeasures(TransformationPass):
             spectator_qubits_ls = list(spectator_qubits)
             spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
 
-            if self.add_barrier is True:
-                qubits = active_qubits.union(spectator_qubits_ls)
-                dag.apply_operation_back(Barrier(len(qubits)), qubits)
+            # Find all qubits that have post-selection measurements (from AddPostSelectionMeasures)
+            # These are qubits that have measurements into registers ending with the post_selection_suffix
+            data_qubits_with_postselection = set()
+            for node in dag.topological_op_nodes():
+                if node.op.name == "measure" and len(node.cargs) == 1:
+                    clbit = node.cargs[0]
+                    for creg in dag.cregs.values():
+                        if clbit in creg and creg.name.endswith(self.post_selection_suffix):
+                            data_qubits_with_postselection.add(node.qargs[0])
+                            break
 
+            # DEBUG
+            import sys
+
+            print(
+                f"DEBUG: Found {len(data_qubits_with_postselection)} post-selection qubits",
+                file=sys.stderr,
+            )
+            print(f"DEBUG: Post-selection suffix: {self.post_selection_suffix}", file=sys.stderr)
+
+            # Combine data qubits with post-selection and spectator qubits for unified barrier
+            all_postselection_qubits = list(
+                data_qubits_with_postselection.union(spectator_qubits_ls)
+            )
+            all_postselection_qubits.sort(key=lambda qubit: qubit_map[qubit])
+
+            # Extend the barrier from AddPostSelectionMeasures to include spectator qubits
+            # We need to find the LAST barrier that acts EXACTLY on post-selection qubits
+            # This is the barrier right before post-selection measurements
+            if self.add_barrier and len(data_qubits_with_postselection) > 0:
+                # Find the last barrier that acts exactly on post-selection qubits
+                # (not a superset, which would include pre-selection barriers)
+                # Store the node ID instead of the node object itself
+                last_barrier_node_id = None
+                for node in dag.topological_op_nodes():
+                    if (
+                        node.op.name == "barrier"
+                        and set(node.qargs) == data_qubits_with_postselection
+                    ):
+                        last_barrier_node_id = node._node_id
+
+                # Rebuild the DAG to replace the barrier with an extended one
+                if last_barrier_node_id is not None:
+                    new_dag = DAGCircuit()
+                    for qreg in dag.qregs.values():
+                        new_dag.add_qreg(qreg)
+                    for creg in dag.cregs.values():
+                        new_dag.add_creg(creg)
+
+                    # Map old qubits to new qubits by index
+                    qubit_indices = [dag.qubits.index(q) for q in all_postselection_qubits]
+                    new_qubits = [new_dag.qubits[i] for i in qubit_indices]
+
+                    # Copy all operations, replacing the last barrier
+                    for node in dag.topological_op_nodes():
+                        if node._node_id == last_barrier_node_id:
+                            # Replace with extended barrier using new DAG's qubits
+                            new_dag.apply_operation_back(Barrier(len(new_qubits)), new_qubits)
+                        else:
+                            new_dag.apply_operation_back(node.op, node.qargs, node.cargs)
+
+                    dag = new_dag
+
+            # Add spectator measurements
             dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
             for qubit, clbit in zip(spectator_qubits_ls, new_reg):
                 dag.apply_operation_back(Measure(), [qubit], [clbit])
@@ -130,8 +194,8 @@ class AddSpectatorMeasures(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            # Skip xslow and rx gates - they are part of pre/post-selection protocol
-            if ("xslow" in node.op.name) or ("rx" in node.op.name):
+            # Skip xslow, rx, and reset gates - they are part of pre/post-selection protocol
+            if ("xslow" in node.op.name) or ("rx" in node.op.name) or (node.op.name == "reset"):
                 continue
             elif node.is_standard_gate():
                 # Check if this is an X gate that's part of a pre-selection sequence

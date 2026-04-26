@@ -187,16 +187,20 @@ class AddPreSelectionMeasures(TransformationPass):
         # Sort by clbit index to ensure consistent ordering
         qubits_list = sorted(qubits_to_preselect, key=lambda q: qubit_to_clbit_map[q]._index)
 
+        # Apply all pulse sequences first
         for qubit in qubits_list:
             for gate in self.pulse_sequence:
                 new_dag.apply_operation_back(gate, [qubit])
-            # Measure to the corresponding clbit in the pre-selection registers
-            clbit = qubit_to_clbit_map[qubit]
-            new_dag.apply_operation_back(Measure(), [qubit], [clbits_map[clbit]])
 
-        # Add a barrier to separate the pre-selection measurements from the rest of the circuit
+        # Add barrier before measurements - AddSpectatorMeasuresPreSelection will extend it
         if qubits_list:
             new_dag.apply_operation_back(Barrier(len(qubits_list)), qubits_list)
+
+        # Then add all measurements
+        for qubit in qubits_list:
+            clbit = qubit_to_clbit_map[qubit]
+            new_dag.apply_operation_back(Measure(), [qubit], [clbits_map[clbit]])
+            # Note: No reset on data qubits - they continue to the main circuit
 
         # Copy all operations from the original DAG to the new DAG
         for node in dag.topological_op_nodes():
@@ -224,8 +228,8 @@ class AddPreSelectionMeasures(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            # Skip xslow and rx gates - they are part of pre/post-selection protocol
-            if ("xslow" in node.op.name) or ("rx" in node.op.name):
+            # Skip xslow, rx, and reset gates - they are part of pre/post-selection protocol
+            if ("xslow" in node.op.name) or ("rx" in node.op.name) or (node.op.name == "reset"):
                 continue
             elif node.is_standard_gate():
                 active_qubits.update(node.qargs)
