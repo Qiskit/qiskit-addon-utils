@@ -396,3 +396,92 @@ def test_pre_selection_invalid_measure_map_raises():
         ValueError, match="Pre selection measurement on qubit 0 writes to bit 0 of creg beta_pre"
     ):
         PostSelectionSummary.from_circuit(circuit2, [], pre_selection_suffix="_pre")
+
+
+def test_spectator_cregs_default_picks_up_spec_register():
+    """``from_circuit`` defaults flag a register named ``spec`` as a spectator."""
+    qreg = QuantumRegister(3, "q")
+    creg_data = ClassicalRegister(2, "c")
+    creg_data_ps = ClassicalRegister(2, "c_ps")
+    creg_spec = ClassicalRegister(1, "spec")
+    creg_spec_ps = ClassicalRegister(1, "spec_ps")
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_ps, creg_spec, creg_spec_ps)
+    circuit.measure(qreg[0], creg_data[0])
+    circuit.measure(qreg[1], creg_data[1])
+    circuit.measure(qreg[2], creg_spec[0])
+    circuit.measure(qreg[0], creg_data_ps[0])
+    circuit.measure(qreg[1], creg_data_ps[1])
+    circuit.measure(qreg[2], creg_spec_ps[0])
+
+    summary = PostSelectionSummary.from_circuit(circuit, [(0, 1), (1, 2)])
+    assert summary.primary_cregs == {"c", "spec"}
+    assert summary.spectator_cregs == {"spec"}
+    # Data-only view: caller can subtract.
+    assert summary.primary_cregs - summary.spectator_cregs == {"c"}
+
+
+def test_spectator_cregs_custom_names():
+    """Custom ``spectator_cregs`` overrides the default and is intersected with primaries."""
+    qreg = QuantumRegister(3, "q")
+    creg_data = ClassicalRegister(2, "alpha")
+    creg_data_ps = ClassicalRegister(2, "alpha_ps")
+    creg_spec = ClassicalRegister(1, "spec_init")
+    creg_spec_ps = ClassicalRegister(1, "spec_init_ps")
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_ps, creg_spec, creg_spec_ps)
+    circuit.measure(qreg[0], creg_data[0])
+    circuit.measure(qreg[1], creg_data[1])
+    circuit.measure(qreg[2], creg_spec[0])
+    circuit.measure(qreg[0], creg_data_ps[0])
+    circuit.measure(qreg[1], creg_data_ps[1])
+    circuit.measure(qreg[2], creg_spec_ps[0])
+
+    # Custom name + a non-existent name (silently dropped).
+    summary = PostSelectionSummary.from_circuit(
+        circuit, [(0, 1), (1, 2)], spectator_cregs=["spec_init", "ghost"]
+    )
+    assert summary.primary_cregs == {"alpha", "spec_init"}
+    assert summary.spectator_cregs == {"spec_init"}
+
+
+def test_spectator_cregs_empty_when_no_spec_register():
+    """A circuit without a ``spec`` primary leaves ``spectator_cregs`` empty."""
+    qreg = QuantumRegister(2, "q")
+    creg = ClassicalRegister(2, "c")
+    creg_ps = ClassicalRegister(2, "c_ps")
+    circuit = QuantumCircuit(qreg, creg, creg_ps)
+    circuit.measure(qreg, creg)
+    circuit.measure(qreg, creg_ps)
+
+    summary = PostSelectionSummary.from_circuit(circuit, [(0, 1)])
+    assert summary.spectator_cregs == set()
+
+
+def test_spectator_cregs_disabled_with_empty_list():
+    """Passing ``spectator_cregs=[]`` opts out of the default ``spec`` classification."""
+    qreg = QuantumRegister(3, "q")
+    creg_data = ClassicalRegister(2, "c")
+    creg_data_ps = ClassicalRegister(2, "c_ps")
+    # User happens to have a register literally named ``spec`` for unrelated reasons.
+    creg_spec = ClassicalRegister(1, "spec")
+    creg_spec_ps = ClassicalRegister(1, "spec_ps")
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_ps, creg_spec, creg_spec_ps)
+    circuit.measure(qreg[0], creg_data[0])
+    circuit.measure(qreg[1], creg_data[1])
+    circuit.measure(qreg[2], creg_spec[0])
+    circuit.measure(qreg[0], creg_data_ps[0])
+    circuit.measure(qreg[1], creg_data_ps[1])
+    circuit.measure(qreg[2], creg_spec_ps[0])
+
+    summary = PostSelectionSummary.from_circuit(circuit, [(0, 1), (1, 2)], spectator_cregs=[])
+    assert summary.spectator_cregs == set()
+
+
+def test_spectator_cregs_eq():
+    """Summaries differing only in ``spectator_cregs`` are not equal."""
+    primary = {"alpha", "spec"}
+    measure_map = {0: ("alpha", 0), 1: ("alpha", 1), 2: ("spec", 0)}
+    edges = {frozenset({0, 1}), frozenset({1, 2})}
+    a = PostSelectionSummary(primary, measure_map, edges, spectator_cregs={"spec"})
+    b = PostSelectionSummary(primary, measure_map, edges, spectator_cregs=set())
+    assert a != b
+    assert a == deepcopy(a)

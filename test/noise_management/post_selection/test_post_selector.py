@@ -591,4 +591,28 @@ def test_validation_errors_pre_selection():
         selector.compute_mask(result_inconsistent, mode="pre")
 
 
+def test_post_selector_forwards_spectator_cregs():
+    """``PostSelector.from_circuit`` forwards ``spectator_cregs`` to the summary."""
+    qreg = QuantumRegister(3, "q")
+    creg_data = ClassicalRegister(2, "c")
+    creg_data_ps = ClassicalRegister(2, "c_ps")
+    creg_spec = ClassicalRegister(1, "spec")
+    creg_spec_ps = ClassicalRegister(1, "spec_ps")
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_ps, creg_spec, creg_spec_ps)
+    circuit.measure(qreg[0], creg_data[0])
+    circuit.measure(qreg[1], creg_data[1])
+    circuit.measure(qreg[2], creg_spec[0])
+    circuit.measure(qreg[0], creg_data_ps[0])
+    circuit.measure(qreg[1], creg_data_ps[1])
+    circuit.measure(qreg[2], creg_spec_ps[0])
+
+    # Default: ``spec`` recognised as spectator.
+    selector = PostSelector.from_circuit(circuit, [(0, 1), (1, 2)])
+    assert selector.summary.spectator_cregs == {"spec"}
+
+    # Override with empty list opts out.
+    selector_off = PostSelector.from_circuit(circuit, [(0, 1), (1, 2)], spectator_cregs=[])
+    assert selector_off.summary.spectator_cregs == set()
+
+
 # Made with Bob

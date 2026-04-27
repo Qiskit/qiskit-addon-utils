@@ -71,6 +71,7 @@ class PostSelector:
         *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
         pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
+        spectator_cregs: set[str] | list[str] | None = None,
     ) -> PostSelector:
         """Initialize from quantum circuits.
 
@@ -79,6 +80,10 @@ class PostSelector:
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
             post_selection_suffix: A fixed suffix for post-selection classical registers.
             pre_selection_suffix: A fixed suffix for pre-selection classical registers.
+            spectator_cregs: Names of primary registers that hold spectator
+                measurements (forwarded to
+                :meth:`.PostSelectionSummary.from_circuit`). Defaults to
+                ``["spec"]`` to match :class:`.AddSpectatorMeasures`.
         """
         coupling_map = (
             coupling_map
@@ -91,6 +96,7 @@ class PostSelector:
             coupling_map,
             post_selection_suffix=post_selection_suffix,
             pre_selection_suffix=pre_selection_suffix,
+            spectator_cregs=spectator_cregs,
         )
         return PostSelector(summary)
 
@@ -181,12 +187,18 @@ def _compute_post_mask_by_edge(
 
     Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
     both of the results failed to flip, and as ``True`` every other shot.
+
+    Edges where one endpoint lacks a primary measurement (and therefore a
+    matching ``_ps`` entry) are skipped — those qubits don't participate in
+    the post-selection parity check.
     """
     _validate_post_result(result, summary)
 
     shape = result[next(iter(summary.primary_cregs))].shape[:-1]
     mask = np.ones(shape, dtype=bool)
     for qubit0_idx, qubit1_idx in summary.edges:
+        if qubit0_idx not in summary.measure_map or qubit1_idx not in summary.measure_map:
+            continue
         name0, clbit0_idx = summary.measure_map[qubit0_idx]
         name0_ps = name0 + summary.post_selection_suffix
 
@@ -230,6 +242,9 @@ def _compute_pre_mask_by_edge(
     Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
     both of the pre-selection measurements returned 1 (bad initialization), and as ``True``
     every other shot.
+
+    Edges where one endpoint lacks a pre-selection measurement are skipped —
+    those qubits don't participate in the initialization check.
     """
     _validate_pre_result(result, summary)
 
@@ -239,6 +254,8 @@ def _compute_pre_mask_by_edge(
 
     # For each edge, discard shots where both qubits have pre-selection measurement of 1 (bad initialization)
     for qubit0_idx, qubit1_idx in summary.edges:
+        if qubit0_idx not in summary.measure_map_pre or qubit1_idx not in summary.measure_map_pre:
+            continue
         # Use measure_map_pre to get the correct register and clbit index for pre-selection measurements
         name0_pre, clbit0_idx_pre = summary.measure_map_pre[qubit0_idx]
         name1_pre, clbit1_idx_pre = summary.measure_map_pre[qubit1_idx]
@@ -285,9 +302,12 @@ def _validate_pre_result(result: dict[str, NDArray[np.bool]], summary: PostSelec
         ValueError: If ``result`` does not contain all of the required registers.
         ValueError: If ``result`` contains arrays of inconsistent shapes.
     """
-    primary_cregs = summary.primary_cregs
-    pre_selection_suffix = summary.pre_selection_suffix
-    cregs = summary.primary_cregs.union(name + pre_selection_suffix for name in primary_cregs)
+    # Every pre-selection register the mask code might index — both the ones
+    # paired with primary cregs and the orphan ones (e.g. ``spec_pre`` from
+    # :class:`.AddSpectatorMeasuresPreSelection` running without a matching
+    # spec primary).
+    pre_cregs = {name for name, _ in summary.measure_map_pre.values()}
+    cregs = summary.primary_cregs | pre_cregs
 
     for name in cregs:
         if result.get(name) is None:
