@@ -192,6 +192,17 @@ class AddSpectatorMeasures(TransformationPass):
 
                     dag = new_dag
 
+            elif self.add_barrier:
+                # Standalone mode (no post-selection): add a fresh barrier synchronising
+                # terminated data qubits with the spectator qubits about to be measured.
+                # ``spectator_qubits_ls`` is non-empty (we are inside the ``num_spectators
+                # != 0`` block), so the union is always non-empty.
+                barrier_qubits = sorted(
+                    terminated_qubits.union(set(spectator_qubits_ls)),
+                    key=lambda q: qubit_map[q],
+                )
+                dag.apply_operation_back(Barrier(len(barrier_qubits)), barrier_qubits)
+
             # Add spectator measurements
             dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
             for qubit, clbit in zip(spectator_qubits_ls, new_reg):
@@ -257,7 +268,7 @@ class AddSpectatorMeasures(TransformationPass):
                 continue
             elif name == "measure":
                 # Check if this is a measurement into an ignored register
-                if len(node.cargs) == 1:
+                if len(node.cargs) == 1:  # pragma: no branch
                     clbit = node.cargs[0]
                     is_ignored = False
                     for creg in dag.cregs.values():

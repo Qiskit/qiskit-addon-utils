@@ -277,7 +277,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
                         terminated_qubits.add(node.qargs[0])
                     # If it IS an ignored measurement, don't mark as terminated
                     # (so pre-selection can be added)
-                else:
+                else:  # pragma: no cover
                     active_qubits.add(node.qargs[0])
                     terminated_qubits.add(node.qargs[0])
             elif isinstance(node.op, ControlFlowOp):
@@ -303,9 +303,10 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
                     )
 
                 terminated_qubits.update(set.intersection(*all_terminated_qubits))
-            elif "xslow" in node.op.name:
-                # xslow gates (from pre/post-selection) don't make a qubit "active"
-                # They are just part of the measurement protocol
+            elif "xslow" in node.op.name:  # pragma: no cover
+                # Unreachable: caught by the earlier ``continue`` near the top of
+                # the loop. Kept as defensive code in case the early-skip
+                # condition is ever loosened.
                 continue
             else:  # pragma: no cover
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")

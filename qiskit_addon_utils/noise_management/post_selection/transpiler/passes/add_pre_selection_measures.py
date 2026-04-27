@@ -192,8 +192,10 @@ class AddPreSelectionMeasures(TransformationPass):
             for gate in self.pulse_sequence:
                 new_dag.apply_operation_back(gate, [qubit])
 
-        # Add barrier before measurements - AddSpectatorMeasuresPreSelection will extend it
-        if qubits_list:
+        # Add barrier before measurements - AddSpectatorMeasuresPreSelection will extend it.
+        # ``qubits_list`` is non-empty: we returned early above when ``qubits_to_preselect``
+        # was empty, so this guard is purely defensive.
+        if qubits_list:  # pragma: no branch
             new_dag.apply_operation_back(Barrier(len(qubits_list)), qubits_list)
 
         # Then add all measurements
@@ -293,10 +295,13 @@ class AddPreSelectionMeasures(TransformationPass):
                         for block_clbit, clbit in zip(block_dag.clbits, node.cargs)
                     }
 
-                    # Find measurements in the block and map them back to parent circuit
+                    # Find measurements in the block and map them back to parent circuit.
+                    # The ``in`` checks are defensive: every block qubit/clbit produced by
+                    # ``_find_measurements`` should already appear in the maps we built
+                    # from ``node.qargs`` / ``node.cargs``.
                     block_measurements = self._find_measurements(block_dag)
                     for block_qubit, block_clbit in block_measurements.items():
-                        if block_qubit in qubit_map and block_clbit in clbit_map:
+                        if block_qubit in qubit_map and block_clbit in clbit_map:  # pragma: no branch
                             qubit_to_clbit_map[qubit_map[block_qubit]] = clbit_map[block_clbit]
 
         return qubit_to_clbit_map
