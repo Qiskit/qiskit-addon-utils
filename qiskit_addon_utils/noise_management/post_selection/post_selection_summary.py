@@ -109,7 +109,6 @@ class PostSelectionSummary:
         *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
         pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
-        validation_mode: Literal["strict", "lenient"] = "strict",
     ) -> PostSelectionSummary:
         """Initialize from quantum circuits.
 
@@ -118,9 +117,6 @@ class PostSelectionSummary:
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
             post_selection_suffix: A fixed suffix for post-selection classical registers.
             pre_selection_suffix: A fixed suffix for pre-selection classical registers.
-            validation_mode: The validation mode to use. "strict" requires matching measure maps
-                (for traditional post-selection), while "lenient" allows partial matches
-                (for pre-selection or mixed scenarios).
         """
         coupling_map = (
             coupling_map
@@ -143,11 +139,13 @@ class PostSelectionSummary:
             dag, primary_cregs, ps_cregs, pre_cregs
         )
 
-        # Validate measure maps based on what's present
+        # Post-selection requires a strict 1:1 mapping between primary and ``_ps``
+        # measurements: ``_compute_post_mask_by_*`` indexes ``measure_map_ps`` by
+        # every primary qubit, so a missing entry would raise at mask time.
+        # Pre-selection is intrinsically partial (only terminally-measured qubits
+        # are pre-selected), so it's validated leniently.
         if measure_map_ps:
-            _validate_measure_maps(
-                measure_map, measure_map_ps, post_selection_suffix, validation_mode
-            )
+            _validate_measure_maps(measure_map, measure_map_ps, post_selection_suffix, "strict")
         if measure_map_pre:
             _validate_measure_maps(measure_map, measure_map_pre, pre_selection_suffix, "lenient")
 

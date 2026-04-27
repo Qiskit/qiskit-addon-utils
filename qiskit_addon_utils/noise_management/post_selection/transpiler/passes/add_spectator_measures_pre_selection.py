@@ -19,7 +19,7 @@ from copy import deepcopy
 from enum import Enum
 
 import numpy as np
-from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit, Reset
+from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
 from qiskit.circuit.library import Barrier, Measure, RXGate, XGate
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit
@@ -49,9 +49,13 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
     is one whose last action is a measurement. A **spectator qubit** is a qubit that is inactive, but adjacent
     to an active qubit under the coupling map.
 
-    This pass adds a pre-selection measurement to all spectator qubits and,
-    optionally via ``include_unmeasured``, to all active qubits that are not terminated qubits.
+    Each spectator qubit receives the same pre-selection check as the data qubits: an
+    ``xslow`` (or 20 ``rx(pi/20)``) pulse, then an ``X`` gate, then a measurement
+    that should read ``0`` for a well-initialised qubit. Edge-mode pre-selection
+    accepts a shot when *at least one* of a data/spectator pair reads ``0``.
 
+    Optionally via ``include_unmeasured``, active qubits that are not terminated by
+    a measurement are also treated as spectators.
 
     The added measurements write to a new classical register with one bit per spectator qubit and name
     ``spectator_creg_name`` (default: ``"spectator_pre"``).
@@ -101,7 +105,6 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
         *,
         include_unmeasured: bool = True,
         spectator_creg_name: str = DEFAULT_SPECTATOR_PRE_CREG_NAME,
-        add_barrier: bool = True,
         ignore_spectator_creg_names: list[str] | None = None,
         ignore_creg_suffixes: list[str] | None = None,
         pre_selection_suffix: str = "_pre",
@@ -114,8 +117,6 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
             include_unmeasured: Whether the qubits that are active but are not terminated by a measurement should
                 also be treated as spectators. If ``True``, a terminal measurement is added on each of them.
             spectator_creg_name: The name of the classical register added for the measurements on the spectator qubits.
-            add_barrier: Whether to add a barrier acting on all active and spectator qubits prior to the spectator
-                measurements.
             ignore_spectator_creg_names: List of classical register names to ignore when determining active qubits.
                 Qubits that only have measurements to these registers are not considered active, preventing cascading
                 spectator selection. Defaults to ``["spec"]`` (the default name used by :class:`.AddSpectatorMeasures`).
@@ -143,7 +144,6 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
             else CouplingMap(couplinglist=coupling_map)
         )
         self.coupling_map.make_symmetric()
-        self.add_barrier = add_barrier
 
         # Pre-selection sequence: xslow (or rx pulses) + X gate
         if self.x_pulse_type == XPulseType.XSLOW:
@@ -203,32 +203,75 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
                         data_qubits_with_preselection.add(node.qargs[0])
                         break
 
-        # Combine data qubits with pre-selection and spectator qubits for unified barrier
-        all_preselection_qubits = list(data_qubits_with_preselection.union(spectator_qubits_ls))
-        all_preselection_qubits.sort(key=lambda qubit: qubit_map[qubit])
+        if not data_qubits_with_preselection:
+            return dag
 
-        # Copy all operations from the original DAG to the new DAG
-        # When we encounter the FIRST barrier from AddPreSelectionMeasures, extend it and add spectator measurements after
-        barrier_extended = False
-        for node in dag.topological_op_nodes():
+        # Combine data qubits with pre-selection and spectator qubits for unified barrier
+        all_preselection_qubits = sorted(
+            data_qubits_with_preselection.union(spectator_qubits_ls),
+            key=lambda qubit: qubit_map[qubit],
+        )
+
+        # The FIRST barrier acting exactly on the data pre-selection qubits is the one we extend.
+        all_topo_nodes = list(dag.topological_op_nodes())
+        first_barrier_idx = next(
+            (
+                i
+                for i, n in enumerate(all_topo_nodes)
+                if n.op.name == "barrier" and set(n.qargs) == data_qubits_with_preselection
+            ),
+            None,
+        )
+        if first_barrier_idx is None:  # pragma: no cover
+            # Defensive: ``AddPreSelectionMeasures`` always emits a barrier on
+            # the data pre-sel qubits, so this is unreachable in practice.
+            return dag
+
+        # Apply the pre-selection pulse sequence (xslow + X, or 20 rx + X) on each
+        # spectator qubit *before* anything else. Together with the extended pre-sel
+        # barrier and the trailing ``measure(spec_pre)`` this gives the spec wire
+        # the same ``pulses -> barrier -> measure`` structure as the data wires.
+        for qubit in spectator_qubits_ls:
+            for gate in self.pulse_sequence:
+                new_dag.apply_operation_back(gate, [qubit])
+
+        # Spectator-only ops appearing *before* the pre-selection barrier in topological
+        # order are logically post-selection ops on the spectator wires (e.g. the
+        # post-sel parity check from a previously-run ``AddSpectatorMeasures``). Defer
+        # them so they emerge *after* the extended barrier and the pre-sel measurement
+        # on the spec wire. With the current passes this list is normally empty —
+        # the post-sel structure depends on data-wire ops (via the full-width
+        # pre-init barrier) and so always lands after the pre-sel barrier in topo
+        # order — but the deferral is kept as a safety net.
+        spec_qubit_set = set(spectator_qubits_ls)
+        early_spec_nodes = [
+            n
+            for n in all_topo_nodes[:first_barrier_idx]
+            if n.op.name != "barrier"
+            and len(n.qargs) > 0
+            and all(q in spec_qubit_set for q in n.qargs)
+        ]
+        early_spec_node_ids = {n._node_id for n in early_spec_nodes}
+
+        for node in all_topo_nodes:
+            if node._node_id in early_spec_node_ids:
+                continue
             if (
-                not barrier_extended
-                and node.op.name == "barrier"
+                node.op.name == "barrier"
                 and set(node.qargs) == data_qubits_with_preselection
-                and self.add_barrier
-                and len(data_qubits_with_preselection) > 0
+                and node._node_id == all_topo_nodes[first_barrier_idx]._node_id
             ):
-                # Replace with full-width barrier that includes spectators
+                # Replace with full-width barrier that includes spectators.
                 new_dag.apply_operation_back(
                     Barrier(len(all_preselection_qubits)), all_preselection_qubits
                 )
-                # Add spectator measurements and resets immediately after the barrier
-                # Note: Spectators only get measurement + reset, NOT the pulse sequence
+                # Spectator pre-selection measurement (no reset: the post-sel parity
+                # check only cares that the two readings flip relative to each other).
                 for qubit, clbit in zip(spectator_qubits_ls, new_reg):
                     new_dag.apply_operation_back(Measure(), [qubit], [clbit])
-                    # Add reset after measurement in case post-selection measures are added later
-                    new_dag.apply_operation_back(Reset(), [qubit])
-                barrier_extended = True
+                # Flush deferred early-spec ops in original relative order.
+                for early_node in early_spec_nodes:
+                    new_dag.apply_operation_back(early_node.op, early_node.qargs, early_node.cargs)
             else:
                 new_dag.apply_operation_back(node.op, node.qargs, node.cargs)
         return new_dag

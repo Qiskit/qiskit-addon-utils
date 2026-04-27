@@ -208,15 +208,11 @@ def test_pre_selection_constructors():
 
     coupling_map = [(0, 1), (1, 2), (2, 3)]
 
-    summary = PostSelectionSummary.from_circuit(
-        circuit, coupling_map, pre_selection_suffix="_pre", validation_mode="lenient"
-    )
+    summary = PostSelectionSummary.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
     selector = PostSelector(summary)
     assert selector.summary == summary
 
-    selector = PostSelector.from_circuit(
-        circuit, coupling_map, pre_selection_suffix="_pre", validation_mode="lenient"
-    )
+    selector = PostSelector.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
     assert selector.summary == summary
 
 
@@ -244,9 +240,7 @@ def test_node_based_pre_selection():
     circuit.measure(qreg[4], creg1[1])
 
     coupling_map = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 4)]
-    selector = PostSelector.from_circuit(
-        circuit, coupling_map, pre_selection_suffix="_pre", validation_mode="lenient"
-    )
+    selector = PostSelector.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
 
     # Generate results with 12 randomizations and 15 shots
     outer_shape = (12, 15)
@@ -316,9 +310,7 @@ def test_edge_based_pre_selection():
     circuit.measure(qreg[4], creg1[1])
 
     coupling_map = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 4)]
-    selector = PostSelector.from_circuit(
-        circuit, coupling_map, pre_selection_suffix="_pre", validation_mode="lenient"
-    )
+    selector = PostSelector.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
 
     # Generate results with 12 randomizations and 15 shots
     outer_shape = (12, 15)
@@ -386,7 +378,6 @@ def test_combined_pre_and_post_selection():
         coupling_map,
         post_selection_suffix="_ps",
         pre_selection_suffix="_pre",
-        validation_mode="strict",
     )
 
     # Generate results with 10 shots
@@ -488,7 +479,7 @@ def test_mode_errors():
     circuit_pre_only.measure(qreg, creg)
 
     selector_pre = PostSelector.from_circuit(
-        circuit_pre_only, [(0, 1), (1, 2)], pre_selection_suffix="_pre", validation_mode="lenient"
+        circuit_pre_only, [(0, 1), (1, 2)], pre_selection_suffix="_pre"
     )
 
     # Should work for pre mode
@@ -522,9 +513,7 @@ def test_pre_selection_with_post_selector():
     coupling_map = [(0, 1), (1, 2)]
 
     # PostSelector should handle pre-selection
-    selector = PostSelector.from_circuit(
-        circuit, coupling_map, pre_selection_suffix="_pre", validation_mode="lenient"
-    )
+    selector = PostSelector.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
 
     # Test with all good pre-selection measurements
     result_good = {
@@ -586,9 +575,7 @@ def test_validation_errors_pre_selection():
     circuit.barrier()
     circuit.measure(qreg, creg)
 
-    selector = PostSelector.from_circuit(
-        circuit, [(0, 1), (1, 2)], pre_selection_suffix="_pre", validation_mode="lenient"
-    )
+    selector = PostSelector.from_circuit(circuit, [(0, 1), (1, 2)], pre_selection_suffix="_pre")
 
     # Test missing register error (line 300)
     result_missing = {"alpha": np.zeros((5, 3), dtype=bool)}

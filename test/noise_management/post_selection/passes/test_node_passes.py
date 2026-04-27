@@ -255,3 +255,23 @@ def test_unsupported_op_raises():
     pm = PassManager([AddPostSelectionMeasures()])
     with pytest.raises(TranspilerError, match="not supported"):
         pm.run(qc)
+
+
+def test_post_selection_skips_user_reset():
+    """User-provided ``reset`` operations are skipped by terminal-measurement detection.
+
+    A reset followed by a measurement should still leave the qubit terminated;
+    the reset itself is not a measurement and shouldn't break the analysis.
+    """
+    from qiskit.circuit import ClassicalRegister, QuantumRegister
+
+    qreg = QuantumRegister(1, "q")
+    creg = ClassicalRegister(1, "c")
+    qc = QuantumCircuit(qreg, creg)
+    qc.h(0)
+    qc.reset(0)
+    qc.measure(0, creg[0])
+
+    result = PassManager([AddPostSelectionMeasures()]).run(qc)
+    # ``c_ps`` register added; qubit is still recognised as terminated despite the reset.
+    assert {creg.name for creg in result.cregs} == {"c", "c_ps"}

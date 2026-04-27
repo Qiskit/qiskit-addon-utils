@@ -181,7 +181,6 @@ def test_pre_selection_from_circuit():
         circuit,
         coupling_map := [(0, 1), (1, 2), (2, 3), (3, 4)],
         pre_selection_suffix=pre_selection_suffix,
-        validation_mode="lenient",
     )
 
     assert summary.primary_cregs == {"alpha", "beta"}
@@ -227,7 +226,6 @@ def test_combined_pre_and_post_selection_from_circuit():
         coupling_map := [(0, 1), (1, 2)],
         post_selection_suffix="_ps",
         pre_selection_suffix="_pre",
-        validation_mode="strict",  # strict for post-selection
     )
 
     assert summary.primary_cregs == {"alpha"}
@@ -270,7 +268,6 @@ def test_pre_selection_only_partial_measurements():
         circuit,
         [(0, 1), (1, 2)],
         pre_selection_suffix="_pre",
-        validation_mode="lenient",
     )
 
     assert summary.primary_cregs == {"alpha"}
@@ -382,9 +379,7 @@ def test_pre_selection_invalid_measure_map_raises():
     with pytest.raises(
         ValueError, match="Pre selection measurement on qubit 0 writes to bit 1 of creg alpha_pre"
     ):
-        PostSelectionSummary.from_circuit(
-            circuit, [], pre_selection_suffix="_pre", validation_mode="lenient"
-        )
+        PostSelectionSummary.from_circuit(circuit, [], pre_selection_suffix="_pre")
 
     # Test case: pre-selection measurement writes to wrong register (different base name)
     # This tests the case where the pre-selection register name doesn't match the primary register
@@ -400,6 +395,4 @@ def test_pre_selection_invalid_measure_map_raises():
     with pytest.raises(
         ValueError, match="Pre selection measurement on qubit 0 writes to bit 0 of creg beta_pre"
     ):
-        PostSelectionSummary.from_circuit(
-            circuit2, [], pre_selection_suffix="_pre", validation_mode="lenient"
-        )
+        PostSelectionSummary.from_circuit(circuit2, [], pre_selection_suffix="_pre")

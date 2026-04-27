@@ -27,8 +27,12 @@ from ..constants import DEFAULT_POST_SELECTION_SUFFIX, DEFAULT_PRE_SELECTION_SUF
 from .post_selection_summary import PostSelectionSummary
 
 
-class SelectionStrategy(str, Enum):
-    """The supported selection strategies."""
+class PostSelectionStrategy(str, Enum):
+    """The supported post-selection strategies.
+
+    Pre- and post-selection are both *post-selection* techniques (they discard
+    shots based on parity checks), so a single strategy enum applies to both.
+    """
 
     NODE = "node"
     """Discard every shot where one or more checks fail. Keep every other shot."""
@@ -36,10 +40,6 @@ class SelectionStrategy(str, Enum):
     EDGE = "edge"
     """Discard every shot where there exists a pair of neighbouring qubits for which both
     checks fail. Keep every other shot."""
-
-
-# Backwards compatibility alias
-PostSelectionStrategy = SelectionStrategy
 
 
 class PostSelector:
@@ -71,7 +71,6 @@ class PostSelector:
         *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
         pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
-        validation_mode: Literal["strict", "lenient"] = "strict",
     ) -> PostSelector:
         """Initialize from quantum circuits.
 
@@ -80,8 +79,6 @@ class PostSelector:
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
             post_selection_suffix: A fixed suffix for post-selection classical registers.
             pre_selection_suffix: A fixed suffix for pre-selection classical registers.
-            validation_mode: The validation mode for post-selection. "strict" requires all qubits
-                to have post-selection measurements, "lenient" allows partial coverage.
         """
         coupling_map = (
             coupling_map
@@ -94,14 +91,13 @@ class PostSelector:
             coupling_map,
             post_selection_suffix=post_selection_suffix,
             pre_selection_suffix=pre_selection_suffix,
-            validation_mode=validation_mode,
         )
         return PostSelector(summary)
 
     def compute_mask(
         self,
         result: dict[str, NDArray[np.bool]],
-        strategy: str | SelectionStrategy = SelectionStrategy.NODE,
+        strategy: str | PostSelectionStrategy = PostSelectionStrategy.NODE,
         *,
         mode: Literal["post", "pre", "both"] = "post",
     ) -> NDArray[np.bool]:
@@ -129,18 +125,18 @@ class PostSelector:
             ValueError: If the requested mode is not available (e.g., no pre-selection measurements
                 in the circuit but mode="pre" was requested).
         """
-        strategy = SelectionStrategy(strategy)
+        strategy = PostSelectionStrategy(strategy)
 
         if mode == "post":
             if not self.summary.measure_map_ps:
                 raise ValueError("No post-selection measurements found in circuit.")
-            if strategy == SelectionStrategy.NODE:
+            if strategy == PostSelectionStrategy.NODE:
                 return _compute_post_mask_by_node(result, self.summary)
             return _compute_post_mask_by_edge(result, self.summary)
         if mode == "pre":
             if not self.summary.measure_map_pre:
                 raise ValueError("No pre-selection measurements found in circuit.")
-            if strategy == SelectionStrategy.NODE:
+            if strategy == PostSelectionStrategy.NODE:
                 return _compute_pre_mask_by_node(result, self.summary)
             return _compute_pre_mask_by_edge(result, self.summary)
         # mode == "both"
@@ -150,7 +146,7 @@ class PostSelector:
             raise ValueError("No pre-selection measurements found in circuit.")
 
         # Compute both masks and combine with logical AND
-        if strategy == SelectionStrategy.NODE:
+        if strategy == PostSelectionStrategy.NODE:
             pre_mask = _compute_pre_mask_by_node(result, self.summary)
             post_mask = _compute_post_mask_by_node(result, self.summary)
         else:

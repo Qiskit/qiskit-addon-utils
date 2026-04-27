@@ -192,11 +192,11 @@ def test_spectators_box():
     pm = PassManager([AddSpectatorMeasures(COUPLING_MAP)])
     result = pm.run(_box_circuit())
 
-    assert _creg_names(result) == {"c", "spec"}
+    assert _creg_names(result) == {"c", "spec", "spec_ps"}
     for q in ACTIVE_QUBITS:
         assert _meas_registers(result, q) == ["c"]
     for q in SPECTATOR_QUBITS:
-        assert _meas_registers(result, q) == ["spec"]
+        assert _meas_registers(result, q) == ["spec", "spec_ps"]
 
 
 def test_spectators_if_else():
@@ -227,7 +227,7 @@ def test_spec_pre_selection_box():
     assert _creg_names(result) == {"c", "c_pre", "spec_pre"}
     for q in SPECTATOR_QUBITS:
         ops = [inst.operation.name for inst in result.data if result.qubits[q] in inst.qubits]
-        assert ops == ["barrier", "measure", "reset"]
+        assert ops == ["rx"] * 20 + ["x", "barrier", "measure"]
 
 
 def test_spec_pre_selection_if_else():

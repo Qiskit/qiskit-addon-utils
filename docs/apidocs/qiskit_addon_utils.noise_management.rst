@@ -16,4 +16,4 @@ noise_management (:mod:`qiskit_addon_utils.noise_management`)
 
 .. currentmodule:: qiskit_addon_utils.noise_management.post_selection
 
-.. autoclass:: SelectionStrategy
+.. autoclass:: PostSelectionStrategy
