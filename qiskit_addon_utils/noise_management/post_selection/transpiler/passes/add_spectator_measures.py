@@ -118,15 +118,6 @@ class AddSpectatorMeasures(TransformationPass):
                             data_qubits_with_postselection.add(node.qargs[0])
                             break
 
-            # DEBUG
-            import sys
-
-            print(
-                f"DEBUG: Found {len(data_qubits_with_postselection)} post-selection qubits",
-                file=sys.stderr,
-            )
-            print(f"DEBUG: Post-selection suffix: {self.post_selection_suffix}", file=sys.stderr)
-
             # Combine data qubits with post-selection and spectator qubits for unified barrier
             all_postselection_qubits = list(
                 data_qubits_with_postselection.union(spectator_qubits_ls)
@@ -141,7 +132,8 @@ class AddSpectatorMeasures(TransformationPass):
                 # (not a superset, which would include pre-selection barriers)
                 # Store the node ID instead of the node object itself
                 last_barrier_node_id = None
-                for node in dag.topological_op_nodes():
+                all_topo_nodes = list(dag.topological_op_nodes())
+                for node in all_topo_nodes:
                     if (
                         node.op.name == "barrier"
                         and set(node.qargs) == data_qubits_with_postselection
@@ -160,9 +152,39 @@ class AddSpectatorMeasures(TransformationPass):
                     qubit_indices = [dag.qubits.index(q) for q in all_postselection_qubits]
                     new_qubits = [new_dag.qubits[i] for i in qubit_indices]
 
+                    # Spectator qubit pre-selection operations (e.g. meas→spec_pre, reset) are
+                    # topologically independent of the post-selection barrier because they live
+                    # on different qubit wires. The topological sort may therefore place them
+                    # *after* the barrier. When we then widen that barrier to include spectator
+                    # qubits, any such late-appearing ops would be appended to new_dag after the
+                    # extended barrier, landing on the wrong side of the sync point.
+                    # Fix: collect those ops and flush them into new_dag *before* the barrier.
+                    last_barrier_idx = next(
+                        i
+                        for i, n in enumerate(all_topo_nodes)
+                        if n._node_id == last_barrier_node_id
+                    )
+                    spec_qubit_set = set(spectator_qubits_ls)
+                    late_spec_nodes = [
+                        n
+                        for n in all_topo_nodes[last_barrier_idx + 1 :]
+                        if n.op.name != "barrier"
+                        and len(n.qargs) > 0
+                        and all(q in spec_qubit_set for q in n.qargs)
+                    ]
+                    late_spec_node_ids = {n._node_id for n in late_spec_nodes}
+
                     # Copy all operations, replacing the last barrier
-                    for node in dag.topological_op_nodes():
+                    for node in all_topo_nodes:
+                        if node._node_id in late_spec_node_ids:
+                            continue  # will be inserted before the extended barrier below
                         if node._node_id == last_barrier_node_id:
+                            # Flush any spectator pre-selection ops that appeared late in the
+                            # topological sort so they sit before the extended barrier.
+                            for spec_node in late_spec_nodes:
+                                new_dag.apply_operation_back(
+                                    spec_node.op, spec_node.qargs, spec_node.cargs
+                                )
                             # Replace with extended barrier using new DAG's qubits
                             new_dag.apply_operation_back(Barrier(len(new_qubits)), new_qubits)
                         else:
