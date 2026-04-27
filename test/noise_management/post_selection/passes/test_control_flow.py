@@ -28,7 +28,6 @@ from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import
     AddSpectatorMeasuresPreSelection,
 )
 
-
 COUPLING_MAP = [(0, 1), (1, 2), (2, 3), (0, 4)]
 ACTIVE_QUBITS = [0, 1, 2]
 SPECTATOR_QUBITS = [3, 4]
@@ -227,11 +226,7 @@ def test_spec_pre_selection_box():
 
     assert _creg_names(result) == {"c", "c_pre", "spec_pre"}
     for q in SPECTATOR_QUBITS:
-        ops = [
-            inst.operation.name
-            for inst in result.data
-            if result.qubits[q] in inst.qubits
-        ]
+        ops = [inst.operation.name for inst in result.data if result.qubits[q] in inst.qubits]
         assert ops == ["barrier", "measure", "reset"]
 
 

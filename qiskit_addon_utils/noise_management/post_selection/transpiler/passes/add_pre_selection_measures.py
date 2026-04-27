@@ -301,7 +301,9 @@ class AddPreSelectionMeasures(TransformationPass):
                     # from ``node.qargs`` / ``node.cargs``.
                     block_measurements = self._find_measurements(block_dag)
                     for block_qubit, block_clbit in block_measurements.items():
-                        if block_qubit in qubit_map and block_clbit in clbit_map:  # pragma: no branch
+                        if (
+                            block_qubit in qubit_map and block_clbit in clbit_map
+                        ):  # pragma: no branch
                             qubit_to_clbit_map[qubit_map[block_qubit]] = clbit_map[block_clbit]
 
         return qubit_to_clbit_map

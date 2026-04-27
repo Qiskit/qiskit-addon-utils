@@ -39,7 +39,6 @@ from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import
     AddSpectatorMeasuresPreSelection,
 )
 
-
 # Coupling: 4 -- 0 -- 1 -- 2 -- 3.
 # Active qubits (from ``_make_circuit``): {0, 1, 2}.
 # Spectator qubits (neighbours of active that are themselves inactive): {3, 4}.
@@ -156,12 +155,8 @@ def test_post_sel_with_spectators():
         assert _meas_registers(result, q) == ["spec"]
 
     # Spectator measurements must come after the last data-qubit post-sel.
-    last_data_ps = max(
-        _measurement_positions(result, q, "c_ps")[-1] for q in ACTIVE_QUBITS
-    )
-    first_spec = min(
-        _measurement_positions(result, q, "spec")[0] for q in SPECTATOR_QUBITS
-    )
+    last_data_ps = max(_measurement_positions(result, q, "c_ps")[-1] for q in ACTIVE_QUBITS)
+    first_spec = min(_measurement_positions(result, q, "spec")[0] for q in SPECTATOR_QUBITS)
     assert first_spec > last_data_ps
 
 
@@ -206,9 +201,7 @@ def test_spectators_only():
         assert _meas_registers(result, q) == ["spec"]
 
     # A barrier separates main-circuit measurements from the spectator ones.
-    first_spec = min(
-        _measurement_positions(result, q, "spec")[0] for q in SPECTATOR_QUBITS
-    )
+    first_spec = min(_measurement_positions(result, q, "spec")[0] for q in SPECTATOR_QUBITS)
     barriers_before_spec = [b for b in _barrier_positions(result) if b < first_spec]
     assert barriers_before_spec, "expected a synchronisation barrier before spectator measurements"
 
@@ -459,7 +452,6 @@ def test_spec_x_gate_pre_selection_pattern():
     Exercises the look-ahead in ``_find_active_and_terminated_qubits`` that
     distinguishes a pre-selection X+measure(_pre) sequence from a logical X.
     """
-    import pytest as _pytest  # local alias to keep top-level imports tidy
 
     from qiskit.circuit import ClassicalRegister, QuantumRegister
 
@@ -467,7 +459,7 @@ def test_spec_x_gate_pre_selection_pattern():
     creg = ClassicalRegister(2, "c")
     creg_pre = ClassicalRegister(1, "c_pre")
     qc = QuantumCircuit(qreg, creg, creg_pre)
-    # Synthetic pre-sel sequence on q0 (no barrier between X and measure) –
+    # Synthetic pre-sel sequence on q0 (no barrier between X and measure)
     # the pass must recognise this pattern and not treat q0 as logically active.
     qc.x(0)
     qc.measure(0, creg_pre[0])
@@ -489,9 +481,7 @@ def test_full_stack_custom_suffixes():
     """Full stack with custom suffixes and a custom spec_pre register name."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(
-                COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init"
-            ),
+            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init"),
             AddSpectatorMeasuresPreSelection(
                 COUPLING_MAP,
                 x_pulse_type="rx",

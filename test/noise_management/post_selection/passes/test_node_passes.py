@@ -30,7 +30,6 @@ from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import
     AddPreSelectionMeasures,
 )
 
-
 # Coupling map used for pre-selection passes that need one. The actual
 # coupling is irrelevant for node-based tests because no spectators are
 # considered, but a valid map must still be provided.
@@ -82,9 +81,7 @@ def test_post_sel_default():
 
 def test_post_sel_custom_suffix():
     """Post-selection with custom suffix: adds ``c_check``, never ``c_ps``."""
-    pm = PassManager(
-        [AddPostSelectionMeasures(x_pulse_type="rx", post_selection_suffix="_check")]
-    )
+    pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx", post_selection_suffix="_check")])
     result = pm.run(_make_circuit())
 
     assert _creg_map(result) == {"c": 3, "c_check": 3}
@@ -105,11 +102,7 @@ def test_pre_sel_default():
 def test_pre_sel_custom_suffix():
     """Pre-selection with custom suffix: adds ``c_init``, never ``c_pre``."""
     pm = PassManager(
-        [
-            AddPreSelectionMeasures(
-                COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init"
-            )
-        ]
+        [AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init")]
     )
     result = pm.run(_make_circuit())
 
@@ -161,9 +154,7 @@ def test_pre_then_post_custom():
     """Pre then post with custom suffixes; pre must be ignored by post."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(
-                COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init"
-            ),
+            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init"),
             AddPostSelectionMeasures(
                 x_pulse_type="rx",
                 post_selection_suffix="_check",
