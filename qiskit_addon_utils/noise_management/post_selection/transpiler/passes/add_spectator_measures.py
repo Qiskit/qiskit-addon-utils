@@ -251,46 +251,72 @@ class AddSpectatorMeasures(TransformationPass):
     ) -> DAGCircuit:
         r"""Splice the spectator parity check into an existing post-sel barrier sandwich.
 
-        We emit three full-width barriers across :math:`data \cup spec`:
+        Each spectator qubit is paired with a single data neighbour; pairs that
+        share a data partner are bundled together. Just before the paired data
+        qubit's terminal measurement we emit a *small* barrier covering only the
+        data qubit and its partner spec(s), then re-emit the data terminal
+        measurement and the spec qubit(s)' first measurement. This forces the
+        synchronised pair of measurements without forcing every data qubit to
+        idle on a full-width sync.
 
-        * ``pre_initial`` — new, just before the initial measurements; forces the
-          data-qubit terminal measurements and the first spectator measurement to
-          land in the same time slice.
-        * ``barrier1`` (extended from the existing one) — between the initial
-          measurements and the pi-rotation pulses.
-        * ``barrier2`` (extended from the existing one) — between the pulses and
-          the second measurements.
+        Two existing barriers, ``barrier1`` and ``barrier2`` (originally
+        emitted by :class:`.AddPostSelectionMeasures` on the data qubits only),
+        are extended to cover the spectator qubits as well; together they
+        sandwich the pi-rotation pulses on both data and spec qubits.
 
-        The data-qubit terminal measurement nodes that originally sat in the main
-        circuit are *deferred* and re-emitted right after ``pre_initial``, so the
-        terminal measure and ``measure(spec)`` happen together. Terminal
-        measurements buried inside control-flow ops (which can't be cleanly
-        defererred at the top level) stay where they are; the pre-init barrier
-        still lands on those wires (after the control-flow op), and they simply
-        don't participate in the synchronisation — the best we can do without
-        rewriting the control-flow block.
+        Data qubits whose terminal measurement is buried inside a control-flow
+        op (or that have no spec neighbour) are left untouched: their
+        measurement happens whenever it is naturally scheduled.
         """
         all_topo_nodes = list(dag.topological_op_nodes())
         barrier1_idx = next(i for i, n in enumerate(all_topo_nodes) if n._node_id == barrier1_id)
 
-        # Top-level terminal measurement nodes for each data-with-postsel qubit:
-        # the LAST top-level ``measure`` on that qubit before ``barrier1``. If a
-        # qubit's terminal measurement is buried inside a control-flow op, it
-        # won't appear here and we leave it alone.
-        data_terminal_nodes: dict[Qubit, DAGOpNode] = {}
+        # Pair each spec qubit with one data neighbour: deterministic, choose
+        # the neighbour with the smallest qubit index. A spec qubit whose only
+        # data neighbour has its terminal measurement buried inside control flow
+        # is unpaired and falls through to the (extended) ``barrier1`` for sync.
+        data_terminal_nodes_full: dict[Qubit, DAGOpNode] = {}
         for node in all_topo_nodes[:barrier1_idx]:
             if (
                 node.op.name == "measure"
                 and len(node.qargs) == 1
                 and node.qargs[0] in data_with_postsel
             ):
-                data_terminal_nodes[node.qargs[0]] = node
+                data_terminal_nodes_full[node.qargs[0]] = node
+
+        spec_to_data: dict[Qubit, Qubit] = {}
+        for spec_q in spectator_qubits_ls:
+            spec_idx = qubit_map[spec_q]
+            data_neighbours = sorted(
+                (
+                    dag.qubits[n]
+                    for n in self.coupling_map.neighbors(spec_idx)
+                    if n < dag.num_qubits() and dag.qubits[n] in data_terminal_nodes_full
+                ),
+                key=lambda q: qubit_map[q],
+            )
+            if data_neighbours:
+                spec_to_data[spec_q] = data_neighbours[0]
+
+        # Bundle: data qubit -> [its paired spec qubits, sorted by index].
+        data_to_specs: dict[Qubit, list[Qubit]] = {}
+        for spec_q, data_q in spec_to_data.items():
+            data_to_specs.setdefault(data_q, []).append(spec_q)
+        for specs in data_to_specs.values():
+            specs.sort(key=lambda q: qubit_map[q])
+
+        # Defer ONLY the data terminal measure nodes that are paired with at
+        # least one spec qubit. Unpaired data qubits keep their measurement in
+        # its natural position.
+        data_terminal_nodes: dict[Qubit, DAGOpNode] = {
+            q: data_terminal_nodes_full[q] for q in data_to_specs
+        }
         deferred_terminal_node_ids = {n._node_id for n in data_terminal_nodes.values()}
 
         # Spectator-only ops that landed *after* the first post-sel barrier in the
         # topological sort are logically pre-selection ops on the spectator wires
         # (e.g. ``measure -> reset`` from ``AddSpectatorMeasuresPreSelection``).
-        # Defer them so they emerge before the pre-init barrier on the spec wires.
+        # Defer them so they emerge before the spec parity check on the spec wires.
         spec_qubit_set = set(spectator_qubits_ls)
         late_spec_nodes = [
             n
@@ -311,35 +337,50 @@ class AddSpectatorMeasures(TransformationPass):
 
         spec_q_indices = [dag.qubits.index(q) for q in spectator_qubits_ls]
         spec_q_new = [new_dag.qubits[i] for i in spec_q_indices]
+        # Look-up from spec qubit (old DAG) -> (new DAG qubit, spec_creg clbit).
+        spec_clbit_for: dict[Qubit, tuple[Qubit, object]] = {
+            spec: (new_dag.qubits[dag.qubits.index(spec)], spec_creg[i])
+            for i, spec in enumerate(spectator_qubits_ls)
+        }
 
         extended = sorted(
             data_with_postsel.union(set(spectator_qubits_ls)), key=lambda q: qubit_map[q]
         )
         extended_new = [new_dag.qubits[dag.qubits.index(q)] for q in extended]
 
-        # Stable order for re-emitting deferred terminal measurements.
-        deferred_terminal_qubits = sorted(data_terminal_nodes, key=lambda q: qubit_map[q])
+        # Stable iteration order for the per-data-qubit bundles.
+        bundled_data_qubits = sorted(data_to_specs, key=lambda q: qubit_map[q])
 
         for node in all_topo_nodes:
             if node._node_id in late_spec_node_ids or node._node_id in deferred_terminal_node_ids:
                 continue
             if node._node_id == barrier1_id:
-                # Flush deferred spec-only ops so they appear before the pre-init
-                # barrier on the spec wires.
+                # Flush deferred spec-only ops so they appear before the spec
+                # parity check on the spec wires.
                 for spec_node in late_spec_nodes:
                     new_dag.apply_operation_back(spec_node.op, spec_node.qargs, spec_node.cargs)
-                # NEW: full-width pre-initial barrier.
-                new_dag.apply_operation_back(Barrier(len(extended_new)), extended_new)
-                # Re-emit the deferred data-qubit terminal measurements after the
-                # barrier so they happen in the same time slice as the spectator
-                # initial measurement.
-                for q in deferred_terminal_qubits:
-                    tm_node = data_terminal_nodes[q]
+                # For each (data qubit, paired specs) bundle: emit a small
+                # barrier on (data + specs), then the data terminal measure,
+                # then each spec's first measurement. Synchronises just the
+                # bundle without idling any other data qubit.
+                for data_q in bundled_data_qubits:
+                    specs = data_to_specs[data_q]
+                    bundle_old = sorted([data_q, *specs], key=lambda q: qubit_map[q])
+                    bundle_new = [new_dag.qubits[dag.qubits.index(q)] for q in bundle_old]
+                    new_dag.apply_operation_back(Barrier(len(bundle_new)), bundle_new)
+                    tm_node = data_terminal_nodes[data_q]
                     new_dag.apply_operation_back(tm_node.op, tm_node.qargs, tm_node.cargs)
-                # First spectator measurement (parallel to the data-qubit terminal measures).
-                for q, clbit in zip(spec_q_new, spec_creg):
-                    new_dag.apply_operation_back(Measure(), [q], [clbit])
-                # Replace the first post-sel barrier with the extended version.
+                    for spec_q in specs:
+                        spec_q_n, spec_clbit = spec_clbit_for[spec_q]
+                        new_dag.apply_operation_back(Measure(), [spec_q_n], [spec_clbit])
+                # Spec qubits with no paired data neighbour still need their
+                # first measurement before the extended barrier1.
+                for spec_q in spectator_qubits_ls:
+                    if spec_q in spec_to_data:
+                        continue
+                    spec_q_n, spec_clbit = spec_clbit_for[spec_q]
+                    new_dag.apply_operation_back(Measure(), [spec_q_n], [spec_clbit])
+                # Replace barrier1 with the extended version.
                 new_dag.apply_operation_back(Barrier(len(extended_new)), extended_new)
                 # Spectator pulses run alongside the data-qubit pulses between the two barriers.
                 for q in spec_q_new:

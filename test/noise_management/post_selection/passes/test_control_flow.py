@@ -209,6 +209,40 @@ def test_spectators_if_else():
     assert _meas_registers(result, 0) == ["c"]
 
 
+def test_spectator_with_buried_data_neighbour_measure_falls_through():
+    """A spec qubit whose only data neighbour has its terminal measure buried
+    inside a box can't be paired up. It still gets its parity check, just
+    synced via the extended ``barrier1`` instead of a small bundle barrier.
+    """
+    qreg = QuantumRegister(5, "q")
+    creg = ClassicalRegister(3, "c")
+    qc = QuantumCircuit(qreg, creg)
+    qc.h(0)
+    qc.cx(0, 1)
+    qc.cx(1, 2)
+    qc.measure(0, creg[0])
+    qc.measure(1, creg[1])
+    # q2's terminal measure is inside the box — can't be deferred top-level,
+    # so spec q3 (q2's only data neighbour) is unpaired and falls through.
+    with qc.box():
+        qc.measure(2, creg[2])
+
+    # AddPostSelectionMeasures runs first so AddSpectatorMeasures takes the
+    # integrate-with-postsel path (where the pairing logic lives).
+    pm = PassManager(
+        [
+            AddPostSelectionMeasures(x_pulse_type="rx"),
+            AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx"),
+        ]
+    )
+    result = pm.run(qc)
+
+    # Spec q3 still gets its full parity check (just no leading bundle barrier
+    # specific to q3 — it's synced to barrier1 instead).
+    q3_meas = _meas_registers(result, 3)
+    assert q3_meas == ["spec", "spec_ps"]
+
+
 # ---------------------------------------------------------------------------
 # AddSpectatorMeasuresPreSelection with control flow
 # ---------------------------------------------------------------------------

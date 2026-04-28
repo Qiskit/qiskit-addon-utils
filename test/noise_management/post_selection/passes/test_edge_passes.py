@@ -139,17 +139,18 @@ def test_pre_sel_only():
 def test_post_sel_with_spectators():
     r"""Spectator parity check is spliced into the data-qubit post-sel sandwich.
 
-    Three full-width barriers across :math:`data \cup spec` bookend the parity check:
+    The post-sel pulses are bookended by two full-width barriers
+    (``barrier1``, ``barrier2``) extended across :math:`data \cup spec`.
+    Synchronisation of the *initial* measurements is local: each spec qubit is
+    paired with one data neighbour, and a small barrier (covering only the
+    bundle :math:`(\text{data}_q, \text{spec}_{q1}, \dots)`) is emitted just
+    before the data terminal measure. Data qubits with no spec partner keep
+    their measurement in its natural position with no extra idling.
 
-    * ``barrier_pre_initial`` — forces the data terminal measure and the first
-      spectator measure to happen in the same time slice,
-    * ``barrier1`` — between the initial measures and the pi-rotation pulses,
-    * ``barrier2`` — between the pulses and the second measures.
-
-    On the data wire the terminal ``measure(c)`` is now *after* the pre-initial
-    barrier (it was previously inside the main circuit, ahead of every barrier).
-    On the spec wire the parity check is ``barrier -> measure -> barrier ->
-    pulses -> barrier -> measure`` — symmetric to the data-qubit pattern.
+    On the spec wire the parity check is
+    ``barrier -> measure -> barrier -> pulses -> barrier -> measure`` —
+    symmetric to the data-wire post-sel pattern but with the first barrier
+    being the small bundled one.
     """
     pm = PassManager(
         [
@@ -164,23 +165,32 @@ def test_post_sel_with_spectators():
     assert cregs["spec"] == len(SPECTATOR_QUBITS)
     assert cregs["spec_ps"] == len(SPECTATOR_QUBITS)
 
+    # Pairing under coupling 4-0-1-2-3: spec q3 -> data q2, spec q4 -> data q0.
+    # q1 has no spec neighbour so its terminal measure is not deferred.
+    paired_data = {0, 2}
+    unpaired_data = {1}
+
+    post_pulse_tail = ["barrier"] + ["rx"] * 20 + ["barrier", "measure"]
+
     for q in ACTIVE_QUBITS:
         assert _meas_registers(result, q) == ["c", "c_ps"]
-        # Data wire post-sel block: barrier(pre-init), measure(c), barrier1,
-        # rx*20, barrier2, measure(c_ps). Three barriers around the parity check.
         ops = _ops_for_qubit(result, q)
-        # Find where the parity-check block starts: the last 5 things before the
-        # final measure are barrier, rx*..., barrier — and the measure(c) sits
-        # right after a barrier.
-        assert ops[-1] == "measure"  # c_ps
-        assert ops[-2] == "barrier"  # barrier2
-        assert ops[-3] == "rx"
-        # The measure(c) and the barrier just before it (pre-init):
-        # find the last "measure" before the final block.
-        # Block layout from the top: ... gates, barrier(pre-init), measure(c),
-        # barrier1, rx*20, barrier2, measure(c_ps).
-        expected_tail = ["barrier", "measure", "barrier"] + ["rx"] * 20 + ["barrier", "measure"]
-        assert ops[-len(expected_tail) :] == expected_tail
+        # All data wires share the post-pulse tail: ...measure(c), barrier1,
+        # rx*20, barrier2, measure(c_ps).
+        assert ops[-len(post_pulse_tail) :] == post_pulse_tail
+        # Just before that tail sits ``measure(c)`` (the terminal measure).
+        assert ops[-(len(post_pulse_tail) + 1)] == "measure"
+        if q in paired_data:
+            # Paired data qubits get a small bundled barrier right before
+            # their terminal measure.
+            assert ops[-(len(post_pulse_tail) + 2)] == "barrier"
+        elif q in unpaired_data:
+            # Unpaired data qubits keep the terminal measure in its natural
+            # position — the op preceding it is the last main-circuit gate.
+            assert ops[-(len(post_pulse_tail) + 2)] != "barrier"
+
+    # Spec wires: bundled barrier, measure(spec), barrier1, rx*20, barrier2,
+    # measure(spec_ps).
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec", "spec_ps"]
         ops = _ops_for_qubit(result, q)
