@@ -14,7 +14,16 @@
 """A submodule with transpilation passes for post selection."""
 
 from .add_post_selection_measures import AddPostSelectionMeasures, XPulseType
+from .add_pre_selection_measures import AddPreSelectionMeasures
 from .add_spectator_measures import AddSpectatorMeasures
+from .add_spectator_measures_pre_selection import AddSpectatorMeasuresPreSelection
 from .xslow_gate import XSlowGate
 
-__all__ = ["AddPostSelectionMeasures", "AddSpectatorMeasures", "XPulseType", "XSlowGate"]
+__all__ = [
+    "AddPostSelectionMeasures",
+    "AddPreSelectionMeasures",
+    "AddSpectatorMeasures",
+    "AddSpectatorMeasuresPreSelection",
+    "XPulseType",
+    "XSlowGate",
+]

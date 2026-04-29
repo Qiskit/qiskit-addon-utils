@@ -151,3 +151,337 @@ def test_invalid_measure_maps_raises():
     circuit.measure(qreg[0], creg0_ps[1])
     with pytest.raises(ValueError, match="Expected measurement on qubit 0 writing to bit 0"):
         PostSelectionSummary.from_circuit(circuit, [])
+
+
+def test_pre_selection_from_circuit():
+    """Test the constructor from circuit with pre-selection measurements."""
+    qreg = QuantumRegister(5, "q")
+    creg0 = ClassicalRegister(3, "alpha")
+    creg1 = ClassicalRegister(2, "beta")
+    creg0_pre = ClassicalRegister(3, "alpha_pre")
+    creg1_pre = ClassicalRegister(2, "beta_pre")
+
+    circuit = QuantumCircuit(qreg, creg0, creg0_pre, creg1, creg1_pre)
+    # Pre-selection measurements at the start
+    circuit.measure(qreg[0], creg0_pre[0])
+    circuit.measure(qreg[1], creg0_pre[1])
+    circuit.measure(qreg[2], creg0_pre[2])
+    circuit.measure(qreg[3], creg1_pre[0])
+    circuit.measure(qreg[4], creg1_pre[1])
+    circuit.barrier()
+    # Terminal measurements
+    circuit.measure(qreg[0], creg0[0])
+    circuit.measure(qreg[1], creg0[1])
+    circuit.measure(qreg[2], creg0[2])
+    circuit.measure(qreg[3], creg1[0])
+    circuit.measure(qreg[4], creg1[1])
+
+    pre_selection_suffix = "_pre"
+    summary = PostSelectionSummary.from_circuit(
+        circuit,
+        coupling_map := [(0, 1), (1, 2), (2, 3), (3, 4)],
+        pre_selection_suffix=pre_selection_suffix,
+    )
+
+    assert summary.primary_cregs == {"alpha", "beta"}
+    assert summary.measure_map == {
+        0: ("alpha", 0),
+        1: ("alpha", 1),
+        2: ("alpha", 2),
+        3: ("beta", 0),
+        4: ("beta", 1),
+    }
+    assert summary.measure_map_pre == {
+        0: ("alpha_pre", 0),
+        1: ("alpha_pre", 1),
+        2: ("alpha_pre", 2),
+        3: ("beta_pre", 0),
+        4: ("beta_pre", 1),
+    }
+    assert summary.measure_map_ps == {}
+    assert summary.edges == {frozenset(pair) for pair in coupling_map}
+    assert summary.pre_selection_suffix == pre_selection_suffix
+
+
+def test_combined_pre_and_post_selection_from_circuit():
+    """Test the constructor from circuit with both pre and post-selection measurements."""
+    qreg = QuantumRegister(3, "q")
+    creg = ClassicalRegister(3, "alpha")
+    creg_pre = ClassicalRegister(3, "alpha_pre")
+    creg_ps = ClassicalRegister(3, "alpha_ps")
+
+    circuit = QuantumCircuit(qreg, creg, creg_pre, creg_ps)
+    # Pre-selection measurements at the start
+    circuit.measure(qreg, creg_pre)
+    circuit.barrier()
+    # Some gates here...
+    circuit.barrier()
+    # Terminal measurements
+    circuit.measure(qreg, creg)
+    # Post-selection measurements
+    circuit.measure(qreg, creg_ps)
+
+    summary = PostSelectionSummary.from_circuit(
+        circuit,
+        coupling_map := [(0, 1), (1, 2)],
+        post_selection_suffix="_ps",
+        pre_selection_suffix="_pre",
+    )
+
+    assert summary.primary_cregs == {"alpha"}
+    assert summary.measure_map == {
+        0: ("alpha", 0),
+        1: ("alpha", 1),
+        2: ("alpha", 2),
+    }
+    assert summary.measure_map_ps == {
+        0: ("alpha_ps", 0),
+        1: ("alpha_ps", 1),
+        2: ("alpha_ps", 2),
+    }
+    assert summary.measure_map_pre == {
+        0: ("alpha_pre", 0),
+        1: ("alpha_pre", 1),
+        2: ("alpha_pre", 2),
+    }
+    assert summary.edges == {frozenset(pair) for pair in coupling_map}
+    assert summary.post_selection_suffix == "_ps"
+    assert summary.pre_selection_suffix == "_pre"
+
+
+def test_pre_selection_only_partial_measurements():
+    """Test pre-selection with only some qubits having terminal measurements (lenient mode)."""
+    qreg = QuantumRegister(3, "q")
+    creg = ClassicalRegister(2, "alpha")  # Only 2 bits
+    creg_pre = ClassicalRegister(2, "alpha_pre")
+
+    circuit = QuantumCircuit(qreg, creg, creg_pre)
+    # Pre-selection measurements on 2 qubits
+    circuit.measure(qreg[0], creg_pre[0])
+    circuit.measure(qreg[1], creg_pre[1])
+    circuit.barrier()
+    # Terminal measurements on same 2 qubits
+    circuit.measure(qreg[0], creg[0])
+    circuit.measure(qreg[1], creg[1])
+
+    summary = PostSelectionSummary.from_circuit(
+        circuit,
+        [(0, 1), (1, 2)],
+        pre_selection_suffix="_pre",
+    )
+
+    assert summary.primary_cregs == {"alpha"}
+    assert summary.measure_map == {
+        0: ("alpha", 0),
+        1: ("alpha", 1),
+    }
+    assert summary.measure_map_pre == {
+        0: ("alpha_pre", 0),
+        1: ("alpha_pre", 1),
+    }
+    assert summary.measure_map_ps == {}
+
+
+def test_init_with_all_measure_maps():
+    """Test initialization with all three measure maps."""
+    summary = PostSelectionSummary(
+        primary_cregs := {"alpha"},
+        measure_map := {0: ("alpha", 0), 1: ("alpha", 1)},
+        edges := {frozenset([0, 1])},
+        measure_map_ps={0: ("alpha_ps", 0), 1: ("alpha_ps", 1)},
+        measure_map_pre={0: ("alpha_pre", 0), 1: ("alpha_pre", 1)},
+        post_selection_suffix="_ps",
+        pre_selection_suffix="_pre",
+    )
+
+    assert summary.primary_cregs == primary_cregs
+    assert summary.measure_map == measure_map
+    assert summary.measure_map_ps == {0: ("alpha_ps", 0), 1: ("alpha_ps", 1)}
+    assert summary.measure_map_pre == {0: ("alpha_pre", 0), 1: ("alpha_pre", 1)}
+    assert summary.edges == edges
+    assert summary.post_selection_suffix == "_ps"
+    assert summary.pre_selection_suffix == "_pre"
+
+
+def test_eq_with_all_properties():
+    """Test equality with all properties including pre and post selection."""
+    summary1 = PostSelectionSummary(
+        {"alpha"},
+        {0: ("alpha", 0)},
+        {frozenset([0, 1])},
+        measure_map_ps={0: ("alpha_ps", 0)},
+        measure_map_pre={0: ("alpha_pre", 0)},
+        post_selection_suffix="_ps",
+        pre_selection_suffix="_pre",
+    )
+
+    summary2 = PostSelectionSummary(
+        {"alpha"},
+        {0: ("alpha", 0)},
+        {frozenset([0, 1])},
+        measure_map_ps={0: ("alpha_ps", 0)},
+        measure_map_pre={0: ("alpha_pre", 0)},
+        post_selection_suffix="_ps",
+        pre_selection_suffix="_pre",
+    )
+
+    assert summary1 == summary2
+
+    # Different measure_map_ps
+    summary3 = PostSelectionSummary(
+        {"alpha"},
+        {0: ("alpha", 0)},
+        {frozenset([0, 1])},
+        measure_map_ps={0: ("alpha_ps", 1)},  # Different bit
+        measure_map_pre={0: ("alpha_pre", 0)},
+        post_selection_suffix="_ps",
+        pre_selection_suffix="_pre",
+    )
+    assert summary1 != summary3
+
+    # Different measure_map_pre
+    summary4 = PostSelectionSummary(
+        {"alpha"},
+        {0: ("alpha", 0)},
+        {frozenset([0, 1])},
+        measure_map_ps={0: ("alpha_ps", 0)},
+        measure_map_pre={},  # Empty
+        post_selection_suffix="_ps",
+        pre_selection_suffix="_pre",
+    )
+    assert summary1 != summary4
+
+    # Different pre_selection_suffix
+    summary5 = PostSelectionSummary(
+        {"alpha"},
+        {0: ("alpha", 0)},
+        {frozenset([0, 1])},
+        measure_map_ps={0: ("alpha_ps", 0)},
+        measure_map_pre={0: ("alpha_pre", 0)},
+        post_selection_suffix="_ps",
+        pre_selection_suffix="_different",
+    )
+    assert summary1 != summary5
+
+
+def test_pre_selection_invalid_measure_map_raises():
+    """Test that pre-selection validation raises when measure maps don't match."""
+    qreg = QuantumRegister(3, "q")
+    creg = ClassicalRegister(3, "alpha")
+    creg_pre = ClassicalRegister(3, "alpha_pre")
+
+    # Test case: pre-selection measurement writes to wrong bit
+    circuit = QuantumCircuit(qreg, creg, creg_pre)
+    circuit.measure(qreg[0], creg_pre[1])  # Wrong bit index
+    circuit.barrier()
+    circuit.measure(qreg[0], creg[0])
+
+    with pytest.raises(
+        ValueError, match="Pre selection measurement on qubit 0 writes to bit 1 of creg alpha_pre"
+    ):
+        PostSelectionSummary.from_circuit(circuit, [], pre_selection_suffix="_pre")
+
+    # Test case: pre-selection measurement writes to wrong register (different base name)
+    # This tests the case where the pre-selection register name doesn't match the primary register
+    creg_beta = ClassicalRegister(3, "beta")
+    creg_alpha_pre2 = ClassicalRegister(3, "alpha_pre")
+    creg_beta_pre = ClassicalRegister(3, "beta_pre")
+    circuit2 = QuantumCircuit(qreg, creg, creg_beta, creg_alpha_pre2, creg_beta_pre)
+    circuit2.measure(qreg[0], creg_beta_pre[0])  # Measuring to beta_pre instead of alpha_pre
+    circuit2.barrier()
+    circuit2.measure(qreg[0], creg[0])  # Primary measurement to alpha
+    circuit2.measure(qreg[1], creg_beta[0])  # Another primary measurement to beta
+
+    with pytest.raises(
+        ValueError, match="Pre selection measurement on qubit 0 writes to bit 0 of creg beta_pre"
+    ):
+        PostSelectionSummary.from_circuit(circuit2, [], pre_selection_suffix="_pre")
+
+
+def test_spectator_cregs_default_picks_up_spec_register():
+    """``from_circuit`` defaults flag a register named ``spec`` as a spectator."""
+    qreg = QuantumRegister(3, "q")
+    creg_data = ClassicalRegister(2, "c")
+    creg_data_ps = ClassicalRegister(2, "c_ps")
+    creg_spec = ClassicalRegister(1, "spec")
+    creg_spec_ps = ClassicalRegister(1, "spec_ps")
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_ps, creg_spec, creg_spec_ps)
+    circuit.measure(qreg[0], creg_data[0])
+    circuit.measure(qreg[1], creg_data[1])
+    circuit.measure(qreg[2], creg_spec[0])
+    circuit.measure(qreg[0], creg_data_ps[0])
+    circuit.measure(qreg[1], creg_data_ps[1])
+    circuit.measure(qreg[2], creg_spec_ps[0])
+
+    summary = PostSelectionSummary.from_circuit(circuit, [(0, 1), (1, 2)])
+    assert summary.primary_cregs == {"c", "spec"}
+    assert summary.spectator_cregs == {"spec"}
+    # Data-only view: caller can subtract.
+    assert summary.primary_cregs - summary.spectator_cregs == {"c"}
+
+
+def test_spectator_cregs_custom_names():
+    """Custom ``spectator_cregs`` overrides the default and is intersected with primaries."""
+    qreg = QuantumRegister(3, "q")
+    creg_data = ClassicalRegister(2, "alpha")
+    creg_data_ps = ClassicalRegister(2, "alpha_ps")
+    creg_spec = ClassicalRegister(1, "spec_init")
+    creg_spec_ps = ClassicalRegister(1, "spec_init_ps")
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_ps, creg_spec, creg_spec_ps)
+    circuit.measure(qreg[0], creg_data[0])
+    circuit.measure(qreg[1], creg_data[1])
+    circuit.measure(qreg[2], creg_spec[0])
+    circuit.measure(qreg[0], creg_data_ps[0])
+    circuit.measure(qreg[1], creg_data_ps[1])
+    circuit.measure(qreg[2], creg_spec_ps[0])
+
+    # Custom name + a non-existent name (silently dropped).
+    summary = PostSelectionSummary.from_circuit(
+        circuit, [(0, 1), (1, 2)], spectator_cregs=["spec_init", "ghost"]
+    )
+    assert summary.primary_cregs == {"alpha", "spec_init"}
+    assert summary.spectator_cregs == {"spec_init"}
+
+
+def test_spectator_cregs_empty_when_no_spec_register():
+    """A circuit without a ``spec`` primary leaves ``spectator_cregs`` empty."""
+    qreg = QuantumRegister(2, "q")
+    creg = ClassicalRegister(2, "c")
+    creg_ps = ClassicalRegister(2, "c_ps")
+    circuit = QuantumCircuit(qreg, creg, creg_ps)
+    circuit.measure(qreg, creg)
+    circuit.measure(qreg, creg_ps)
+
+    summary = PostSelectionSummary.from_circuit(circuit, [(0, 1)])
+    assert summary.spectator_cregs == set()
+
+
+def test_spectator_cregs_disabled_with_empty_list():
+    """Passing ``spectator_cregs=[]`` opts out of the default ``spec`` classification."""
+    qreg = QuantumRegister(3, "q")
+    creg_data = ClassicalRegister(2, "c")
+    creg_data_ps = ClassicalRegister(2, "c_ps")
+    # User happens to have a register literally named ``spec`` for unrelated reasons.
+    creg_spec = ClassicalRegister(1, "spec")
+    creg_spec_ps = ClassicalRegister(1, "spec_ps")
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_ps, creg_spec, creg_spec_ps)
+    circuit.measure(qreg[0], creg_data[0])
+    circuit.measure(qreg[1], creg_data[1])
+    circuit.measure(qreg[2], creg_spec[0])
+    circuit.measure(qreg[0], creg_data_ps[0])
+    circuit.measure(qreg[1], creg_data_ps[1])
+    circuit.measure(qreg[2], creg_spec_ps[0])
+
+    summary = PostSelectionSummary.from_circuit(circuit, [(0, 1), (1, 2)], spectator_cregs=[])
+    assert summary.spectator_cregs == set()
+
+
+def test_spectator_cregs_eq():
+    """Summaries differing only in ``spectator_cregs`` are not equal."""
+    primary = {"alpha", "spec"}
+    measure_map = {0: ("alpha", 0), 1: ("alpha", 1), 2: ("spec", 0)}
+    edges = {frozenset({0, 1}), frozenset({1, 2})}
+    a = PostSelectionSummary(primary, measure_map, edges, spectator_cregs={"spec"})
+    b = PostSelectionSummary(primary, measure_map, edges, spectator_cregs=set())
+    assert a != b
+    assert a == deepcopy(a)

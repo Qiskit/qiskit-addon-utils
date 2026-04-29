@@ -63,16 +63,22 @@ class AddPostSelectionMeasures(TransformationPass):
         x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
+        ignore_creg_suffixes: list[str] | None = None,
     ):
         """Initialize the pass.
 
         Args:
             x_pulse_type: The type of X-pulse to apply for the post-selection measurements.
             post_selection_suffix: A fixed suffix to append to the names of the classical registers when copying them.
+            ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
+                By default, registers ending with "_pre" are ignored to avoid adding post-selection to pre-selection registers.
         """
         super().__init__()
         self.x_pulse_type = XPulseType(x_pulse_type)
         self.post_selection_suffix = post_selection_suffix
+        self.ignore_creg_suffixes = (
+            ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_pre"]
+        )
 
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate()]
@@ -81,28 +87,44 @@ class AddPostSelectionMeasures(TransformationPass):
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Find what qubits have a terminal measurement
-        terminal_measurements: dict[Qubit, Clbit] = {
-            qubit: clbit for qubit, clbit in self._find_terminal_measurements(dag).items() if clbit
-        }
-        if not terminal_measurements:
-            return dag
+        all_terminal_measurements = self._find_terminal_measurements(dag)
 
         # Add the new registers and create a map between the original clbit and the new ones
+        # Skip registers with ignored suffixes (e.g., pre-selection registers)
         clbits_map = {}
         for name, creg in dag.cregs.items():
+            if any(name.endswith(suffix) for suffix in self.ignore_creg_suffixes):
+                # Skip registers with ignored suffixes
+                continue
             dag.add_creg(
                 new_creg := ClassicalRegister(creg.size, name + self.post_selection_suffix)
             )
             clbits_map.update({clbit: clbit_ps for clbit, clbit_ps in zip(creg, new_creg)})
 
-        # Add a barrier to separate the post selection measurements from the rest of the circuit
+        # Filter terminal measurements to only include those with clbits in clbits_map
+        # This excludes measurements into pre-selection registers
+        terminal_measurements: dict[Qubit, Clbit] = {
+            qubit: clbit
+            for qubit, clbit in all_terminal_measurements.items()
+            if clbit and clbit in clbits_map
+        }
+        if not terminal_measurements:
+            return dag
+
+        # Add a barrier before post-selection to ensure all terminal measurements finish
         qubits = tuple(terminal_measurements)
         dag.apply_operation_back(Barrier(len(qubits)), qubits)
 
-        # Append the post selection measurements
-        for qubit, clbit in terminal_measurements.items():
+        # Apply all pulse sequences
+        for qubit in terminal_measurements:
             for gate in self.pulse_sequence:
                 dag.apply_operation_back(gate, [qubit])
+
+        # Add a barrier before measurements - AddSpectatorMeasures will extend it
+        dag.apply_operation_back(Barrier(len(qubits)), qubits)
+
+        # Then add all measurements
+        for qubit, clbit in terminal_measurements.items():
             dag.apply_operation_back(Measure(), [qubit], [clbits_map[clbit]])
 
         return dag
@@ -122,7 +144,10 @@ class AddPostSelectionMeasures(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            if node.is_standard_gate():
+            # Skip reset operations - they are part of pre-selection protocol
+            if node.op.name == "reset":
+                continue
+            elif node.is_standard_gate() or (name := node.op.name) == "xslow":
                 for qarg in node.qargs:
                     terminal_measurements[qarg] = None
             elif (name := node.op.name) == "barrier":
