@@ -1,0 +1,5 @@
+---
+features:
+  - |
+    Enable new input format for the `executor_expectation_values` function - allow a tuple of observables and measurement bases instead of a dictionary that maps between each measurement basis and its relevant commuting observables.
+    In case such a tuple is given as input, the mapping between the measurement bases and the relevant commuting observables is done internally in the function.

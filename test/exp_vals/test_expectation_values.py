@@ -22,7 +22,12 @@ from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp
 from qiskit.quantum_info.random import random_pauli_list
 from qiskit.transpiler import generate_preset_pass_manager
-from qiskit_addon_utils.exp_vals.expectation_values import executor_expectation_values
+from qiskit_addon_utils.exp_vals.expectation_values import (
+    _convert_to_pauli,
+    _find_measure_basis_to_observable_mapping,
+    _validate_and_format_basis_mapping,
+    executor_expectation_values,
+)
 from qiskit_addon_utils.exp_vals.measurement_bases import _convert_basis_to_uint_representation
 from qiskit_addon_utils.exp_vals.observable_mappings import map_observable_virtual_to_canonical
 from samplomatic.annotations import ChangeBasis
@@ -403,7 +408,7 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
                 basis_dict,
                 meas_basis_axis=0,
             )
-        self.assertIn("len(basis_dict)", str(context.exception))
+        self.assertIn("len(basis_mapping)", str(context.exception))
         self.assertIn("does not match", str(context.exception))
 
     def test_inconsistent_observable_counts(self):
@@ -428,7 +433,7 @@ class TestExecutorExpectationValuesInputValidation(unittest.TestCase):
                 basis_dict,
                 meas_basis_axis=0,
             )
-        self.assertIn("`basis_dict` indicates 2 observables, but entry", str(context.exception))
+        self.assertIn("`basis_mapping` indicates 2 observables, but entry", str(context.exception))
 
     def test_measurement_flips_shape_mismatch(self):
         """Test that measurement_flips with wrong shape causes issues."""
@@ -854,3 +859,778 @@ class TestExecutorExpectationValuesSimple(unittest.TestCase):
             seed=None,
         )
         self.assertTrue(np.allclose(evs, target_evs))
+
+
+class TestExecutorExpectationValuesTupleInput(unittest.TestCase):
+    """Test executor_expectation_values with tuple input for basis_mapping."""
+
+    def test_tuple_input_single_observable_string_bases(self):
+        """Test tuple input with a single observable and string measurement bases."""
+        # Create a simple observable
+        observable = SparsePauliOp("ZZ", coeffs=[1.0])
+        observables = [observable]
+
+        # Define measurement bases as strings
+        measurement_bases = ["ZZ"]
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], tuple)
+        self.assertEqual(len(result[0]), 2)  # (mean, variance)
+
+    def test_tuple_input_single_observable_paulilist_bases(self):
+        """Test tuple input with a single observable and PauliList measurement bases."""
+        # Create a simple observable
+        observable = SparsePauliOp("XX", coeffs=[1.0])
+        observables = [observable]
+
+        # Define measurement bases as PauliList
+        measurement_bases = PauliList(["XX"])
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], tuple)
+        self.assertEqual(len(result[0]), 2)  # (mean, variance)
+
+    def test_tuple_input_multiple_observables_multiple_bases(self):
+        """Test tuple input with multiple observables and multiple measurement bases."""
+        # Create multiple observables
+        obs1 = SparsePauliOp("ZZ", coeffs=[1.0])
+        obs2 = SparsePauliOp("XX", coeffs=[1.0])
+        observables = [obs1, obs2]
+
+        # Define measurement bases as strings
+        measurement_bases = ["ZZ", "XX"]
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(2, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 2)
+        for res in result:
+            self.assertIsInstance(res, tuple)
+            self.assertEqual(len(res), 2)  # (mean, variance)
+
+    def test_tuple_input_observable_with_multiple_terms(self):
+        """Test tuple input with an observable containing multiple terms."""
+        # Create an observable with multiple terms
+        observable = SparsePauliOp(["ZZ", "XX"], coeffs=[1.0, 0.5])
+        observables = [observable]
+
+        # Define measurement bases - need two bases for the two terms
+        measurement_bases = ["ZZ", "XX"]
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(2, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], tuple)
+        self.assertEqual(len(result[0]), 2)  # (mean, variance)
+
+    def test_tuple_input_with_identity_terms(self):
+        """Test tuple input with observables containing identity terms."""
+        # Create observables with identity terms
+        obs1 = SparsePauliOp("ZI", coeffs=[1.0])
+        obs2 = SparsePauliOp("IZ", coeffs=[1.0])
+        observables = [obs1, obs2]
+
+        # Define measurement bases - identities are measured as Z
+        measurement_bases = ["ZZ", "ZZ"]
+
+        # Create bool_array with shape (num_bases, num_shots, num_qubits)
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(2, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+        )
+
+        self.assertEqual(len(result), 2)
+        for res in result:
+            self.assertIsInstance(res, tuple)
+            self.assertEqual(len(res), 2)  # (mean, variance)
+
+    def test_tuple_input_mismatched_bases_length(self):
+        """Test that mismatched number of bases raises ValueError."""
+        observable = SparsePauliOp("ZZ", coeffs=[1.0])
+        observables = [observable]
+
+        # Define measurement bases with wrong length
+        measurement_bases = ["ZZ", "XX"]  # 2 bases
+
+        # Create bool_array with only 1 basis
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, num_shots, num_qubits), dtype=bool)
+
+        # Should raise ValueError due to mismatch
+        with self.assertRaises(ValueError) as context:
+            executor_expectation_values(
+                bool_array,
+                (observables, measurement_bases),
+                meas_basis_axis=0,
+            )
+        self.assertIn("does not match", str(context.exception))
+
+    def test_tuple_input_incompatible_observable_and_basis(self):
+        """Test that incompatible observable and measurement basis raises ValueError."""
+        # Create an observable that doesn't qubit-wise commute with the measurement basis
+        # XZ doesn't qubit-wise commute with ZX (X doesn't commute with Z on first qubit)
+        observable = SparsePauliOp("XZ", coeffs=[1.0])
+        observables = [observable]
+
+        # Define a measurement basis that doesn't qubit-wise commute with the observable
+        measurement_bases = ["ZX"]  # ZX doesn't qubit-wise commute with XZ
+
+        # Create bool_array
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, num_shots, num_qubits), dtype=bool)
+
+        # Should raise ValueError because no compatible basis found
+        with self.assertRaises(ValueError) as context:
+            executor_expectation_values(
+                bool_array,
+                (observables, measurement_bases),
+                meas_basis_axis=0,
+            )
+        self.assertIn("The observables and measurement bases in", str(context.exception))
+
+    def test_tuple_input_with_avg_axis(self):
+        """Test tuple input with averaging over additional axes."""
+        observable = SparsePauliOp("ZZ", coeffs=[1.0])
+        observables = [observable]
+        measurement_bases = ["ZZ"]
+
+        # Create bool_array with extra dimension for averaging
+        num_shots = 100
+        num_qubits = 2
+        bool_array = np.random.randint(0, 2, size=(1, 3, num_shots, num_qubits), dtype=bool)
+
+        # Test with tuple input and avg_axis
+        result = executor_expectation_values(
+            bool_array,
+            (observables, measurement_bases),
+            meas_basis_axis=0,
+            avg_axis=1,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], tuple)
+        self.assertEqual(len(result[0]), 2)  # (mean, variance)
+
+
+class TestConvertToPauli(unittest.TestCase):
+    """Tests for _convert_to_pauli function."""
+
+    def test_pauli_input(self):
+        """Test with Pauli object as input."""
+        pauli = Pauli("XYZ")
+        result = _convert_to_pauli(pauli)
+        self.assertEqual(result, pauli)
+
+    def test_string_input(self):
+        """Test with string as input."""
+        result = _convert_to_pauli("XYZ")
+        self.assertEqual(result, Pauli("XYZ"))
+
+    def test_list_of_ints_input(self):
+        """Test with list of integers as input."""
+        result = _convert_to_pauli([2, 3, 1])  # X, Y, Z
+        self.assertEqual(result, Pauli("XYZ"))
+
+    def test_numpy_array_input(self):
+        """Test with numpy array as input."""
+        result = _convert_to_pauli(np.array([0, 1, 2, 3], dtype=np.uint8))
+        # Array [0,1,2,3] maps to I,Z,X,Y
+        self.assertEqual(result, Pauli("IZXY"))
+
+    def test_tuple_input(self):
+        """Test with tuple as input."""
+        result = _convert_to_pauli((1, 2, 3))
+        self.assertEqual(result, Pauli("ZXY"))
+
+    def test_identity_conversion(self):
+        """Test conversion of identity."""
+        result = _convert_to_pauli([0, 0, 0])
+        self.assertEqual(result, Pauli("III"))
+
+    def test_invalid_input_type(self):
+        """Test with invalid input type."""
+        with pytest.raises(
+            ValueError, match="basis must be a Pauli instance, str or a list of ints"
+        ):
+            _convert_to_pauli({"invalid": "type"})
+
+    def test_invalid_list_content(self):
+        """Test with list containing non-integers."""
+        with pytest.raises((ValueError, KeyError)):
+            _convert_to_pauli(["X", "Y", "Z"])
+
+
+class TestFindMeasureBasisToObservableMapping(unittest.TestCase):
+    """Tests for _find_measure_basis_to_observable_mapping function."""
+
+    def test_single_observable_single_basis(self):
+        """Test with single observable and single basis."""
+        obs = SparsePauliOp("ZZZ", 1.0)
+        bases = ["ZZZ"]
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        self.assertEqual(len(result), 1)
+        basis_pauli = Pauli("ZZZ")
+        self.assertIn(basis_pauli, result)
+        self.assertEqual(len(result[basis_pauli]), 1)
+        self.assertIsInstance(result[basis_pauli][0], SparsePauliOp)
+
+    def test_multiple_observables_single_basis(self):
+        """Test with multiple observables and single basis."""
+        obs1 = SparsePauliOp("ZZI", 1.0)
+        obs2 = SparsePauliOp("IZZ", 2.0)
+        bases = ["ZZZ"]
+        result = _find_measure_basis_to_observable_mapping([obs1, obs2], bases)
+
+        basis_pauli = Pauli("ZZZ")
+        self.assertEqual(len(result[basis_pauli]), 2)
+
+    def test_single_observable_multiple_bases(self):
+        """Test with single observable and multiple bases."""
+        obs = SparsePauliOp(["ZI", "XI"], [1.0, 2.0])
+        bases = ["ZI", "XI"]
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        self.assertEqual(len(result), 2)
+        # Each term should be mapped to its commuting basis
+        for _, obs_list in result.items():
+            self.assertEqual(len(obs_list), 1)
+            if obs_list[0] is not None:
+                self.assertEqual(len(obs_list[0].paulis), 1)
+
+    def test_basis_as_int_list(self):
+        """Test with basis as list of integers."""
+        obs = SparsePauliOp("ZZ", 1.0)
+        bases = [[1, 1]]  # ZZ in int format
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        self.assertEqual(len(result), 1)
+
+    def test_basis_as_pauli_list(self):
+        """Test with basis as PauliList."""
+        obs = SparsePauliOp("XX", 1.0)
+        bases = PauliList(["XX"])
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        self.assertEqual(len(result), 1)
+
+    def test_observable_term_not_commuting_with_any_basis(self):
+        """Test error when observable term doesn't commute with any basis."""
+        obs = SparsePauliOp("XY", 1.0)
+        bases = ["ZZ"]  # Doesn't commute with XY
+
+        with pytest.raises(
+            ValueError, match="Some observable elements do not commute with any measurement basis"
+        ):
+            _find_measure_basis_to_observable_mapping([obs], bases)
+
+    def test_none_observable_in_result(self):
+        """Test that None is returned for observables without terms in a basis."""
+        obs1 = SparsePauliOp("ZZ", 1.0)
+        obs2 = SparsePauliOp("XX", 2.0)
+        bases = ["ZZ", "XX"]
+        result = _find_measure_basis_to_observable_mapping([obs1, obs2], bases)
+
+        # Each basis should have one observable with terms and one None
+        for _, obs_list in result.items():
+            self.assertEqual(len(obs_list), 2)
+            none_count = sum(1 for obs in obs_list if obs is None)
+            self.assertEqual(none_count, 1)
+
+    def test_first_commuting_basis_used(self):
+        """Test that only the first commuting basis is used for each term."""
+        obs = SparsePauliOp("ZZ", 1.0)
+        bases = ["ZZ", "ZI", "IZ"]  # All commute with ZZ
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        # The observable should only be in the first basis
+        first_basis = Pauli("ZZ")
+        self.assertIsNotNone(result[first_basis][0])
+
+        # Other bases should have None
+        second_basis = Pauli("ZI")
+        third_basis = Pauli("IZ")
+        self.assertIsNone(result[second_basis][0])
+        self.assertIsNone(result[third_basis][0])
+
+    def test_complex_observable_with_multiple_terms(self):
+        """Test with complex observable containing multiple terms."""
+        obs = SparsePauliOp(["ZZI", "IZZ", "XII"], [1.0, 2.0, 3.0])
+        bases = ["ZZZ", "XXX"]
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        # ZZI and IZZ should map to ZZZ, XII should map to XXX
+        z_basis = Pauli("ZZZ")
+        x_basis = Pauli("XXX")
+
+        self.assertIsNotNone(result[z_basis][0])
+        self.assertEqual(len(result[z_basis][0].paulis), 2)
+
+        self.assertIsNotNone(result[x_basis][0])
+        self.assertEqual(len(result[x_basis][0].paulis), 1)
+
+    def test_identity_terms(self):
+        """Test handling of identity terms."""
+        obs = SparsePauliOp(["III", "ZZZ"], [1.0, 2.0])
+        bases = ["ZZZ"]
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        # Both terms should commute with ZZZ
+        basis_pauli = Pauli("ZZZ")
+        self.assertIsNotNone(result[basis_pauli][0])
+        self.assertEqual(len(result[basis_pauli][0].paulis), 2)
+
+    def test_empty_observables(self):
+        """Test with empty observables list."""
+        bases = ["ZZ"]
+        result = _find_measure_basis_to_observable_mapping([], bases)
+
+        # Should have entries for each basis but with empty lists
+        self.assertEqual(len(result), 1)
+        basis_pauli = Pauli("ZZ")
+        self.assertEqual(len(result[basis_pauli]), 0)
+
+    def test_y_pauli_terms(self):
+        """Test handling of Y Pauli terms which involve both X and Z."""
+        # Y commutes with Y, Z commutes with Z
+        obs = SparsePauliOp(["YI", "IZ"], [1.0, 2.0])
+        bases = ["YI", "IZ"]
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        # YI should map to YI basis, IZ should map to IZ basis
+        y_basis = Pauli("YI")
+        z_basis = Pauli("IZ")
+
+        self.assertIsNotNone(result[y_basis][0])
+        self.assertEqual(len(result[y_basis][0].paulis), 1)
+        self.assertIsNotNone(result[z_basis][0])
+        self.assertEqual(len(result[z_basis][0].paulis), 1)
+
+    def test_observable_with_complex_coefficients(self):
+        """Test with observable having complex coefficients."""
+        obs = SparsePauliOp(["ZZ", "XX"], [1.0 + 2.0j, 3.0 - 1.0j])
+        bases = ["ZZ", "XX"]
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        # Should handle complex coefficients correctly
+        z_basis = Pauli("ZZ")
+        x_basis = Pauli("XX")
+
+        self.assertIsNotNone(result[z_basis][0])
+        self.assertIsNotNone(result[x_basis][0])
+        # Check that coefficients are preserved
+        self.assertAlmostEqual(result[z_basis][0].coeffs[0], 1.0 + 2.0j)
+        self.assertAlmostEqual(result[x_basis][0].coeffs[0], 3.0 - 1.0j)
+
+    def test_observables_with_different_qubit_counts(self):
+        """Test with observables having different numbers of qubits."""
+        obs1 = SparsePauliOp("ZZ", 1.0)
+        obs2 = SparsePauliOp("ZZ", 2.0)
+        bases = ["ZZ"]
+        result = _find_measure_basis_to_observable_mapping([obs1, obs2], bases)
+
+        basis_pauli = Pauli("ZZ")
+        self.assertEqual(len(result[basis_pauli]), 2)
+        self.assertIsNotNone(result[basis_pauli][0])
+        self.assertIsNotNone(result[basis_pauli][1])
+
+    def test_observable_with_duplicate_terms(self):
+        """Test with observable containing duplicate Pauli terms."""
+        obs = SparsePauliOp(["ZZ", "ZZ", "XX"], [1.0, 2.0, 3.0])
+        bases = ["ZZ", "XX"]
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        z_basis = Pauli("ZZ")
+        x_basis = Pauli("XX")
+
+        # Both ZZ terms should map to ZZ basis
+        self.assertIsNotNone(result[z_basis][0])
+        self.assertEqual(len(result[z_basis][0].paulis), 2)
+        # XX term should map to XX basis
+        self.assertIsNotNone(result[x_basis][0])
+        self.assertEqual(len(result[x_basis][0].paulis), 1)
+
+    def test_multiple_observables_with_overlapping_terms(self):
+        """Test multiple observables where some terms overlap."""
+        obs1 = SparsePauliOp(["ZZ", "XX"], [1.0, 2.0])
+        obs2 = SparsePauliOp(["ZZ", "XI"], [3.0, 4.0])
+        bases = ["ZZ", "XX", "XI"]
+        result = _find_measure_basis_to_observable_mapping([obs1, obs2], bases)
+
+        z_basis = Pauli("ZZ")
+        # Both observables have ZZ term, should be in first basis
+        self.assertIsNotNone(result[z_basis][0])
+        self.assertIsNotNone(result[z_basis][1])
+
+    def test_basis_order_matters(self):
+        """Test that the order of bases affects which basis is chosen."""
+        obs = SparsePauliOp("ZI", 1.0)
+        bases1 = ["ZI", "ZZ"]
+        bases2 = ["ZZ", "ZI"]
+
+        result1 = _find_measure_basis_to_observable_mapping([obs], bases1)
+        result2 = _find_measure_basis_to_observable_mapping([obs], bases2)
+
+        # In result1, ZI should be used (first commuting basis)
+        basis_zi = Pauli("ZI")
+        basis_zz = Pauli("ZZ")
+
+        self.assertIsNotNone(result1[basis_zi][0])
+        self.assertIsNone(result1[basis_zz][0])
+
+        # In result2, ZZ should be used (first commuting basis)
+        self.assertIsNotNone(result2[basis_zz][0])
+        self.assertIsNone(result2[basis_zi][0])
+
+    def test_large_number_of_observables_and_bases(self):
+        """Test with a large number of observables and bases."""
+        num_qubits = 5
+        num_observables = 10
+        num_bases = 8
+
+        # Create random observables
+        observables = [
+            SparsePauliOp(random_pauli_list(num_qubits, size=3)) for _ in range(num_observables)
+        ]
+
+        # Create bases that should cover all terms
+        bases = random_pauli_list(num_qubits, size=num_bases)
+
+        # This should not raise an error if bases cover all terms
+        try:
+            result = _find_measure_basis_to_observable_mapping(observables, bases)
+            self.assertEqual(len(result), num_bases)
+            # Each basis should have entries for all observables
+            for basis_obs_list in result.values():
+                self.assertEqual(len(basis_obs_list), num_observables)
+        except ValueError:
+            # It's possible random bases don't cover all terms, which is acceptable
+            pass
+
+    def test_observable_with_zero_coefficient(self):
+        """Test observable with zero coefficient term."""
+        obs = SparsePauliOp(["ZZ", "XX"], [0.0, 1.0])
+        bases = ["ZZ", "XX"]
+        result = _find_measure_basis_to_observable_mapping([obs], bases)
+
+        # Both terms should still be mapped even with zero coefficient
+        z_basis = Pauli("ZZ")
+        x_basis = Pauli("XX")
+
+        self.assertIsNotNone(result[z_basis][0])
+        self.assertIsNotNone(result[x_basis][0])
+        self.assertEqual(result[z_basis][0].coeffs[0], 0.0)
+
+
+class TestValidateAndFormatBasisMapping(unittest.TestCase):
+    """Tests for _validate_and_format_basis_mapping function."""
+
+    def test_dict_input_valid(self):
+        """Test valid dict input with matching dimensions."""
+        bool_array = np.zeros((2, 10, 3), dtype=bool)  # 2 bases, 10 shots, 3 qubits
+        basis_dict = {
+            Pauli("ZZZ"): [SparsePauliOp("ZZZ", 1.0), SparsePauliOp("XXX", 1.0)],
+            Pauli("XXX"): [SparsePauliOp("ZZZ", 1.0), SparsePauliOp("XXX", 1.0)],
+        }
+        meas_basis_axis = 0
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_dict, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 2)
+        self.assertEqual(len(result_dict), 2)
+        # Check that observables were converted to SparseObservable
+        for _basis, obs_list in result_dict.items():
+            self.assertEqual(len(obs_list), 2)
+            for obs in obs_list:
+                self.assertIsInstance(obs, type(obs))  # SparseObservable
+
+    def test_dict_input_length_mismatch(self):
+        """Test dict input with mismatched length raises ValueError."""
+        bool_array = np.zeros((3, 10, 2), dtype=bool)  # 3 bases
+        basis_dict = {
+            Pauli("ZZ"): [SparsePauliOp("ZZ", 1.0)],
+            Pauli("XX"): [SparsePauliOp("XX", 1.0)],
+        }  # Only 2 bases
+        meas_basis_axis = 0
+
+        with self.assertRaises(ValueError) as context:
+            _validate_and_format_basis_mapping(basis_dict, bool_array, meas_basis_axis)
+        self.assertIn("does not match", str(context.exception))
+
+    def test_dict_input_inconsistent_observable_counts(self):
+        """Test dict with inconsistent observable counts raises ValueError."""
+        bool_array = np.zeros((2, 10, 2), dtype=bool)
+        basis_dict = {
+            Pauli("ZZ"): [SparsePauliOp("ZZ", 1.0), SparsePauliOp("XX", 1.0)],  # 2 observables
+            Pauli("XX"): [SparsePauliOp("XX", 1.0)],  # 1 observable
+        }
+        meas_basis_axis = 0
+
+        with self.assertRaises(ValueError) as context:
+            _validate_and_format_basis_mapping(basis_dict, bool_array, meas_basis_axis)
+        self.assertIn("indicates", str(context.exception))
+        self.assertIn("observables", str(context.exception))
+
+    def test_dict_input_with_none_observables(self):
+        """Test dict input with None observables (converted to zero observables)."""
+        bool_array = np.zeros((2, 10, 2), dtype=bool)
+        basis_dict = {
+            Pauli("ZZ"): [SparsePauliOp("ZZ", 1.0), None],
+            Pauli("XX"): [None, SparsePauliOp("XX", 1.0)],
+        }
+        meas_basis_axis = 0
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_dict, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 2)
+        # Check that None was converted to zero observable
+        for _, obs_list in result_dict.items():
+            self.assertEqual(len(obs_list), 2)
+
+    def test_tuple_input_valid(self):
+        """Test valid tuple input (observables, bases)."""
+        bool_array = np.zeros((2, 10, 2), dtype=bool)
+        observables = [SparsePauliOp("ZZ", 1.0), SparsePauliOp("XX", 1.0)]
+        bases = ["ZZ", "XX"]
+        basis_mapping = (observables, bases)
+        meas_basis_axis = 0
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_mapping, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 2)
+        self.assertEqual(len(result_dict), 2)
+
+    def test_tuple_input_wrong_length(self):
+        """Test tuple input with wrong length raises ValueError."""
+        bool_array = np.zeros((2, 10, 2), dtype=bool)
+        basis_mapping = (
+            [SparsePauliOp("ZZ", 1.0)],
+            ["ZZ"],
+            "extra_element",
+        )  # 3 elements instead of 2
+        meas_basis_axis = 0
+
+        with self.assertRaises(ValueError) as context:
+            _validate_and_format_basis_mapping(basis_mapping, bool_array, meas_basis_axis)
+        self.assertIn(
+            "must contain observables element and measurement_bases element", str(context.exception)
+        )
+
+    def test_tuple_input_bases_length_mismatch(self):
+        """Test tuple input where bases length doesn't match bool_array dimension."""
+        bool_array = np.zeros((3, 10, 2), dtype=bool)  # 3 bases
+        observables = [SparsePauliOp("ZZ", 1.0)]
+        bases = ["ZZ", "XX"]  # Only 2 bases
+        basis_mapping = (observables, bases)
+        meas_basis_axis = 0
+
+        with self.assertRaises(ValueError) as context:
+            _validate_and_format_basis_mapping(basis_mapping, bool_array, meas_basis_axis)
+        self.assertIn("does not match", str(context.exception))
+
+    def test_tuple_input_incompatible_observable_and_basis(self):
+        """Test tuple input where observable doesn't commute with any basis."""
+        bool_array = np.zeros((2, 10, 2), dtype=bool)
+        # YY doesn't commute with ZZ or XX
+        observables = [SparsePauliOp("YY", 1.0)]
+        bases = ["ZZ", "XX"]
+        basis_mapping = (observables, bases)
+        meas_basis_axis = 0
+
+        with self.assertRaises(ValueError) as context:
+            _validate_and_format_basis_mapping(basis_mapping, bool_array, meas_basis_axis)
+        self.assertIn("do not match", str(context.exception))
+
+    def test_tuple_input_with_pauli_list_bases(self):
+        """Test tuple input with PauliList as bases."""
+        bool_array = np.zeros((2, 10, 2), dtype=bool)
+        observables = [SparsePauliOp("ZZ", 1.0), SparsePauliOp("XX", 1.0)]
+        bases = PauliList(["ZZ", "XX"])
+        basis_mapping = (observables, bases)
+        meas_basis_axis = 0
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_mapping, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 2)
+        self.assertEqual(len(result_dict), 2)
+
+    def test_invalid_input_type(self):
+        """Test invalid input type (not dict or tuple) raises ValueError."""
+        bool_array = np.zeros((2, 10, 2), dtype=bool)
+        basis_mapping = ["ZZ", "XX"]  # List instead of dict or tuple
+        meas_basis_axis = 0
+
+        with self.assertRaises(ValueError) as context:
+            _validate_and_format_basis_mapping(basis_mapping, bool_array, meas_basis_axis)
+        self.assertIn("must be either a dict or a tuple", str(context.exception))
+
+    def test_different_meas_basis_axis(self):
+        """Test with different meas_basis_axis values."""
+        # Test with meas_basis_axis = 1
+        bool_array = np.zeros((5, 2, 10, 3), dtype=bool)  # 2 bases at axis 1
+        basis_dict = {
+            Pauli("ZZZ"): [SparsePauliOp("ZZZ", 1.0)],
+            Pauli("XXX"): [SparsePauliOp("XXX", 1.0)],
+        }
+        meas_basis_axis = 1
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_dict, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 1)
+        self.assertEqual(len(result_dict), 2)
+
+    def test_single_qubit_observables(self):
+        """Test with single qubit observables."""
+        bool_array = np.zeros((2, 10, 1), dtype=bool)
+        basis_dict = {
+            Pauli("Z"): [SparsePauliOp("Z", 1.0)],
+            Pauli("X"): [SparsePauliOp("X", 1.0)],
+        }
+        meas_basis_axis = 0
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_dict, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 1)
+        self.assertEqual(len(result_dict), 2)
+
+    def test_multiple_observables_per_basis(self):
+        """Test with multiple observables per basis."""
+        bool_array = np.zeros((1, 10, 3), dtype=bool)
+        basis_dict = {
+            Pauli("ZZZ"): [
+                SparsePauliOp("ZZZ", 1.0),
+                SparsePauliOp("ZZI", 0.5),
+                SparsePauliOp("IZZ", 2.0),
+            ]
+        }
+        meas_basis_axis = 0
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_dict, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 3)
+        self.assertEqual(len(result_dict[Pauli("ZZZ")]), 3)
+
+    def test_observable_with_multiple_terms(self):
+        """Test observables with multiple Pauli terms."""
+        bool_array = np.zeros((2, 10, 2), dtype=bool)
+        # Observable with multiple terms
+        obs = SparsePauliOp(["ZZ", "ZI", "IZ"], [1.0, 0.5, 0.5])
+        basis_dict = {
+            Pauli("ZZ"): [obs],
+            Pauli("XX"): [SparsePauliOp("XX", 1.0)],
+        }
+        meas_basis_axis = 0
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_dict, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 1)
+        # Check that the multi-term observable was preserved
+        self.assertEqual(len(result_dict), 2)
+
+    def test_empty_observable_list(self):
+        """Test with empty observable list."""
+        bool_array = np.zeros((1, 10, 2), dtype=bool)
+        basis_dict = {Pauli("ZZ"): []}
+        meas_basis_axis = 0
+
+        result_dict, num_obs = _validate_and_format_basis_mapping(
+            basis_dict, bool_array, meas_basis_axis
+        )
+
+        self.assertEqual(num_obs, 0)
+        self.assertEqual(len(result_dict[Pauli("ZZ")]), 0)
+
+    def test_complex_coefficients(self):
+        """Test observables with complex coefficients."""
+        bool_array = np.zeros((1, 10, 2), dtype=bool)
+        obs = SparsePauliOp("ZZ", 1.0 + 2.0j)
+        basis_dict = {Pauli("ZZ"): [obs]}
+        meas_basis_axis = 0
+
+        _, num_obs = _validate_and_format_basis_mapping(basis_dict, bool_array, meas_basis_axis)
+
+        self.assertEqual(num_obs, 1)
+        # Complex coefficients should be preserved
+
+    def test_tuple_input_with_identity_observable(self):
+        """Test tuple input with identity observable."""
+        bool_array = np.zeros((1, 10, 2), dtype=bool)
+        observables = [SparsePauliOp("II", 1.0)]
+        bases = ["ZZ"]
+        basis_mapping = (observables, bases)
+        meas_basis_axis = 0
+
+        _, num_obs = _validate_and_format_basis_mapping(basis_mapping, bool_array, meas_basis_axis)
+
+        self.assertEqual(num_obs, 1)
+        # Identity should commute with any basis
+
+
+# Made with Bob

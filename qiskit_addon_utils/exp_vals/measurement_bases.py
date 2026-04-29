@@ -20,7 +20,11 @@ from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp
 
 def get_measurement_bases(
     observables: SparsePauliOp | list[SparsePauliOp],
-) -> tuple[list[np.typing.NDArray[np.uint8]], dict[Pauli, list[SparsePauliOp]]]:
+    bases_in_int_format: bool = True,
+) -> (
+    tuple[list[np.typing.NDArray[np.uint8]], dict[Pauli, list[SparsePauliOp]]]
+    | tuple[list[str], dict[Pauli, list[SparsePauliOp]]]
+):
     """Choose bases to sample in order to calculate expectation values for all given observables.
 
     Here a "basis" refers to measurement of a full-weight or high-weight Pauli, from which multiple qubit-wise commuting Paulis may be estimated.
@@ -29,9 +33,12 @@ def get_measurement_bases(
 
     Args:
         observables: The observables to calculate using the quantum computer.
+        bases_in_int_format: If true, return bases as an array of ints, using the samplomatic convention of: I=0, Z=1, X=2, Y=3.
+            The order of the ints will be according to the index of each Pauli in the string. For example, the basis "IXYZ" would be returned as [1, 3, 2, 0].
+            If false, return the bases as an array of strings.
 
     Returns:
-        * List of Pauli bases to sample encoded in a list of uint8 where 0=I,1=Z,2=X,3=Y.
+        * List of Pauli bases to sample encoded in a list of uint8 where 0=I,1=Z,2=X,3=Y or a list of strings (based on bases_in_int_format parameter).
         * Dict that maps each measured basis to the relevant Paulis and their coefficients for each observable.
           With the measured bases as keys, for each observable there is a SparsePauliOp representing it.
     """
@@ -56,7 +63,10 @@ def get_measurement_bases(
                     paulis.append(pauli)
                     current_basis_weight += coeff
             reverser[basis][i] = SparsePauliOp(paulis, coeffs) if paulis else None
-    bases = _convert_basis_to_uint_representation(bases)
+    if bases_in_int_format:
+        bases = _convert_basis_to_uint_representation(bases)
+    else:
+        bases = bases.to_labels()
 
     return bases, reverser
 
