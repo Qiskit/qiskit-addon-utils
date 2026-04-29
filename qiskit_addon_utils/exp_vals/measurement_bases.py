@@ -34,7 +34,8 @@ def get_measurement_bases(
     Args:
         observables: The observables to calculate using the quantum computer.
         bases_in_int_format: If true, return bases as an array of ints, using the samplomatic convention of: I=0, Z=1, X=2, Y=3.
-            otherwise, return the bases as a array of strings.
+            The order of the ints will be according to the index of each Pauli in the string. For example, the basis "IXYZ" would be returned as [1, 3, 2, 0].
+            If false, return the bases as an array of strings.
 
     Returns:
         * List of Pauli bases to sample encoded in a list of uint8 where 0=I,1=Z,2=X,3=Y or a list of strings (based on bases_in_int_format parameter).
