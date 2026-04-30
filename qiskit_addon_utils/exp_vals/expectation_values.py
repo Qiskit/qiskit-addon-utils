@@ -101,7 +101,7 @@ def executor_expectation_values(
     avg_axis = _validate_avg_axis(avg_axis, len(bool_array.shape))
 
     if meas_basis_axis is None:
-        if len(basis_mapping) != 1:
+        if (isinstance(basis_mapping, dict) and len(basis_mapping) != 1) or (isinstance(basis_mapping, tuple) and len(basis_mapping[1]) != 1):
             raise ValueError(
                 f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_mapping) = }. "
             )

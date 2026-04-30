@@ -30,17 +30,19 @@ from qiskit_addon_utils.noise_management.trex_factors import trex_factors
 
 
 class TREX:
-    def __init__(self, pubs, noise=None, shots_per_randomization=64, num_randomizations=128):
+    def __init__(self, pubs, noise=None, shots_per_randomization=64, num_randomizations=128, cal_randomizations=128):
         """
         pubs - list of sets in the form of (circuit, list of observables, circuit parameters)
         """
         self.pubs = pubs
         self.shots_per_randomization = shots_per_randomization
         self.num_randomizations = num_randomizations
+        self.cal_randomizations = cal_randomizations
         self.noise_learning_layers = None
         self.annotated_circuits = None
         self.basis_dict_list = []
         self.measure_bases_list = []
+        self.observables_list = []
         self.noise = noise
         self.mitigation_factors = []
 
@@ -87,6 +89,7 @@ class TREX:
             measure_bases, basis_dict = get_measurement_bases(pub[1])
             self.measure_bases_list.append(measure_bases)
             self.basis_dict_list.append(basis_dict)
+            self.observables_list.append(pub[1])
             # broadcast measurement basis shape
             if len(pub) > 2:
                 parameter_values = pub[2]
@@ -149,12 +152,18 @@ class TREX:
             program.append_samplex_item(
                 template_calibration_circuit,
                 samplex=calibration_samplex,
-                shape=(self.num_randomizations),
+                shape=(self.cal_randomizations),
             )
-
+        # save data in the program for post processing
+        program.passthrough_data = {
+            "trex": {
+                "observables": self.observables_list,
+                "measure_bases": self.measure_bases_list,
+            }
+        }
         return program
 
-    def post_process(self, results, bases_list=None, observables_list=None):
+    def post_process(self, results):
         if not self.noise:
             # assume a calibration circuit was added to the quantum program as the last item
             noise_learning_result = results[-1]
@@ -175,6 +184,8 @@ class TREX:
             self.noise = readout_noise
 
         if not self.basis_dict_list:
+            observables_list = results.passthrough_data["trex"]["observables"]
+            bases_list = results.passthrough_data["trex"]["measure_bases"]
             # TODO: change trex_factors so it can get a tuple of (observables, bases) as input
             for bases, observables in zip(bases_list, observables_list):
                 self.basis_dict_list.append(
@@ -189,16 +200,17 @@ class TREX:
             basis_mapping = self.basis_dict_list[result_index]
             trex_factors_per_basis = trex_factors(self.noise, basis_mapping)
 
-            pub = self.pubs[result_index]
-            avg_axes = 1
-            if len(pub) > 2:
-                parameter_values = pub[2]
-                avg_axes = (1,) + (1,) * len(parameter_values.shape[:-1])
+            if len(basis_mapping) > 1:
+                avg_axes = tuple(range(1, len(meas.shape[1:-2])))
+                meas_basis_axis = 0
+            else:
+                avg_axes = tuple(range(len(meas.shape[:-2])))
+                meas_basis_axis = None
 
             res = executor_expectation_values(
                 meas,
                 basis_mapping,
-                meas_basis_axis=0,
+                meas_basis_axis=meas_basis_axis,
                 avg_axis=avg_axes,
                 measurement_flips=measurement_flips,
                 rescale_factors=trex_factors_per_basis,
