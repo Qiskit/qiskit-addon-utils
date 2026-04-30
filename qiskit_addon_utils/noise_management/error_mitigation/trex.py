@@ -16,7 +16,8 @@ import numpy as np
 from qiskit.circuit import QuantumCircuit
 from qiskit.transpiler import generate_preset_pass_manager
 from qiskit.circuit.controlflow.box import BoxOp
-from qiskit.quantum_info import PauliLindbladMap
+from qiskit.quantum_info import PauliLindbladMap, SparsePauliOp
+from qiskit.primitives.containers.estimator_pub import ObservablesArray
 from samplomatic.transpiler import generate_boxing_pass_manager
 from samplomatic import build
 from qiskit_ibm_runtime import QuantumProgram
@@ -98,7 +99,7 @@ class TREX:
                     (len(measure_bases),)
                     + (1,)
                     + (1,) * len(parameter_values.shape[:-1])
-                    + (annotated_circuit.num_qubits,)
+                    + (annotated_circuit.num_clbits,)
                 )
                 measure_bases_broadcastable = np.array(measure_bases).reshape(bases_shape)
                 samplex_shape = (
@@ -108,7 +109,7 @@ class TREX:
                 )
             else:
                 # add dimension also for the twirling randomizations
-                bases_shape = (len(measure_bases),) + (1,) + (annotated_circuit.num_qubits,)
+                bases_shape = (len(measure_bases),) + (1,) + (annotated_circuit.num_clbits,)
                 measure_bases_broadcastable = np.array(measure_bases).reshape(bases_shape)
                 samplex_shape = (len(measure_bases),) + (self.num_randomizations,)
 
@@ -155,9 +156,10 @@ class TREX:
                 shape=(self.cal_randomizations),
             )
         # save data in the program for post processing
+        observables_arr = [ObservablesArray.coerce(observables) for observables in self.observables_list]
         program.passthrough_data = {
             "trex": {
-                "observables": self.observables_list,
+                "observables": observables_arr,
                 "measure_bases": self.measure_bases_list,
             }
         }
@@ -184,7 +186,9 @@ class TREX:
             self.noise = readout_noise
 
         if not self.basis_dict_list:
-            observables_list = results.passthrough_data["trex"]["observables"]
+            observables_list = []
+            for observables in results.passthrough_data["trex"]["observables"]:
+                observables_list.append([SparsePauliOp(observable) for observable in observables])
             bases_list = results.passthrough_data["trex"]["measure_bases"]
             # TODO: change trex_factors so it can get a tuple of (observables, bases) as input
             for bases, observables in zip(bases_list, observables_list):
