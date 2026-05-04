@@ -14,6 +14,7 @@
 
 import numpy as np
 from qiskit.circuit import QuantumCircuit
+from qiskit import ClassicalRegister
 from qiskit.transpiler import generate_preset_pass_manager
 from qiskit.circuit.controlflow.box import BoxOp
 from qiskit.quantum_info import PauliLindbladMap, SparsePauliOp
@@ -71,13 +72,21 @@ class TREX:
     def _create_trex_calibration_circuit(self, measured_qubits):
         qubit_list = list(range(len(measured_qubits)))
 
-        trex_circuit = QuantumCircuit(len(measured_qubits), len(measured_qubits))
-        trex_circuit.measure(qubit_list, qubit_list)
+        cr = ClassicalRegister(len(measured_qubits), name="trex_cal")
+        trex_circuit = QuantumCircuit(len(measured_qubits))
+        trex_circuit.add_register(cr)
+        trex_circuit.measure(qubit_list, cr)
         trex_isa_pm = generate_preset_pass_manager(
             initial_layout=measured_qubits, optimization_level=0
         )
         trex_circuit = trex_isa_pm.run(trex_circuit)
-        return trex_circuit
+        boxing_pm = generate_boxing_pass_manager(
+            enable_gates=False,
+            enable_measures=True,
+            measure_annotations="twirl",
+        )
+        annotated_trex_circuit = boxing_pm.run(trex_circuit)
+        return annotated_trex_circuit
 
     def prepare(self):
         if not self.annotated_circuits or not self.noise_learning_layers:
@@ -166,24 +175,26 @@ class TREX:
         return program
 
     def post_process(self, results):
+        data_results = results
         if not self.noise:
             # assume a calibration circuit was added to the quantum program as the last item
             noise_learning_result = results[-1]
-            measurement_flips = noise_learning_result["measurement_flips.meas"]
-            noise_calibration_data = noise_learning_result["meas"]
+            measurement_flips = noise_learning_result["measurement_flips.trex_cal"]
+            noise_calibration_data = noise_learning_result["trex_cal"]
             noise_calibration_data_flipped = np.logical_xor(
                 noise_calibration_data, measurement_flips
             )
             noise_list = []
-            num_qubits = len(noise_calibration_data.shape[-1])
+            num_qubits = noise_calibration_data.shape[-1]
             for qubit_index in range(num_qubits):
                 # the shape of the calibration data is (randomizations, shots, measured_qubit)
-                excited_state_count = np.sum(noise_calibration_data_flipped[:, :, 0])
-                total_shots = len(noise_calibration_data_flipped[:, :, 0].flatten())
+                excited_state_count = np.sum(noise_calibration_data_flipped[:, :, qubit_index])
+                total_shots = len(noise_calibration_data_flipped[:, :, qubit_index].flatten())
                 flip_rate = excited_state_count / total_shots
                 noise_list.append(("X", [qubit_index], flip_rate))
             readout_noise = PauliLindbladMap.from_sparse_list(noise_list, num_qubits=num_qubits)
             self.noise = readout_noise
+            data_results = results[:-1]
 
         if not self.basis_dict_list:
             observables_list = []
@@ -198,7 +209,7 @@ class TREX:
 
         exp_vals_list = []
         exp_vars_list = []
-        for result_index, result in enumerate(results):
+        for result_index, result in enumerate(data_results):
             measurement_flips = result["measurement_flips.meas"]
             meas = result["meas"]
             basis_mapping = self.basis_dict_list[result_index]

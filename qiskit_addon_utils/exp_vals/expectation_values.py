@@ -555,7 +555,8 @@ def _bitarray_expectation_value(
     # Divide by rescale factors if supplied
     if rescale_each_observable is not None:
         # flatten rescale factors of all the terms of all observables into 1D array
-        rescale_each_term = np.reshape(rescale_each_observable, -1)
+        # remove factors of empty observables to keep the shape as the expvals
+        rescale_each_term = np.reshape(np.array(rescale_each_observable)[np.nonzero(obs_lengths)] , -1)
         expvals_each_term *= rescale_each_term
         variances_each_term *= rescale_each_term**2
 
