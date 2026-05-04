@@ -21,8 +21,9 @@ from qiskit.quantum_info import PauliLindbladMap, SparsePauliOp
 from qiskit.primitives.containers.estimator_pub import ObservablesArray
 from samplomatic.transpiler import generate_boxing_pass_manager
 from samplomatic import build
-from qiskit_ibm_runtime import QuantumProgram
 
+from .executor_quantum_program import ExecutorQuantumProgram
+from .executor_quantum_program_result import ExecutorQuantumProgramResult
 from qiskit_addon_utils.exp_vals import get_measurement_bases
 from qiskit_addon_utils.exp_vals.expectation_values import (
     executor_expectation_values,
@@ -88,12 +89,12 @@ class TREX:
         annotated_trex_circuit = boxing_pm.run(trex_circuit)
         return annotated_trex_circuit
 
-    def prepare(self):
+    def prepare(self) -> ExecutorQuantumProgram:
         if not self.annotated_circuits or not self.noise_learning_layers:
             self.find_layers()
 
-        # create QuantumProgram
-        program = QuantumProgram(shots=self.shots_per_randomization)
+        # create ExecutorQuantumProgram
+        program = ExecutorQuantumProgram(shots=self.shots_per_randomization)
         for index, pub in enumerate(self.pubs):
             annotated_circuit = self.annotated_circuits[index]
             measure_bases, basis_dict = get_measurement_bases(pub[1])
@@ -167,14 +168,14 @@ class TREX:
         # save data in the program for post processing
         observables_arr = [ObservablesArray.coerce(observables) for observables in self.observables_list]
         program.passthrough_data = {
-            "trex": {
+            "_trex": {
                 "observables": observables_arr,
                 "measure_bases": self.measure_bases_list,
             }
         }
         return program
 
-    def post_process(self, results):
+    def post_process(self, results: ExecutorQuantumProgramResult):
         data_results = results
         if not self.noise:
             # assume a calibration circuit was added to the quantum program as the last item
@@ -198,9 +199,9 @@ class TREX:
 
         if not self.basis_dict_list:
             observables_list = []
-            for observables in results.passthrough_data["trex"]["observables"]:
+            for observables in results.passthrough_data["_trex"]["observables"]:
                 observables_list.append([SparsePauliOp(observable) for observable in observables])
-            bases_list = results.passthrough_data["trex"]["measure_bases"]
+            bases_list = results.passthrough_data["_trex"]["measure_bases"]
             # TODO: change trex_factors so it can get a tuple of (observables, bases) as input
             for bases, observables in zip(bases_list, observables_list):
                 self.basis_dict_list.append(
