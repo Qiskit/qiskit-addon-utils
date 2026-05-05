@@ -13,7 +13,7 @@
 """TREX quantum error mitigation method."""
 
 import numpy as np
-from qiskit.circuit import QuantumCircuit
+from qiskit.circuit import QuantumCircuit, CircuitInstruction
 from qiskit import ClassicalRegister
 from qiskit.transpiler import generate_preset_pass_manager
 from qiskit.circuit.controlflow.box import BoxOp
@@ -41,6 +41,7 @@ class TREX:
         self.shots_per_randomization = shots_per_randomization
         self.num_randomizations = num_randomizations
         self.cal_randomizations = cal_randomizations
+        self.data_register_name = None
         self.noise_learning_layers = None
         self.annotated_circuits = None
         self.basis_dict_list = []
@@ -49,13 +50,51 @@ class TREX:
         self.noise = noise
         self.mitigation_factors = []
 
+    @staticmethod
+    def remove_midcircuit_box_annotations(circuit: QuantumCircuit):
+        """Return a new circuit with all annotations removed from every box, besides the final box.
+
+            Args:
+                circuit: The circuit whose box annotations to strip.
+
+            Returns:
+                A new circuit with empty annotation lists on every box, besides the final box.
+        """
+        new_circuit = circuit.copy_empty_like()
+        for instr in circuit.data[:-1]:
+            if instr.operation.name == "box":
+                box = instr.operation
+                new_box = BoxOp(body=box.body, label=box.label, annotations=[])
+                new_circuit.data.append(CircuitInstruction(new_box, instr.qubits, instr.clbits))
+            else:
+                new_circuit.data.append(instr)
+        new_circuit.data.append(circuit.data[-1])
+        return new_circuit
+
     def _annotate_circuit_and_find_layers(self, circuit):
+        """annotate the final measurement layer with ChangeBasis and Twirling annotations.
+
+        Remove terminal measurements in the circuit if present, and replace with new terminal measurements on all the circuit's qubits,
+        writing the results to a new dedicated classical register.
+        """
+        if circuit.layout:
+            qubits_in_layout = circuit.layout.final_index_layout()
+        else:
+            qubits_in_layout = list(range(len(circuit.qubits)))
+        edited_circuit = circuit.remove_final_measurements(inplace=False)
+        qubits_register = ClassicalRegister._new_with_prefix(len(qubits_in_layout), "trex_data")
+        self.data_register_name = qubits_register.name
+        edited_circuit.add_register(qubits_register)
+        edited_circuit.barrier(qubits_in_layout)
+        edited_circuit.measure(qubits_in_layout, qubits_register)
+
         boxing_pm = generate_boxing_pass_manager(
             enable_gates=False,
             enable_measures=True,
             measure_annotations="all",
         )
-        annotated_circuit = boxing_pm.run(circuit)
+        annotated_circuit = boxing_pm.run(edited_circuit)
+        annotated_circuit = self.remove_midcircuit_box_annotations(annotated_circuit)
         return annotated_circuit, annotated_circuit.data[-1]
 
     def find_layers(self):
@@ -73,10 +112,10 @@ class TREX:
     def _create_trex_calibration_circuit(self, measured_qubits):
         qubit_list = list(range(len(measured_qubits)))
 
-        cr = ClassicalRegister(len(measured_qubits), name="trex_cal")
+        classical_cal_reg = ClassicalRegister(len(measured_qubits), name="trex_cal")
         trex_circuit = QuantumCircuit(len(measured_qubits))
-        trex_circuit.add_register(cr)
-        trex_circuit.measure(qubit_list, cr)
+        trex_circuit.add_register(classical_cal_reg)
+        trex_circuit.measure(qubit_list, classical_cal_reg)
         trex_isa_pm = generate_preset_pass_manager(
             initial_layout=measured_qubits, optimization_level=0
         )
@@ -101,6 +140,10 @@ class TREX:
             self.measure_bases_list.append(measure_bases)
             self.basis_dict_list.append(basis_dict)
             self.observables_list.append(pub[1])
+
+            for register in annotated_circuit.cregs:
+                if register.name == self.data_register_name:
+                    num_qubits = len(register)
             # broadcast measurement basis shape
             if len(pub) > 2:
                 parameter_values = pub[2]
@@ -109,7 +152,7 @@ class TREX:
                     (len(measure_bases),)
                     + (1,)
                     + (1,) * len(parameter_values.shape[:-1])
-                    + (annotated_circuit.num_clbits,)
+                    + (num_qubits,)
                 )
                 measure_bases_broadcastable = np.array(measure_bases).reshape(bases_shape)
                 samplex_shape = (
@@ -119,7 +162,7 @@ class TREX:
                 )
             else:
                 # add dimension also for the twirling randomizations
-                bases_shape = (len(measure_bases),) + (1,) + (annotated_circuit.num_clbits,)
+                bases_shape = (len(measure_bases),) + (1,) + (num_qubits,)
                 measure_bases_broadcastable = np.array(measure_bases).reshape(bases_shape)
                 samplex_shape = (len(measure_bases),) + (self.num_randomizations,)
 
@@ -171,6 +214,7 @@ class TREX:
             "_trex": {
                 "observables": observables_arr,
                 "measure_bases": self.measure_bases_list,
+                "data_register_name": self.data_register_name,
             }
         }
         return program
@@ -210,9 +254,10 @@ class TREX:
 
         exp_vals_list = []
         exp_vars_list = []
+        data_register_name = results.passthrough_data["_trex"]["data_register_name"]
         for result_index, result in enumerate(data_results):
-            measurement_flips = result["measurement_flips.meas"]
-            meas = result["meas"]
+            measurement_flips = result[f"measurement_flips.{data_register_name}"]
+            meas = result[data_register_name]
             basis_mapping = self.basis_dict_list[result_index]
             trex_factors_per_basis = trex_factors(self.noise, basis_mapping)
 
