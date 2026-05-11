@@ -90,10 +90,6 @@ class TREX:
                         new_box = BoxOp(body=box.body, label=box.label, annotations=[])
                 else:
                     new_box = box
-                    # if self.options["twirl_gates"]:
-                    #     new_box = box
-                    # else:
-                    #     new_box = BoxOp(body=box.body, label=box.label, annotations=[])
                 new_circuit.data.append(CircuitInstruction(new_box, instr.qubits, instr.clbits))
             else:
                 new_circuit.data.append(instr)
@@ -341,12 +337,9 @@ class TREX:
             basis_mapping = self.basis_dict_list[result_index]
             trex_factors_per_basis = trex_factors(self.noise, basis_mapping)
 
-            if len(basis_mapping) > 1:
-                avg_axes = tuple(range(1, len(meas.shape[1:-2])))
-                meas_basis_axis = 0
-            else:
-                avg_axes = tuple(range(len(meas.shape[:-2])))
-                meas_basis_axis = None
+            # The prepare function places meas_basis in axis 0, even for cases with only a single basis
+            avg_axes = tuple(range(1, len(meas.shape[1:-2])))
+            meas_basis_axis = 0
 
             res = executor_expectation_values(
                 meas,
