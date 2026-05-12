@@ -74,6 +74,32 @@ class TestGetMeasurementBases(unittest.TestCase):
         self.assertIsInstance(bases[0], str)
         self.assertEqual(bases[0], "XYZ")
 
+    def test_bases_both_format(self):
+        """Test with bases_format="both" to get both int and string formats."""
+        obs = SparsePauliOp("XYZ", 1.0)
+        bases, reverser = get_measurement_bases(obs, bases_format="both")
+
+        # bases should be a tuple of (int_bases, str_bases)
+        self.assertIsInstance(bases, tuple)
+        self.assertEqual(len(bases), 2)
+
+        bases_int, bases_str = bases
+
+        # Check int format
+        self.assertEqual(len(bases_int), 1)
+        self.assertIsInstance(bases_int[0], np.ndarray)
+        np.testing.assert_array_equal(bases_int[0], np.array([1, 3, 2], dtype=np.uint8))
+
+        # Check string format
+        self.assertEqual(len(bases_str), 1)
+        self.assertIsInstance(bases_str[0], str)
+        self.assertEqual(bases_str[0], "XYZ")
+
+        # Check reverser is still correct
+        self.assertEqual(len(reverser), 1)
+        basis_pauli = next(iter(reverser.keys()))
+        self.assertEqual(basis_pauli, Pauli("XYZ"))
+
     def test_commuting_paulis_grouped(self):
         """Test that commuting Paulis are grouped into the same basis."""
         obs = SparsePauliOp(["ZII", "IZI", "IIZ"], [1.0, 1.0, 1.0])

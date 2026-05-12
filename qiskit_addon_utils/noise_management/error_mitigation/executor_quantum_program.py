@@ -1,4 +1,4 @@
-# This code is part of Qiskit.
+# This code is a Qiskit project.
 #
 # (C) Copyright IBM 2026.
 #
@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import abc
 import math
-from typing import Any, Literal
 from collections.abc import Iterable
+from typing import Any, Literal
 
 import numpy as np
 from qiskit.circuit import QuantumCircuit
@@ -50,8 +50,13 @@ class ExecutorQuantumProgramItem(abc.ABC):
     """
 
     def __init__(self, circuit: QuantumCircuit):
+        """Item of QuantumProgram.
+
+        Args:
+            circuit: The circuit to be executed.
+        """
         if not isinstance(circuit, QuantumCircuit):
-            raise ValueError(f"Expected {repr(circuit)} to be a QuantumCircuit.")
+            raise ValueError(f"Expected {circuit!r} to be a QuantumCircuit.")
 
         self.circuit = circuit
 
@@ -72,7 +77,7 @@ class ExecutorCircuitItem(ExecutorQuantumProgramItem):
         circuit: The circuit to be executed.
         circuit_arguments: A real-valued array of parameter values for the circuit. The last axis
             is intrinsic with size equal to the number of circuit parameters. Leading axes are
-            extrinsic and define the sweep grid. For example, shape ``(5, 3, n)`` means 5×3=15
+            extrinsic and define the sweep grid. For example, shape ``(5, 3, n)`` means 5x3=15
             configurations for a circuit with ``n`` parameters.
     """
 
@@ -82,12 +87,18 @@ class ExecutorCircuitItem(ExecutorQuantumProgramItem):
         *,
         circuit_arguments: np.ndarray | None = None,
     ):
+        """Circuit item in a QuantumProgram.
+
+        Args:
+            circuit: The circuit to be executed.
+            circuit_arguments: A real-valued array of parameter values for the circuit.
+        """
         super().__init__(circuit=circuit)
 
         if circuit_arguments is None:
             if circuit.num_parameters:
                 raise ValueError(
-                    f"{repr(circuit)} is parametric, but no 'circuit_arguments' were supplied."
+                    f"{circuit!r} is parametric, but no 'circuit_arguments' were supplied."
                 )
             circuit_arguments = []
 
@@ -108,6 +119,7 @@ class ExecutorCircuitItem(ExecutorQuantumProgramItem):
         return self.circuit_arguments.shape[:-1]
 
     def __repr__(self) -> str:
+        """Return a string representation of this item."""
         circuit = f"<QuantumCircuit @ {hex(id(self.circuit))}>"
 
         if not self.circuit_arguments.size:
@@ -142,6 +154,14 @@ class ExecutorSamplexItem(ExecutorQuantumProgramItem):
         samplex_arguments: dict[str, Any] | None = None,
         shape: tuple[int, ...] | None = None,
     ):
+        """Samplex item in a QuantumProgram.
+
+        Args:
+            circuit: The circuit related to the samplex to be executed.
+            samplex: A samplex to draw random parameters for the circuit.
+            samplex_arguments: A map from argument names to argument values for the samplex.
+            shape: A shape that the item's extrinsic shape must be broadcastable to.
+        """
         super().__init__(circuit=circuit)
 
         # Calling bind() here will do all Samplex validation
@@ -170,6 +190,7 @@ class ExecutorSamplexItem(ExecutorQuantumProgramItem):
         return self._shape
 
     def __repr__(self) -> str:
+        """Return a string representation of this item."""
         circuit = f"<QuantumCircuit @ {hex(id(self.circuit))}>"
 
         samplex = f", <Samplex @ {hex(id(self.samplex))}>" if self.samplex is not None else ""
@@ -212,6 +233,7 @@ class ExecutorQuantumProgram:
         meas_level: Literal["classified", "kerneled", "avg_kerneled"] = "classified",
         passthrough_data: dict | None = None,
     ):
+        """QuantumProgram constructor."""
         self.shots = shots
         self.items: list[ExecutorQuantumProgramItem] = list(items or [])
         self.noise_maps = noise_maps or {}
@@ -281,10 +303,11 @@ class ExecutorQuantumProgram:
         )
 
     def __repr__(self) -> str:
+        """Return a string representation of this program."""
         if not self.items:
             return f"ExecutorQuantumProgram(shots={self.shots})"
         return "\n".join(
             [f"ExecutorQuantumProgram(shots={self.shots}, items=["]
-            + [f"    {repr(item)}," for item in self.items]
+            + [f"    {item!r}," for item in self.items]
             + ["])"]
         )

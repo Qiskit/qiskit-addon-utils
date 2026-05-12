@@ -1,4 +1,4 @@
-# This code is part of Qiskit.
+# This code is a Qiskit project.
 #
 # (C) Copyright IBM 2026.
 #
@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+
 import numpy as np
 
 
@@ -31,17 +32,22 @@ class ExecutorQuantumProgramResult:
         data: list[dict[str, np.ndarray]],
         passthrough_data: dict | None = None,
     ):
+        """Initialize an ExecutorQuantumProgramResult."""
         self._data = data
         self.passthrough_data = passthrough_data
 
     def __iter__(self) -> Iterator[dict[str, np.ndarray]]:
+        """Return an iterator over the results of executing on a quantum hardware."""
         yield from self._data
 
     def __getitem__(self, idx: int) -> dict[str, np.ndarray]:
+        """Return the results of executing on a quantum hardware."""
         return self._data[idx]
 
     def __len__(self) -> int:
+        """Return the number of results of executing on a quantum hardware."""
         return len(self._data)
 
     def __repr__(self) -> str:
+        """Return a string representation of an ExecutorQuantumProgramResult."""
         return f"{type(self).__name__}(<{len(self)} results>)"
