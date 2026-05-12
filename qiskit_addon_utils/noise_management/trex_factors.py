@@ -53,9 +53,7 @@ def trex_factors(
             basis_scales = [
                 1
                 / measurement_noise_map.pauli_fidelity(
-                    QubitSparsePauli(
-                        ("Z" * len(term.indices), term.indices), num_qubits=num_qubits
-                    )
+                    QubitSparsePauli(("Z" * len(term.indices), term.indices), num_qubits=num_qubits)
                 )
                 for term in sparse_observable
             ]

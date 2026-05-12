@@ -101,7 +101,9 @@ def executor_expectation_values(
     avg_axis = _validate_avg_axis(avg_axis, len(bool_array.shape))
 
     if meas_basis_axis is None:
-        if (isinstance(basis_mapping, dict) and len(basis_mapping) != 1) or (isinstance(basis_mapping, tuple) and len(basis_mapping[1]) != 1):
+        if (isinstance(basis_mapping, dict) and len(basis_mapping) != 1) or (
+            isinstance(basis_mapping, tuple) and len(basis_mapping[1]) != 1
+        ):
             raise ValueError(
                 f"`meas_basis_axis` cannot be `None` unless there is only one measurement basis, but {len(basis_mapping) = }. "
             )
@@ -354,9 +356,11 @@ def _find_measure_basis_to_observable_mapping(
                 # TODO: enable multiple bases for each element, lowering variance in the expectation value calculation
                 if observables_elements_basis_found[observable_index][element_index]:
                     continue
-                commutes = (
-                    np.dot(observable_element.z, basis.x) + np.dot(observable_element.x, basis.z)
-                ) % 2 == 0
+                qubit_commute = [
+                    term_a == term_b or term_a == Pauli("I") or term_b == Pauli("I")
+                    for term_a, term_b in zip(observable_element, basis)
+                ]
+                commutes = np.all(qubit_commute)
                 if commutes:
                     basis_paulis.append(observable_element)
                     basis_coeffs.append(observable_coeff)
@@ -556,7 +560,9 @@ def _bitarray_expectation_value(
     if rescale_each_observable is not None:
         # flatten rescale factors of all the terms of all observables into 1D array
         # remove factors of empty observables to keep the shape as the expvals
-        rescale_each_term = np.reshape(np.array(rescale_each_observable)[np.nonzero(obs_lengths)] , -1)
+        rescale_each_term = np.reshape(
+            np.array(rescale_each_observable)[np.nonzero(obs_lengths)], -1
+        )
         expvals_each_term *= rescale_each_term
         variances_each_term *= rescale_each_term**2
 

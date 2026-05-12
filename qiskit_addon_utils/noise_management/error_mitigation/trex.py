@@ -231,6 +231,9 @@ class TREX:
 
         Returns:
             ExecutorQuantumProgram that contains a relevant samplex item for each input in ``self.inputs`` and an item for noise learning if a noise model is not set.
+
+        Raises:
+            ValueError: If ``annotated_circuits`` and ``noise_learning_layer`` were set manually and one of the circuits does not contain a matching register name as in ``data_register_names``.
         """
         if not self.annotated_circuits or not self.noise_learning_layer:
             self.annotate_circuits_and_find_layers()
@@ -246,9 +249,14 @@ class TREX:
             self.basis_dict_list.append(basis_dict)
             self.observables_list.append(input_tuple[1])
 
+            num_qubits = None
             for register in annotated_circuit.cregs:
                 if register.name == self.data_register_names[index]:
                     num_qubits = len(register)
+            if not num_qubits:
+                raise ValueError(
+                    f"The circuit in input number {index} does not contain a register named {self.data_register_names[index]}"
+                )
             # broadcast measurement basis shape
             if len(input_tuple) > 2:
                 parameter_values = input_tuple[2]
@@ -379,7 +387,7 @@ class TREX:
             trex_factors_per_basis = trex_factors(self.noise, basis_mapping)
 
             # The prepare function places meas_basis in axis 0, even for cases with only a single basis
-            avg_axes = tuple(range(1, len(meas.shape[1:-2])))
+            avg_axes = 1
             meas_basis_axis = 0
 
             res = executor_expectation_values(

@@ -12,8 +12,8 @@
 
 """Tests for the TREX error mitigation method."""
 
+import types
 import unittest
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 from qiskit.circuit import Parameter, QuantumCircuit
@@ -76,12 +76,11 @@ class TestTREXInit(unittest.TestCase):
         """Test that state variables are properly initialized."""
         trex = TREX()
         self.assertEqual(trex.data_register_names, [])
-        self.assertIsNone(trex.noise_learning_layers)
+        self.assertIsNone(trex.noise_learning_layer)
         self.assertIsNone(trex.annotated_circuits)
         self.assertEqual(trex.basis_dict_list, [])
         self.assertEqual(trex.measure_bases_list, [])
         self.assertEqual(trex.observables_list, [])
-        self.assertEqual(trex.mitigation_factors, [])
 
 
 class TestTREXRemoveMidcircuitBoxAnnotations(unittest.TestCase):
@@ -94,7 +93,7 @@ class TestTREXRemoveMidcircuitBoxAnnotations(unittest.TestCase):
         """Test that _remove_midcircuit_box_annotations removes midcircuit box annotations."""
         self.trex.options["twirl_mcm"] = False
 
-        circuit = QuantumCircuit(2)
+        circuit = QuantumCircuit(3, 1)
         circuit.h(0)
         circuit.cx(0, 1)
         circuit.cx(1, 2)
@@ -115,7 +114,7 @@ class TestTREXRemoveMidcircuitBoxAnnotations(unittest.TestCase):
         self.assertIsNotNone(result_circ.data[-1].operation.annotations)
         self.assertEqual(len(result_circ.data[-1].operation.annotations), 2)
         self.assertEqual(
-            result_circ.data[-1].operation.annotations,
+            result_circ.data[-1].operation.annotations[0],
             Twirl(group="pauli", dressing="left", decomposition="rzsx"),
         )
         self.assertIsInstance(result_circ.data[-1].operation.annotations[1], ChangeBasis)
@@ -124,7 +123,7 @@ class TestTREXRemoveMidcircuitBoxAnnotations(unittest.TestCase):
         """Test that _remove_midcircuit_box_annotations keeps Twirl annotations for midcircuit box if twirl_mcm is True."""
         self.trex.options["twirl_mcm"] = True
 
-        circuit = QuantumCircuit(2)
+        circuit = QuantumCircuit(3, 1)
         circuit.h(0)
         circuit.cx(0, 1)
         circuit.cx(1, 2)
@@ -144,13 +143,13 @@ class TestTREXRemoveMidcircuitBoxAnnotations(unittest.TestCase):
         self.assertIsNotNone(result_circ.data[3].operation.annotations)
         self.assertEqual(len(result_circ.data[3].operation.annotations), 1)
         self.assertEqual(
-            result_circ.data[3].operation.annotations,
+            result_circ.data[3].operation.annotations[0],
             Twirl(group="pauli", dressing="left", decomposition="rzsx"),
         )
         self.assertIsNotNone(result_circ.data[-1].operation.annotations)
         self.assertEqual(len(result_circ.data[-1].operation.annotations), 2)
         self.assertEqual(
-            result_circ.data[-1].operation.annotations,
+            result_circ.data[-1].operation.annotations[0],
             Twirl(group="pauli", dressing="left", decomposition="rzsx"),
         )
         self.assertIsInstance(result_circ.data[-1].operation.annotations[1], ChangeBasis)
@@ -313,46 +312,31 @@ class TestTREXCreateTrexCalibrationCircuit(unittest.TestCase):
 class TestTREXPrepare(unittest.TestCase):
     """Tests for prepare method."""
 
-    def setUp(self):
-        self.circuit = QuantumCircuit(2)
-        self.circuit.h(0)
-        self.circuit.cx(0, 1)
-        self.observable = SparsePauliOp("ZZ")
-        self.inputs = [(self.circuit, [self.observable])]
-
-        self.trex = TREX(inputs=self.inputs)
-
     def test_prepare_calls_annotate_when_needed(self):
         """Test that prepare calls annotate_circuits_and_find_layers when needed."""
-        # Initially, annotated_circuits and noise_learning_layers are None
-        self.assertIsNone(self.trex.annotated_circuits)
-        self.assertIsNone(self.trex.noise_learning_layer)
+        circuit = QuantumCircuit(2)
+        circuit.h(0)
+        circuit.cx(0, 1)
+        observable = SparsePauliOp("ZZ")
 
-        with patch.object(self.trex, "annotate_circuits_and_find_layers") as mock_annotate:
-            # Make annotate_circuits_and_find_layers set the attributes
-            def set_attrs():
-                self.trex.annotated_circuits = [QuantumCircuit(2)]
-                self.trex.noise_learning_layers = [MagicMock()]
-                self.trex.data_register_names = ["trex_data"]
+        trex = TREX(inputs=[(circuit, [observable])])
+        # Initially, annotated_circuits and noise_learning_layer are None
+        self.assertIsNone(trex.annotated_circuits)
+        self.assertIsNone(trex.noise_learning_layer)
 
-            mock_annotate.side_effect = set_attrs
+        trex.old_annotate_circuits_and_find_layers = trex.annotate_circuits_and_find_layers
+        trex.called_annotate_circuits_and_find_layers = False
 
-            with patch(
-                "qiskit_addon_utils.noise_management.error_mitigation.trex.get_measurement_bases"
-            ) as mock_get_bases:
-                mock_get_bases.return_value = ((np.array([[1, 1]]), ["ZZ"]), {"ZZ": 0})
+        def new_annotate_circuits_and_find_layers(self):
+            self.called_annotate_circuits_and_find_layers = True
+            return self.old_annotate_circuits_and_find_layers()
 
-                with patch(
-                    "qiskit_addon_utils.noise_management.error_mitigation.trex.build"
-                ) as mock_build:
-                    mock_build.return_value = (MagicMock(), MagicMock())
+        trex.annotate_circuits_and_find_layers = types.MethodType(
+            new_annotate_circuits_and_find_layers, trex
+        )
 
-                    with patch(
-                        "qiskit_addon_utils.noise_management.error_mitigation.trex.ExecutorQuantumProgram"
-                    ):
-                        self.trex.prepare()
-
-                        mock_annotate.assert_called_once()
+        trex.prepare()
+        self.assertEqual(trex.called_annotate_circuits_and_find_layers, True)
 
     def test_prepare_returns_executor_quantum_program(self):
         """Test prepare returned value."""
@@ -373,8 +357,8 @@ class TestTREXPrepare(unittest.TestCase):
         trex = TREX(inputs=[(circuit, observables, parameter_values)])
         result_program = trex.prepare()
         self.assertEqual(len(result_program.items), 2)
-        self.assertEqual(len(result_program.items[0].shape), (2, 128, 4))
-        self.assertEqual(len(result_program.items[1].shape), (128,))
+        self.assertEqual(result_program.items[0].shape, (2, 128, 4))
+        self.assertEqual(result_program.items[1].shape, (128,))
 
         parameter_values2 = np.array([[0, np.pi, np.pi], [np.pi, np.pi, np.pi]])
 
@@ -386,9 +370,9 @@ class TestTREXPrepare(unittest.TestCase):
         )
         result_program = trex.prepare()
         self.assertEqual(len(result_program.items), 3)
-        self.assertEqual(len(result_program.items[0].shape), (2, 128, 2))
-        self.assertEqual(len(result_program.items[1].shape), (2, 128, 4))
-        self.assertEqual(len(result_program.items[1].shape), (128,))
+        self.assertEqual(result_program.items[0].shape, (2, 128, 2))
+        self.assertEqual(result_program.items[1].shape, (2, 128, 4))
+        self.assertEqual(result_program.items[2].shape, (128,))
 
     def test_prepare_condition_for_calibration(self):
         """Test prepare checks the condition for creating calibration circuit."""
@@ -413,19 +397,6 @@ class TestTREXPrepare(unittest.TestCase):
 
 class TestTREXPostProcess(unittest.TestCase):
     """Tests for post_process method."""
-
-    def setUp(self):
-        self.circuit = QuantumCircuit(2)
-        self.circuit.h(0)
-        self.circuit.cx(0, 1)
-        self.observable = SparsePauliOp("ZZ")
-        self.inputs = [(self.circuit, [self.observable])]
-        self.trex = TREX(inputs=self.inputs)
-
-        self.noise = PauliLindbladMap.from_sparse_list(
-            [("X", [0], 0.01), ("X", [1], 0.01)], num_qubits=2
-        )
-        self.trex.noise = self.noise
 
     def test_post_process_no_noise_provided(self):
         """Test post-processing with no noise model provided."""
@@ -687,8 +658,8 @@ class TestTREXIntegration(unittest.TestCase):
         exp_vals_list, exp_vars_list = trex.post_process(results_data)
         self.assertEqual(len(exp_vals_list), len(inputs))
         self.assertEqual(len(exp_vars_list), len(inputs))
-        self.assertEqual(exp_vals_list[0].shape, len(observables))
-        self.assertEqual(exp_vars_list[0].shape, len(observables))
+        self.assertEqual(exp_vals_list[0].shape, (1,))
+        self.assertEqual(exp_vars_list[0].shape, (1,))
         self.assertIsNotNone(trex.noise)
         self.assertIsNotNone(trex.basis_dict_list)
 
