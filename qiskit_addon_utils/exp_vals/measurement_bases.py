@@ -24,6 +24,7 @@ def get_measurement_bases(
 ) -> (
     tuple[list[np.typing.NDArray[np.uint8]], dict[Pauli, list[SparsePauliOp]]]
     | tuple[list[str], dict[Pauli, list[SparsePauliOp]]]
+    | tuple[tuple[list[np.typing.NDArray[np.uint8]], list[str]], dict[Pauli, list[SparsePauliOp]]]
 ):
     """Choose bases to sample in order to calculate expectation values for all given observables.
 

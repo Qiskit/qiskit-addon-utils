@@ -100,7 +100,7 @@ class ExecutorCircuitItem(ExecutorQuantumProgramItem):
                 raise ValueError(
                     f"{circuit!r} is parametric, but no 'circuit_arguments' were supplied."
                 )
-            circuit_arguments = []
+            circuit_arguments = np.array([])
 
         circuit_arguments = np.array(circuit_arguments, dtype=float)
 
@@ -227,7 +227,7 @@ class ExecutorQuantumProgram:
 
     def __init__(
         self,
-        shots: int,
+        shots: int = 64,
         items: Iterable[ExecutorQuantumProgramItem] | None = None,
         noise_maps: dict[str, PauliLindbladMap] | None = None,
         meas_level: Literal["classified", "kerneled", "avg_kerneled"] = "classified",

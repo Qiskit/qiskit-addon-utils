@@ -12,6 +12,8 @@
 
 """TREX quantum error mitigation method."""
 
+from typing import Optional
+
 import numpy as np
 from qiskit import ClassicalRegister
 from qiskit.circuit import CircuitInstruction, QuantumCircuit
@@ -30,6 +32,7 @@ from qiskit_addon_utils.exp_vals.expectation_values import (
 )
 from qiskit_addon_utils.noise_management.trex_factors import trex_factors
 
+from .execution_inputs import ExecutionInputs
 from .executor_quantum_program import ExecutorQuantumProgram
 from .executor_quantum_program_result import ExecutorQuantumProgramResult
 
@@ -44,9 +47,7 @@ class TREX:
 
     def __init__(
         self,
-        inputs: list[tuple[QuantumCircuit, list[SparsePauliOp]]]
-        | list[tuple[QuantumCircuit, list[SparsePauliOp], list[np.ndarray]]]
-        | None = None,
+        inputs: Optional[list[ExecutionInputs]] = None,
         noise: PauliLindbladMap | None = None,
         twirl_gates: bool = False,
         twirling_strategy: str | None = None,
@@ -59,7 +60,7 @@ class TREX:
         """Implementation of Twirled Readout Error eXtinction (TREX) method.
 
         Args:
-            inputs: List of tuples in the form of (circuit, list of observables, list of circuit parameters)
+            inputs: List of ``ExecutionInputs``. Each ExecutionInput is a tuple in the form of (circuit, list of observables, list of circuit parameters)
             noise: Readout noise learned, in the form of PauliLindbladMap, to be used for the TREX factor post-processing calculation.
             twirl_gates: If ``True``, find and twirl also two-qubit gate layers and annotate them with `Twirl` annotations.
             twirling_strategy: The twirling strategy to use. See samplomatic for available strategies.
@@ -70,6 +71,13 @@ class TREX:
             cal_randomizations: Number of randomizations for twirling in the noise learning execution.
         """
         self.inputs = inputs
+        if inputs is not None:
+            self.inputs = [
+                execution_input
+                if isinstance(execution_input, ExecutionInputs)
+                else ExecutionInputs.coerce(execution_input)
+                for execution_input in inputs
+            ]
         self.options = {
             "twirl_gates": twirl_gates,
             "twirling_strategy": twirling_strategy,
@@ -81,15 +89,15 @@ class TREX:
         }
 
         self.data_register_names: list[str] = []
-        self.noise_learning_layer: QuantumCircuit = None
-        self.annotated_circuits: list[QuantumCircuit] = None
+        self.noise_learning_layer: QuantumCircuit | None = None
+        self.annotated_circuits: list[QuantumCircuit] | None = None
         self.basis_dict_list: list[dict[Pauli, list[SparsePauliOp | None]]] = []
         self.measure_bases_list: list[list[str]] = []
         self.observables_list: list[list[SparsePauliOp]] = []
         self.noise: PauliLindbladMap = noise
 
     def _remove_midcircuit_box_annotations(self, circuit: QuantumCircuit):
-        """Return a new circuit with all annotations removed from every box, besides the final box.
+        """Return a new circuit with all annotations removed from every measurement box, besides the final box.
 
         If the option of twirl_mcm is set to ``True``, keep Twirl annotation also for layers with mid-circuit measurements.
 
@@ -178,9 +186,9 @@ class TREX:
         """
         noise_learning_layers = []
         annotated_circuits = []
-        for input_tuple in self.inputs:
+        for execution_input in self.inputs:
             annotated_circuit, noise_learning_layer = self._annotate_circuit_and_find_layers(
-                input_tuple[0]
+                execution_input.circuit
             )
             noise_learning_layers.append(noise_learning_layer)
             annotated_circuits.append(annotated_circuit)
@@ -235,19 +243,29 @@ class TREX:
         Raises:
             ValueError: If ``annotated_circuits`` and ``noise_learning_layer`` were set manually and one of the circuits does not contain a matching register name as in ``data_register_names``.
         """
+        if self.inputs is None:
+            return ExecutorQuantumProgram()
         if not self.annotated_circuits or not self.noise_learning_layer:
             self.annotate_circuits_and_find_layers()
+        if self.annotated_circuits is None:
+            return ExecutorQuantumProgram()
 
         # create ExecutorQuantumProgram
-        program = ExecutorQuantumProgram(shots=self.options["shots_per_randomization"])
-        for index, input_tuple in enumerate(self.inputs):
+        if isinstance(self.options["shots_per_randomization"], int):
+            program = ExecutorQuantumProgram(shots=self.options["shots_per_randomization"])
+        else:
+            raise ValueError("Shots_per_randomization must be an integer.")
+        for index, execution_input in enumerate(self.inputs):
             annotated_circuit = self.annotated_circuits[index]
             (measure_bases, measure_bases_str), basis_dict = get_measurement_bases(
-                input_tuple[1], bases_format="both"
+                execution_input.observables, bases_format="both"
             )
+            measure_bases_str = [
+                str(basis) for basis in measure_bases_str
+            ]  # force the type of the returned bases
             self.measure_bases_list.append(measure_bases_str)
             self.basis_dict_list.append(basis_dict)
-            self.observables_list.append(input_tuple[1])
+            self.observables_list.append(execution_input.observables)
 
             num_qubits = None
             for register in annotated_circuit.cregs:
@@ -258,8 +276,12 @@ class TREX:
                     f"The circuit in input number {index} does not contain a register named {self.data_register_names[index]}"
                 )
             # broadcast measurement basis shape
-            if len(input_tuple) > 2:
-                parameter_values = input_tuple[2]
+            if isinstance(self.options["num_randomizations"], int):
+                num_randomizations = self.options["num_randomizations"]
+            else:
+                raise ValueError("num_randomizations must be an integer.")
+            if execution_input.parameters is not None:
+                parameter_values = execution_input.parameters
                 # add dimension also for the twirling randomizations
                 bases_shape = (
                     (len(measure_bases),)
@@ -270,24 +292,23 @@ class TREX:
                 measure_bases_broadcastable = np.array(measure_bases).reshape(bases_shape)
                 samplex_shape = (
                     (len(measure_bases),)
-                    + (self.options["num_randomizations"],)
+                    + (num_randomizations,)
                     + (1,) * len(parameter_values.shape[:-1])
                 )
             else:
                 # add dimension also for the twirling randomizations
                 bases_shape = (len(measure_bases), 1, num_qubits)
                 measure_bases_broadcastable = np.array(measure_bases).reshape(bases_shape)
-                num_randomizations = self.options["num_randomizations"]
                 samplex_shape = (len(measure_bases), num_randomizations)
 
             template_circuit, samplex = build(annotated_circuit)
             # Generate `samplex_arguments` for the executor
             samplex_arguments = samplex.inputs().make_broadcastable()
             basis_changes_name = samplex.inputs().get_specs("basis_changes")[0].name
-            if len(input_tuple) > 2:
+            if execution_input.parameters is not None:
                 samplex_arguments.bind(
                     **{
-                        "parameter_values": input_tuple[2],
+                        "parameter_values": execution_input.parameters,
                         basis_changes_name: measure_bases_broadcastable,
                     }
                 )
@@ -309,10 +330,14 @@ class TREX:
             calibration_circuit = self._create_trex_calibration_circuit()
 
             template_calibration_circuit, calibration_samplex = build(calibration_circuit)
+            if isinstance(self.options["cal_randomizations"], int):
+                cal_randomizations = self.options["cal_randomizations"]
+            else:
+                raise ValueError("cal_randomizations must be an integer.")
             program.append_samplex_item(
                 template_calibration_circuit,
                 samplex=calibration_samplex,
-                shape=(self.options["cal_randomizations"]),
+                shape=(cal_randomizations,),
             )
         # save data in the program for post processing
         observables_arr = [
@@ -337,7 +362,7 @@ class TREX:
         Returns:
             A tuple of ndarray of all the expectation values and ndarray of all standard deviations for all given observables, for each parameters set, for each input.
         """
-        data_results = results
+        data_results = results._data
         if not self.noise:
             # assume a calibration circuit was added to the quantum program as the last item
             noise_learning_result = results[-1]
@@ -356,12 +381,21 @@ class TREX:
                 noise_list.append(("X", [qubit_index], flip_rate))
             readout_noise = PauliLindbladMap.from_sparse_list(noise_list, num_qubits=num_qubits)
             self.noise = readout_noise
-            data_results = results[:-1]
+            data_results = results._data[:-1]
 
         if not self.basis_dict_list:
             # map the observable to commuting bases, so the trex factors and the expectation values are calculated using the same mapping
+            if results.passthrough_data:
+                observables = results.passthrough_data.get("_trex", {}).get("observables")
+                measure_bases = results.passthrough_data.get("_trex", {}).get("measure_bases")
+                if observables is None or measure_bases is None:
+                    raise ValueError(
+                        "The result must contain observables and measure_bases in the _trex key of the passthrough_data."
+                    )
+            else:
+                raise ValueError("The result must contain passthrough_data.")
             observables_list = []
-            for input_observables in results.passthrough_data["_trex"]["observables"]:
+            for input_observables in observables:
                 observables = []
                 for observable in input_observables:
                     paulis = []
@@ -371,18 +405,26 @@ class TREX:
                         coeffs.append(coeff)
                     observables.append(SparsePauliOp(paulis, coeffs))
                 observables_list.append(observables)
-            bases_list = results.passthrough_data["_trex"]["measure_bases"]
-            for bases, observables in zip(bases_list, observables_list):
+            for bases, observables in zip(measure_bases, observables_list):
                 self.basis_dict_list.append(
                     _find_measure_basis_to_observable_mapping(observables, bases)
                 )
+            data_register_names = results.passthrough_data.get("_trex", {}).get(
+                "data_register_names"
+            )
+            if data_register_names is None:
+                raise ValueError(
+                    "The result must contain data_register_names in the _trex key of the passthrough_data."
+                )
+            self.data_register_names = data_register_names
 
         exp_vals_list = []
         exp_vars_list = []
-        data_register_names = results.passthrough_data["_trex"]["data_register_names"]
         for result_index, result in enumerate(data_results):
-            measurement_flips = result[f"measurement_flips.{data_register_names[result_index]}"]
-            meas = result[data_register_names[result_index]]
+            measurement_flips = result[
+                f"measurement_flips.{self.data_register_names[result_index]}"
+            ]
+            meas = result[self.data_register_names[result_index]]
             basis_mapping = self.basis_dict_list[result_index]
             trex_factors_per_basis = trex_factors(self.noise, basis_mapping)
 

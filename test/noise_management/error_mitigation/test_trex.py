@@ -19,6 +19,7 @@ import numpy as np
 from qiskit.circuit import Parameter, QuantumCircuit
 from qiskit.primitives.containers.estimator_pub import ObservablesArray
 from qiskit.quantum_info import PauliLindbladMap, SparsePauliOp
+from qiskit_addon_utils.noise_management.error_mitigation.execution_inputs import ExecutionInputs
 from qiskit_addon_utils.noise_management.error_mitigation.executor_quantum_program_result import (
     ExecutorQuantumProgramResult,
 )
@@ -62,7 +63,8 @@ class TestTREXInit(unittest.TestCase):
             num_randomizations=256,
             cal_randomizations=64,
         )
-        self.assertEqual(trex.inputs, inputs)
+        execution_input = [ExecutionInputs.coerce(execution_input) for execution_input in inputs]
+        self.assertEqual(trex.inputs, execution_input)
         self.assertEqual(trex.noise, noise)
         self.assertTrue(trex.options["twirl_gates"])
         self.assertEqual(trex.options["twirling_strategy"], "active")
@@ -613,7 +615,8 @@ class TestTREXPostProcess(unittest.TestCase):
 class TestTREXIntegration(unittest.TestCase):
     """Integration tests for TREX workflow."""
 
-    def _create_res_vector(self, program, contains_cal):
+    @classmethod
+    def _create_res_vector(cls, program, contains_cal):
         num_shots = program.shots
         results = []
         num_items = len(program.items)
