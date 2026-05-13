@@ -51,6 +51,23 @@ class ExecutionInputs:
             SparsePauliOp.from_sparse_observable(sparse_obs)
             for sparse_obs in observables.sparse_observables_array()
         ]
+        # clean observable from layout
+        if circuit.layout:
+            qubits_layout = circuit.layout.final_index_layout()
+            new_observables = []
+            for observable in self.observables:
+                # check if layout should be removed
+                if observable.num_qubits == circuit.num_qubits and observable.num_qubits != len(
+                    qubits_layout
+                ):
+                    new_elements = []
+                    for element in observable.paulis:
+                        new_elements.append(element[circuit.layout.final_index_layout()])
+                    new_observables.append(SparsePauliOp(new_elements, observable.coeffs))
+                else:
+                    new_observables.append(observable)
+            self.observables = new_observables
+
         self.parameters = parameters
 
     def __eq__(self, other):

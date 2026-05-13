@@ -32,7 +32,7 @@ from qiskit_addon_utils.exp_vals.expectation_values import (
 )
 from qiskit_addon_utils.noise_management.trex_factors import trex_factors
 
-from .execution_inputs import ExecutionInputs
+from .execution_inputs import ExecutionInputs, InputsLike
 from .executor_quantum_program import ExecutorQuantumProgram
 from .executor_quantum_program_result import ExecutorQuantumProgramResult
 
@@ -47,7 +47,7 @@ class TREX:
 
     def __init__(
         self,
-        inputs: Optional[list[ExecutionInputs]] = None,
+        inputs: Optional[list[InputsLike]] = None,
         noise: PauliLindbladMap | None = None,
         twirl_gates: bool = False,
         twirling_strategy: str | None = None,
@@ -60,7 +60,7 @@ class TREX:
         """Implementation of Twirled Readout Error eXtinction (TREX) method.
 
         Args:
-            inputs: List of ``ExecutionInputs``. Each ExecutionInput is a tuple in the form of (circuit, list of observables, list of circuit parameters)
+            inputs: List of ``InputsLike`` objects. Each InputsLike is a tuple in the form of (circuit, list of observables, list of circuit parameters)
             noise: Readout noise learned, in the form of PauliLindbladMap, to be used for the TREX factor post-processing calculation.
             twirl_gates: If ``True``, find and twirl also two-qubit gate layers and annotate them with `Twirl` annotations.
             twirling_strategy: The twirling strategy to use. See samplomatic for available strategies.
@@ -70,7 +70,7 @@ class TREX:
             num_randomizations: Number of randomizations for twirling in the observables execution.
             cal_randomizations: Number of randomizations for twirling in the noise learning execution.
         """
-        self.inputs = inputs
+        self.inputs: list[ExecutionInputs] | None = None
         if inputs is not None:
             self.inputs = [
                 execution_input

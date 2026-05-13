@@ -18,7 +18,9 @@ import unittest
 import numpy as np
 from qiskit.circuit import Parameter, QuantumCircuit
 from qiskit.primitives.containers.estimator_pub import ObservablesArray
+from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.quantum_info import PauliLindbladMap, SparsePauliOp
+from qiskit.transpiler import generate_preset_pass_manager
 from qiskit_addon_utils.noise_management.error_mitigation.execution_inputs import ExecutionInputs
 from qiskit_addon_utils.noise_management.error_mitigation.executor_quantum_program_result import (
     ExecutorQuantumProgramResult,
@@ -375,6 +377,61 @@ class TestTREXPrepare(unittest.TestCase):
         self.assertEqual(result_program.items[0].shape, (2, 128, 2))
         self.assertEqual(result_program.items[1].shape, (2, 128, 4))
         self.assertEqual(result_program.items[2].shape, (128,))
+
+    def test_prepare_observable_array(self):
+        """Test prepare returned value."""
+
+        circuit = QuantumCircuit(3)
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cx(1, 2)
+        circuit.rx(Parameter("th0"), 0)
+        circuit.rx(Parameter("th1"), 1)
+        circuit.rx(Parameter("th2"), 2)
+        observables = ObservablesArray(["XXX", "IXI", "ZZZ"])
+
+        parameter_values = np.array(
+            [[0, 0, 0], [0, 0, np.pi], [0, np.pi, np.pi], [np.pi, np.pi, np.pi]]
+        )
+
+        trex = TREX(inputs=[(circuit, observables, parameter_values)])
+        result_program = trex.prepare()
+        self.assertEqual(len(result_program.items), 2)
+        self.assertEqual(result_program.items[0].shape, (2, 128, 4))
+        self.assertEqual(result_program.items[1].shape, (128,))
+
+    def test_prepare_observable_with_layout(self):
+        """Test prepare returned value."""
+
+        circuit = QuantumCircuit(3)
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cx(1, 2)
+        circuit.rx(Parameter("th0"), 0)
+        circuit.rx(Parameter("th1"), 1)
+        circuit.rx(Parameter("th2"), 2)
+        observables = [SparsePauliOp(op) for op in (["XIX"], ["ZIZ"])]
+
+        backend = GenericBackendV2(num_qubits=5)
+        layout = [2, 3, 4]
+
+        pm = generate_preset_pass_manager(
+            backend=backend, initial_layout=layout, optimization_level=0
+        )
+        circuit_isa = pm.run(circuit)
+        observables_with_layout = [
+            observable.apply_layout(circuit_isa.layout) for observable in observables
+        ]
+
+        parameter_values = np.array(
+            [[0, 0, 0], [0, 0, np.pi], [0, np.pi, np.pi], [np.pi, np.pi, np.pi]]
+        )
+
+        trex = TREX(inputs=[(circuit_isa, observables_with_layout, parameter_values)])
+        result_program = trex.prepare()
+        self.assertEqual(len(result_program.items), 2)
+        self.assertEqual(result_program.items[0].shape, (2, 128, 4))
+        self.assertEqual(result_program.items[1].shape, (128,))
 
     def test_prepare_condition_for_calibration(self):
         """Test prepare checks the condition for creating calibration circuit."""
