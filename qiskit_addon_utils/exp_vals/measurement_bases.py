@@ -14,13 +14,15 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import numpy as np
 from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp
 
 
 def get_measurement_bases(
     observables: SparsePauliOp | list[SparsePauliOp],
-    bases_format: str = "int",
+    bases_format: Literal["int", "str", "both"] = "int",
 ) -> (
     tuple[list[np.typing.NDArray[np.uint8]], dict[Pauli, list[SparsePauliOp]]]
     | tuple[list[str], dict[Pauli, list[SparsePauliOp]]]
@@ -34,15 +36,15 @@ def get_measurement_bases(
 
     Args:
         observables: The observables to calculate using the quantum computer.
-        bases_format: The format of the returned bases. Can be one of "int", "str", "both". If "int" is chosen, bases are returned as an array of ints, using the samplomatic convention of: I=0, Z=1, X=2, Y=3.
-            The order of the ints will be according to the index of each Pauli in the string. For example, the basis "IXYZ" would be returned as [1, 3, 2, 0].
-            If "str" is chosen, return the bases as an array of strings.
-            If "both" is chosen, return the bases as a tuple of both options in the format of (array_of_ints, array_of_strs).
+        bases_format: The format of the returned bases. Can be one of "int", "str", "both".
+        * If "int" is chosen, bases are returned as an array of ints, using the Qiskit convention of: I=0, Z=1, X=2, Y=3. The order of the ints will be according to the index of each Pauli in the string. For example, the basis "IXYZ" would be returned as [1, 3, 2, 0].
+        * If "str" is chosen, return the bases as an array of strings.
+        * If "both" is chosen, return the bases as a tuple of both options in the format of (array_of_ints, array_of_strs).
 
     Returns:
-        * List of Pauli bases to sample encoded in a list of uint8 where 0=I,1=Z,2=X,3=Y or a list of strings, or both (based on bases_format parameter).
-        * Dict that maps each measured basis to the relevant Paulis and their coefficients for each observable.
-          With the measured bases as keys, for each observable there is a SparsePauliOp representing it.
+        A length-2 tuple containing:
+        * The Pauli bases to sample. Depending on ``bases_format`` kwarg, may be a list of Paulis, each represented as either a ``list[int]`` or a ``list[str]`` or a  ``tuple[list[int], list[str]]`` holding both representations.
+        * Dict that maps each measured basis to the relevant Paulis and their coefficients for each observable. With the measured bases as keys, for each observable there is a SparsePauliOp representing it.
 
     Raises:
         ValueError: If the bases_format is not one of "int", "str", "both".
