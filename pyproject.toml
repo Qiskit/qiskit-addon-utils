@@ -44,7 +44,7 @@ basetest = [
 test = [
     "qiskit-addon-utils[basetest]",
     "qiskit-qasm3-import>=0.5.0",
-    "samplomatic>=0.13",
+    "samplomatic>=0.16",
 ]
 doctest = [
     "qiskit-addon-utils[basetest,notebook-dependencies]",
