@@ -79,7 +79,6 @@ class TestTREXInit(unittest.TestCase):
     def test_init_state_variables(self):
         """Test that state variables are properly initialized."""
         trex = TREX()
-        self.assertEqual(trex.data_register_names, [])
         self.assertIsNone(trex.noise_learning_layer)
         self.assertIsNone(trex.annotated_circuits)
         self.assertEqual(trex.basis_dict_list, [])
@@ -207,13 +206,10 @@ class TestTREXAnnotateCircuitAndFindLayers(unittest.TestCase):
         self.assertIsInstance(result_circ.data[0].operation.annotations[0], Twirl)
 
     def test_annotate_circuit_data_register_naming(self):
-        """Test that data register names are tracked correctly."""
-        self.assertEqual(len(self.trex.data_register_names), 0)
+        """Test that data register names are set correctly."""
 
-        self.trex._annotate_circuit_and_find_layers(self.test_circuit)
-
-        self.assertEqual(len(self.trex.data_register_names), 1)
-        self.assertEqual(self.trex.data_register_names[0][:9], "trex_data")
+        annotated_circuit, _ = self.trex._annotate_circuit_and_find_layers(self.test_circuit)
+        self.assertEqual(annotated_circuit.cregs[0].name, "_trex_data")
 
 
 class TestTREXAnnotateCircuitsAndFindLayers(unittest.TestCase):
@@ -488,7 +484,7 @@ class TestTREXPostProcess(unittest.TestCase):
         temp_flips = np.random.randint(
             0, 2, size=(num_bases, num_radomizations, num_parameters, 1, num_qubits), dtype=bool
         )
-        results_data = [{"trex_data": temp_bool_array, "measurement_flips.trex_data": temp_flips}]
+        results_data = [{"_trex_data": temp_bool_array, "measurement_flips._trex_data": temp_flips}]
         # add cal results
         temp_cal_bool_array = np.random.randint(
             0, 2, size=(num_radomizations, num_shots, num_qubits), dtype=bool
@@ -497,13 +493,12 @@ class TestTREXPostProcess(unittest.TestCase):
             0, 2, size=(num_radomizations, 1, num_qubits), dtype=bool
         )
         results_data.append(
-            {"trex_cal": temp_cal_bool_array, "measurement_flips.trex_cal": temp_cal_flips}
+            {"_trex_cal": temp_cal_bool_array, "measurement_flips._trex_cal": temp_cal_flips}
         )
         passthrough_data = {
             "_trex": {
                 "observables": [ObservablesArray.coerce(observables)],
                 "measure_bases": [["XIX", "ZIZ"]],
-                "data_register_names": ["trex_data"],
             }
         }
 
@@ -557,13 +552,12 @@ class TestTREXPostProcess(unittest.TestCase):
         temp_flips = np.random.randint(
             0, 2, size=(num_bases, num_radomizations, num_parameters, 1, num_qubits), dtype=bool
         )
-        results_data = [{"trex_data": temp_bool_array, "measurement_flips.trex_data": temp_flips}]
+        results_data = [{"_trex_data": temp_bool_array, "measurement_flips._trex_data": temp_flips}]
 
         passthrough_data = {
             "_trex": {
                 "observables": [ObservablesArray.coerce(observables)],
                 "measure_bases": [["XIX", "ZIZ"]],
-                "data_register_names": ["trex_data"],
             }
         }
 
@@ -619,7 +613,7 @@ class TestTREXPostProcess(unittest.TestCase):
         temp_flips = np.random.randint(
             0, 2, size=(num_bases, num_radomizations, num_parameters, 1, num_qubits), dtype=bool
         )
-        results_data = [{"trex_data": temp_bool_array, "measurement_flips.trex_data": temp_flips}]
+        results_data = [{"_trex_data": temp_bool_array, "measurement_flips._trex_data": temp_flips}]
         temp_bool_array2 = np.random.randint(
             0,
             2,
@@ -630,7 +624,7 @@ class TestTREXPostProcess(unittest.TestCase):
             0, 2, size=(num_bases2, num_radomizations, num_parameters, 1, num_qubits), dtype=bool
         )
         results_data.append(
-            {"trex_data1": temp_bool_array2, "measurement_flips.trex_data1": temp_flips2}
+            {"_trex_data": temp_bool_array2, "measurement_flips._trex_data": temp_flips2}
         )
         # add cal results
         temp_cal_bool_array = np.random.randint(
@@ -640,7 +634,7 @@ class TestTREXPostProcess(unittest.TestCase):
             0, 2, size=(num_radomizations, 1, num_qubits), dtype=bool
         )
         results_data.append(
-            {"trex_cal": temp_cal_bool_array, "measurement_flips.trex_cal": temp_cal_flips}
+            {"_trex_cal": temp_cal_bool_array, "measurement_flips._trex_cal": temp_cal_flips}
         )
         passthrough_data = {
             "_trex": {
@@ -649,7 +643,6 @@ class TestTREXPostProcess(unittest.TestCase):
                     ObservablesArray.coerce(observables2),
                 ],
                 "measure_bases": [["XIX", "ZIZ"], ["YYY"]],
-                "data_register_names": ["trex_data", "trex_data1"],
             }
         }
 
@@ -683,11 +676,7 @@ class TestTREXIntegration(unittest.TestCase):
             temp_bool_array = np.random.randint(0, 2, size=bool_array_shape, dtype=bool)
             flips_array_shape = (*item.shape, 1, num_qubits)
             temp_flips = np.random.randint(0, 2, size=flips_array_shape, dtype=bool)
-            if contains_cal and i == num_items - 1:
-                # calibration result
-                register_name = "trex_cal"
-            else:
-                register_name = program.passthrough_data["_trex"]["data_register_names"][i]
+            register_name = "_trex_cal" if contains_cal and i == num_items - 1 else "_trex_data"
             results.append(
                 {register_name: temp_bool_array, f"measurement_flips.{register_name}": temp_flips}
             )

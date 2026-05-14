@@ -16,7 +16,7 @@ from typing import Optional
 
 import numpy as np
 from qiskit import ClassicalRegister
-from qiskit.circuit import CircuitInstruction, QuantumCircuit
+from qiskit.circuit import CircuitError, CircuitInstruction, QuantumCircuit
 from qiskit.circuit.controlflow.box import BoxOp
 from qiskit.primitives.containers.estimator_pub import ObservablesArray
 from qiskit.quantum_info import Pauli, PauliLindbladMap, SparsePauliOp
@@ -88,7 +88,6 @@ class TREX:
             "cal_randomizations": cal_randomizations,
         }
 
-        self.data_register_names: list[str] = []
         self.noise_learning_layer: QuantumCircuit | None = None
         self.annotated_circuits: list[QuantumCircuit] | None = None
         self.basis_dict_list: list[dict[Pauli, list[SparsePauliOp | None]]] = []
@@ -137,7 +136,7 @@ class TREX:
         """Annotate the final measurement layer with ChangeBasis and Twirling annotations.
 
         Remove terminal measurements in the circuit if present, and replace with new terminal measurements on all the circuit's qubits,
-        writing the results to a new dedicated classical register.
+        writing the results to a new dedicated classical register named `_trex_data`.
 
         Args:
             circuit: The circuit whose layers to annotate.
@@ -145,6 +144,9 @@ class TREX:
         Returns:
             A tuple of a circuit with annotations removed from every box, besides the final measurement box that contains Twirling and ChangeBasis annotations,
             and the final measurement layer of the circuit as a list of CircuitInstructions.
+
+        Raises:
+            ValueError: If the circuit contains classical register named `_trex_data`.
         """
         if circuit.layout:
             qubits_in_layout = circuit.layout.final_index_layout()
@@ -152,9 +154,13 @@ class TREX:
             qubits_in_layout = list(range(len(circuit.qubits)))
         edited_circuit = circuit.remove_final_measurements(inplace=False)
         contain_mcm = "measure" in edited_circuit.count_ops()
-        data_register = ClassicalRegister._new_with_prefix(len(qubits_in_layout), "trex_data")
-        self.data_register_names.append(data_register.name)
-        edited_circuit.add_register(data_register)
+        data_register = ClassicalRegister(len(qubits_in_layout), "_trex_data")
+        try:
+            edited_circuit.add_register(data_register)
+        except CircuitError as err:
+            raise ValueError(
+                "Register name `_trex_data` is reserved for a dedicated classical register used by this class."
+            ) from err
         edited_circuit.barrier(qubits_in_layout)
         edited_circuit.measure(qubits_in_layout, data_register)
         boxing_params = {
@@ -201,7 +207,7 @@ class TREX:
             measured_qubits.update(circuit_measured_qubits)
         qubit_list = list(range(len(measured_qubits)))
 
-        classical_cal_reg = ClassicalRegister(len(measured_qubits), name="trex_cal")
+        classical_cal_reg = ClassicalRegister(len(measured_qubits), name="_trex_cal")
         trex_circuit = QuantumCircuit(len(measured_qubits))
         trex_circuit.add_register(classical_cal_reg)
         trex_circuit.measure(qubit_list, classical_cal_reg)
@@ -241,7 +247,8 @@ class TREX:
             ExecutorQuantumProgram that contains a relevant samplex item for each input in ``self.inputs`` and an item for noise learning if a noise model is not set.
 
         Raises:
-            ValueError: If ``annotated_circuits`` and ``noise_learning_layer`` were set manually and one of the circuits does not contain a matching register name as in ``data_register_names``.
+            * ValueError: If ``annotated_circuits`` and ``noise_learning_layer`` were set manually and one of the circuits does not contain a register named `_trex_data`.
+            * ValueError: If one of the input circuits contains a register named `_trex_data`.
         """
         if self.inputs is None:
             return ExecutorQuantumProgram()
@@ -269,11 +276,11 @@ class TREX:
 
             num_qubits = None
             for register in annotated_circuit.cregs:
-                if register.name == self.data_register_names[index]:
+                if register.name == "_trex_data":
                     num_qubits = len(register)
             if not num_qubits:
                 raise ValueError(
-                    f"The circuit in input number {index} does not contain a register named {self.data_register_names[index]}"
+                    f"The circuit in input number {index} does not contain a register named `_trex_data`."
                 )
             # broadcast measurement basis shape
             if isinstance(self.options["num_randomizations"], int):
@@ -347,7 +354,6 @@ class TREX:
             "_trex": {
                 "observables": observables_arr,
                 "measure_bases": self.measure_bases_list,
-                "data_register_names": self.data_register_names,
             }
         }
         return program
@@ -366,8 +372,8 @@ class TREX:
         if not self.noise:
             # assume a calibration circuit was added to the quantum program as the last item
             noise_learning_result = results[-1]
-            measurement_flips = noise_learning_result["measurement_flips.trex_cal"]
-            noise_calibration_data = noise_learning_result["trex_cal"]
+            measurement_flips = noise_learning_result["measurement_flips._trex_cal"]
+            noise_calibration_data = noise_learning_result["_trex_cal"]
             noise_calibration_data_flipped = np.logical_xor(
                 noise_calibration_data, measurement_flips
             )
@@ -409,22 +415,12 @@ class TREX:
                 self.basis_dict_list.append(
                     _find_measure_basis_to_observable_mapping(observables, bases)
                 )
-            data_register_names = results.passthrough_data.get("_trex", {}).get(
-                "data_register_names"
-            )
-            if data_register_names is None:
-                raise ValueError(
-                    "The result must contain data_register_names in the _trex key of the passthrough_data."
-                )
-            self.data_register_names = data_register_names
 
         exp_vals_list = []
         exp_vars_list = []
         for result_index, result in enumerate(data_results):
-            measurement_flips = result[
-                f"measurement_flips.{self.data_register_names[result_index]}"
-            ]
-            meas = result[self.data_register_names[result_index]]
+            measurement_flips = result["measurement_flips._trex_data"]
+            meas = result["_trex_data"]
             basis_mapping = self.basis_dict_list[result_index]
             trex_factors_per_basis = trex_factors(self.noise, basis_mapping)
 
