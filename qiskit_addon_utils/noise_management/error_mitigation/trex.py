@@ -56,6 +56,7 @@ class TREX:
         shots_per_randomization: int = 64,
         num_randomizations: int = 128,
         cal_randomizations: int = 128,
+        parameters_outer_product: bool = True,
     ):
         """Implementation of Twirled Readout Error eXtinction (TREX) method.
 
@@ -69,13 +70,12 @@ class TREX:
             shots_per_randomization: Number of shots for each randomization for the observables execution.
             num_randomizations: Number of randomizations for twirling in the observables execution.
             cal_randomizations: Number of randomizations for twirling in the noise learning execution.
+            parameters_outer_product: If ``True``, parameters binding variable must be an array with no empty shape. The shape of the observables and parameters will be broadcasted to create an outer-product calculation.
         """
         self.inputs: list[ExecutionInputs] | None = None
         if inputs is not None:
             self.inputs = [
-                execution_input
-                if isinstance(execution_input, ExecutionInputs)
-                else ExecutionInputs.coerce(execution_input)
+                ExecutionInputs.coerce(execution_input, parameters_outer_product)
                 for execution_input in inputs
             ]
         self.options = {
@@ -92,8 +92,9 @@ class TREX:
         self.annotated_circuits: list[QuantumCircuit] | None = None
         self.basis_dict_list: list[dict[Pauli, list[SparsePauliOp | None]]] = []
         self.measure_bases_list: list[list[str]] = []
-        self.observables_list: list[list[SparsePauliOp]] = []
+        self.observables_list: list[ObservablesArray] = []
         self.noise: PauliLindbladMap = noise
+        self.parameters_outer_product: bool = parameters_outer_product
 
     def _remove_midcircuit_box_annotations(self, circuit: QuantumCircuit):
         """Return a new circuit with all annotations removed from every measurement box, besides the final box.
@@ -264,8 +265,11 @@ class TREX:
             raise ValueError("Shots_per_randomization must be an integer.")
         for index, execution_input in enumerate(self.inputs):
             annotated_circuit = self.annotated_circuits[index]
+            sparse_observables = ExecutionInputs.observables_array_to_1d_sparse_obs(
+                execution_input.observables
+            )
             (measure_bases, measure_bases_str), basis_dict = get_measurement_bases(
-                execution_input.observables, bases_format="both"
+                sparse_observables, bases_format="both"
             )
             measure_bases_str = [
                 str(basis) for basis in measure_bases_str
@@ -347,12 +351,9 @@ class TREX:
                 shape=(cal_randomizations,),
             )
         # save data in the program for post processing
-        observables_arr = [
-            ObservablesArray.coerce(observables) for observables in self.observables_list
-        ]
         program.passthrough_data = {
             "_trex": {
-                "observables": observables_arr,
+                "observables": self.observables_list,
                 "measure_bases": self.measure_bases_list,
             }
         }
@@ -392,7 +393,10 @@ class TREX:
         if not self.basis_dict_list:
             # map the observable to commuting bases, so the trex factors and the expectation values are calculated using the same mapping
             if results.passthrough_data:
-                observables = results.passthrough_data.get("_trex", {}).get("observables")
+                observables_list = results.passthrough_data.get("_trex", {}).get("observables")
+                observables = [
+                    ObservablesArray.coerce(observables) for observables in observables_list
+                ]
                 measure_bases = results.passthrough_data.get("_trex", {}).get("measure_bases")
                 if observables is None or measure_bases is None:
                     raise ValueError(
@@ -400,28 +404,25 @@ class TREX:
                     )
             else:
                 raise ValueError("The result must contain passthrough_data.")
-            observables_list = []
-            for input_observables in observables:
-                observables = []
-                for observable in input_observables:
-                    paulis = []
-                    coeffs = []
-                    for pauli, coeff in observable.items():
-                        paulis.append(pauli)
-                        coeffs.append(coeff)
-                    observables.append(SparsePauliOp(paulis, coeffs))
-                observables_list.append(observables)
-            for bases, observables in zip(measure_bases, observables_list):
+
+            for bases, input_observables in zip(measure_bases, observables):
+                sparse_observables = ExecutionInputs.observables_array_to_1d_sparse_obs(
+                    input_observables
+                )
                 self.basis_dict_list.append(
-                    _find_measure_basis_to_observable_mapping(observables, bases)
+                    _find_measure_basis_to_observable_mapping(sparse_observables, bases)
                 )
 
         exp_vals_list = []
         exp_vars_list = []
-        for result_index, result in enumerate(data_results):
-            measurement_flips = result["measurement_flips._trex_data"]
-            meas = result["_trex_data"]
-            basis_mapping = self.basis_dict_list[result_index]
+        for result, basis_mapping in zip(data_results, self.basis_dict_list):
+            if "_trex_data" in result and "measurement_flips._trex_data" in result:
+                measurement_flips = result["measurement_flips._trex_data"]
+                meas = result["_trex_data"]
+            else:
+                raise ValueError(
+                    "The result must contain `_trex_data` and `measurement_flips._trex_data` keys."
+                )
             trex_factors_per_basis = trex_factors(self.noise, basis_mapping)
 
             # The prepare function places meas_basis in axis 0, even for cases with only a single basis

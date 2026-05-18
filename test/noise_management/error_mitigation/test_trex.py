@@ -455,19 +455,11 @@ class TestTREXPostProcess(unittest.TestCase):
 
     def test_post_process_no_noise_provided(self):
         """Test post-processing with no noise model provided."""
-        circuit = QuantumCircuit(3)
-        circuit.h(0)
-        circuit.cx(0, 1)
-        circuit.cx(1, 2)
-        circuit.rx(Parameter("th0"), 0)
-        circuit.rx(Parameter("th1"), 1)
-        circuit.rx(Parameter("th2"), 2)
         observables = [SparsePauliOp(op) for op in (["XIX"], ["ZIZ"])]
 
         parameter_values = np.array(
             [[0, 0, 0], [0, 0, np.pi], [0, np.pi, np.pi], [np.pi, np.pi, np.pi]]
         )
-        inputs = [(circuit, observables, parameter_values)]
 
         # Create a mock result object
         num_bases = len(observables)
@@ -497,41 +489,31 @@ class TestTREXPostProcess(unittest.TestCase):
         )
         passthrough_data = {
             "_trex": {
-                "observables": [ObservablesArray.coerce(observables)],
+                "observables": [ObservablesArray.coerce(observables).tolist()],
                 "measure_bases": [["XIX", "ZIZ"]],
             }
         }
 
         results = ExecutorQuantumProgramResult(data=results_data, passthrough_data=passthrough_data)
 
-        trex = TREX(
-            inputs=inputs, num_randomizations=num_radomizations, shots_per_randomization=num_shots
-        )
+        trex = TREX()
         exp_vals_list, exp_vars_list = trex.post_process(results)
         self.assertEqual(
-            np.array(exp_vals_list).shape, (len(inputs), len(observables), len(parameter_values))
+            np.array(exp_vals_list).shape, (1, len(observables), len(parameter_values))
         )
         self.assertEqual(
-            np.array(exp_vars_list).shape, (len(inputs), len(observables), len(parameter_values))
+            np.array(exp_vars_list).shape, (1, len(observables), len(parameter_values))
         )
         self.assertIsNotNone(trex.noise)
         self.assertIsNotNone(trex.basis_dict_list)
 
     def test_post_process_with_noise_model(self):
         """Test post-processing with noise model provided."""
-        circuit = QuantumCircuit(3)
-        circuit.h(0)
-        circuit.cx(0, 1)
-        circuit.cx(1, 2)
-        circuit.rx(Parameter("th0"), 0)
-        circuit.rx(Parameter("th1"), 1)
-        circuit.rx(Parameter("th2"), 2)
         observables = [SparsePauliOp(op) for op in (["XIX"], ["ZIZ"])]
 
         parameter_values = np.array(
             [[0, 0, 0], [0, 0, np.pi], [0, np.pi, np.pi], [np.pi, np.pi, np.pi]]
         )
-        inputs = [(circuit, observables, parameter_values)]
 
         noise = PauliLindbladMap.from_sparse_list(
             [("X", [0], 0.01), ("X", [1], 0.02), ("X", [2], 0.03)], num_qubits=3
@@ -556,46 +538,30 @@ class TestTREXPostProcess(unittest.TestCase):
 
         passthrough_data = {
             "_trex": {
-                "observables": [ObservablesArray.coerce(observables)],
+                "observables": [ObservablesArray.coerce(observables).tolist()],
                 "measure_bases": [["XIX", "ZIZ"]],
             }
         }
 
         results = ExecutorQuantumProgramResult(data=results_data, passthrough_data=passthrough_data)
 
-        trex = TREX(
-            inputs=inputs,
-            noise=noise,
-            num_randomizations=num_radomizations,
-            shots_per_randomization=num_shots,
-        )
+        trex = TREX(noise=noise)
         exp_vals_list, exp_vars_list = trex.post_process(results)
         self.assertEqual(
-            np.array(exp_vals_list).shape, (len(inputs), len(observables), len(parameter_values))
+            np.array(exp_vals_list).shape, (1, len(observables), len(parameter_values))
         )
         self.assertEqual(
-            np.array(exp_vars_list).shape, (len(inputs), len(observables), len(parameter_values))
+            np.array(exp_vars_list).shape, (1, len(observables), len(parameter_values))
         )
 
     def test_post_process_multiple_inputs(self):
         """Test post-processing with multiple inputs."""
-        circuit = QuantumCircuit(3)
-        circuit.h(0)
-        circuit.cx(0, 1)
-        circuit.cx(1, 2)
-        circuit.rx(Parameter("th0"), 0)
-        circuit.rx(Parameter("th1"), 1)
-        circuit.rx(Parameter("th2"), 2)
         observables = [SparsePauliOp(op) for op in (["XIX"], ["ZIZ"])]
         observables2 = [SparsePauliOp(op) for op in (["YYY"])]
 
         parameter_values = np.array(
             [[0, 0, 0], [0, 0, np.pi], [0, np.pi, np.pi], [np.pi, np.pi, np.pi]]
         )
-        inputs = [
-            (circuit, observables, parameter_values),
-            (circuit, observables2, parameter_values),
-        ]
 
         # Create a mock result object
         num_bases = len(observables)
@@ -639,21 +605,20 @@ class TestTREXPostProcess(unittest.TestCase):
         passthrough_data = {
             "_trex": {
                 "observables": [
-                    ObservablesArray.coerce(observables),
-                    ObservablesArray.coerce(observables2),
+                    ObservablesArray.coerce(observables).tolist(),
+                    ObservablesArray.coerce(observables2).tolist(),
                 ],
                 "measure_bases": [["XIX", "ZIZ"], ["YYY"]],
             }
         }
 
+        inputs_len = 2
         results = ExecutorQuantumProgramResult(data=results_data, passthrough_data=passthrough_data)
 
-        trex = TREX(
-            inputs=inputs, num_randomizations=num_radomizations, shots_per_randomization=num_shots
-        )
+        trex = TREX()
         exp_vals_list, exp_vars_list = trex.post_process(results)
-        self.assertEqual(len(exp_vals_list), len(inputs))
-        self.assertEqual(len(exp_vars_list), len(inputs))
+        self.assertEqual(len(exp_vals_list), inputs_len)
+        self.assertEqual(len(exp_vars_list), inputs_len)
         self.assertEqual(exp_vals_list[0].shape, (len(observables), len(parameter_values)))
         self.assertEqual(exp_vals_list[1].shape, (len(observables2), len(parameter_values)))
         self.assertEqual(exp_vars_list[0].shape, (len(observables), len(parameter_values)))
