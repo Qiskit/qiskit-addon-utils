@@ -89,16 +89,25 @@ class AddPostSelectionMeasures(TransformationPass):
         # Find what qubits have a terminal measurement
         all_terminal_measurements = self._find_terminal_measurements(dag)
 
-        # Add the new registers and create a map between the original clbit and the new ones
-        # Skip registers with ignored suffixes (e.g., pre-selection registers)
+        # Add the new registers and create a map between the original clbit and the new ones.
+        # Skip three kinds of registers so that this pass can be safely run after one that has
+        # already produced part of the post-selection structure (notably ``AddSpectatorMeasures``,
+        # which now emits its own ``spec``/``spec_ps`` pair):
+        #   1. registers with ignored suffixes (pre-selection registers by default),
+        #   2. registers whose ``{name}{post_selection_suffix}`` counterpart already exists, and
+        #   3. registers that *are* the ``{name}{post_selection_suffix}`` counterpart of another
+        #      register in the DAG — running this pass on those would chain another ``_ps`` suffix.
+        existing_creg_names = set(dag.cregs)
+        suffix = self.post_selection_suffix
         clbits_map = {}
         for name, creg in dag.cregs.items():
-            if any(name.endswith(suffix) for suffix in self.ignore_creg_suffixes):
-                # Skip registers with ignored suffixes
+            if any(name.endswith(s) for s in self.ignore_creg_suffixes):
                 continue
-            dag.add_creg(
-                new_creg := ClassicalRegister(creg.size, name + self.post_selection_suffix)
-            )
+            if name + suffix in existing_creg_names:
+                continue
+            if name.endswith(suffix) and name[: -len(suffix)] in existing_creg_names:
+                continue
+            dag.add_creg(new_creg := ClassicalRegister(creg.size, name + suffix))
             clbits_map.update({clbit: clbit_ps for clbit, clbit_ps in zip(creg, new_creg)})
 
         # Filter terminal measurements to only include those with clbits in clbits_map

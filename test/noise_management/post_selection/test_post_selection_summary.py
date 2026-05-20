@@ -485,3 +485,35 @@ def test_spectator_cregs_eq():
     b = PostSelectionSummary(primary, measure_map, edges, spectator_cregs=set())
     assert a != b
     assert a == deepcopy(a)
+
+
+def test_from_circuit_does_not_recurse_into_control_flow_ops():
+    """Document a current limitation: measurements buried inside a ``ControlFlowOp``
+    (e.g. a ``BoxOp``) are invisible to ``_get_measure_maps``, which iterates the
+    top-level DAG only.
+
+    This means a circuit whose *primary* measurement is inside a box but whose
+    ``_ps`` measurement is appended outside the box (the situation produced by
+    running ``AddPostSelectionMeasures`` on a samplomatic-style boxed circuit)
+    will trip the strict primary↔ps count validation. The pass-side helpers
+    (``_find_terminal_measurements`` etc.) already recurse correctly; the
+    summary builder needs the same treatment to lift this restriction.
+    """
+    from qiskit.transpiler import PassManager
+    from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
+        AddPostSelectionMeasures,
+    )
+
+    qc = QuantumCircuit(3, 3)
+    with qc.box():
+        qc.h(0)
+        qc.cx(0, 1)
+        qc.cx(1, 2)
+        qc.measure([0, 1, 2], [0, 1, 2])  # measurements buried inside the box
+
+    out = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")]).run(qc)
+    # The pass appended ``c_ps`` measurements at the top level; the summary
+    # builder sees those but cannot see the inside-box primary measurements,
+    # so the strict 0-vs-N count check raises.
+    with pytest.raises(ValueError, match="measurements"):
+        PostSelectionSummary.from_circuit(out, [(0, 1), (1, 2)])

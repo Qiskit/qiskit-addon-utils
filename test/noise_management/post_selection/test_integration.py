@@ -33,10 +33,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from qiskit.circuit import QuantumCircuit
+from qiskit.circuit import ClassicalRegister, QuantumCircuit
 from qiskit.transpiler import PassManager
 from qiskit_addon_utils.noise_management.post_selection import (
     PostSelectionStrategy,
+    PostSelectionSummary,
     PostSelector,
 )
 from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
@@ -441,3 +442,184 @@ def test_strategy_enum_and_string_equivalent():
     m_str = selector.compute_mask(result, "node", mode="post")
     m_enum = selector.compute_mask(result, PostSelectionStrategy.NODE, mode="post")
     assert np.array_equal(m_str, m_enum)
+
+
+# ---------------------------------------------------------------------------
+# Legacy pass ordering (backward compatibility with pre-refactor client API).
+#
+# Older client code typically wrote::
+#
+#     [AddSpectatorMeasures(coupling_map, spectator_creg_name="spec"),
+#      AddPostSelectionMeasures(x_pulse_type)]
+#
+# i.e. the spec pass first, then the post-sel pass. The new
+# ``AddSpectatorMeasures`` emits its own ``(spec, spec_ps)`` register pair
+# (rather than just measuring once and letting the post-sel pass add the
+# second measurement). Naive composition under the old ordering would have
+# ``AddPostSelectionMeasures`` attempt to add a duplicate ``spec_ps`` and
+# crash. The post-sel pass is defensively guarded — it skips primaries whose
+# ``_ps`` counterpart already exists, and skips registers that themselves are
+# ``_ps`` counterparts — so the legacy ordering must continue to produce a
+# correct ``PostSelector`` that yields the same masks as the recommended
+# ``[post, spec]`` ordering.
+# ---------------------------------------------------------------------------
+
+
+def _passes_legacy_spec_then_post(*, spectator_creg_name: str = "spec", x_pulse_type: str = "rx"):
+    """Old client pattern: spec measurements first, then the post-sel pass."""
+    return [
+        AddSpectatorMeasures(
+            COUPLING, x_pulse_type=x_pulse_type, spectator_creg_name=spectator_creg_name
+        ),
+        AddPostSelectionMeasures(x_pulse_type=x_pulse_type),
+    ]
+
+
+def test_legacy_order_does_not_crash():
+    """Spec-then-post ordering must complete without ``DAGCircuitError``.
+
+    Regression guard: a duplicate-register crash here would mean the
+    defensive guard in ``AddPostSelectionMeasures`` regressed.
+    """
+    pm = PassManager(_passes_legacy_spec_then_post())
+    out = pm.run(_data_circuit())
+    assert {cr.name for cr in out.cregs} == {"c", "spec", "spec_ps", "c_ps"}
+
+
+def test_legacy_order_no_double_parity_check_on_spec_qubits():
+    """A spec qubit must end up with exactly one parity check, not two.
+
+    Before the guard, the post-sel pass would also create a ``spec_ps_ps``
+    register and append a second pulse + measurement on the spec wire (since
+    the spec qubit's terminal measurement maps into ``spec_ps`` — a non-pre
+    register that wasn't on the ignore list).
+    """
+    pm = PassManager(_passes_legacy_spec_then_post())
+    out = pm.run(_data_circuit())
+    # q3 is a spec qubit under COUPLING.
+    spec_q = out.qubits[3]
+    measure_targets = [
+        instr.clbits[0]._register.name
+        for instr in out.data
+        if spec_q in instr.qubits and instr.operation.name == "measure"
+    ]
+    assert measure_targets == ["spec", "spec_ps"]
+
+
+def test_legacy_order_produces_no_extra_cregs():
+    """Only the canonical four cregs appear — no chained ``_ps_ps`` etc."""
+    pm = PassManager(_passes_legacy_spec_then_post())
+    out = pm.run(_data_circuit())
+    assert all(not cr.name.endswith("_ps_ps") for cr in out.cregs)
+
+
+def test_legacy_order_post_selector_constructs_two_ways():
+    """``PostSelector.from_circuit`` and ``PostSelector(summary)`` agree on legacy output."""
+    pm = PassManager(_passes_legacy_spec_then_post())
+    circuit = pm.run(_data_circuit())
+
+    selector_a = PostSelector.from_circuit(circuit, COUPLING)
+    summary = PostSelectionSummary.from_circuit(circuit, COUPLING)
+    selector_b = PostSelector(summary)
+    assert selector_a.summary == selector_b.summary
+
+    result = _perfect_result(has_pre=False)
+    for strategy in ("node", "edge"):
+        mask_a = selector_a.compute_mask(result, strategy, mode="post")
+        mask_b = selector_b.compute_mask(result, strategy, mode="post")
+        assert np.array_equal(mask_a, mask_b)
+
+
+@pytest.mark.parametrize("strategy", ["node", "edge"])
+def test_legacy_and_recommended_orderings_produce_identical_masks(strategy):
+    """Same input + same synthesised result ⇒ identical masks from either ordering.
+
+    The failure injection is engineered to be non-trivial under *both*
+    strategies: shot 1 breaks q0 AND q1 (a connected pair under
+    ``COUPLING``), so node-mode discards it (q0 failed) and edge-mode also
+    discards it (edge (0,1) has both endpoints failing).
+    """
+    legacy_pm = PassManager(_passes_legacy_spec_then_post())
+    new_pm = PassManager(_passes_post_with_spec())
+
+    sel_legacy = PostSelector.from_circuit(legacy_pm.run(_data_circuit()), COUPLING)
+    sel_new = PostSelector.from_circuit(new_pm.run(_data_circuit()), COUPLING)
+
+    result = _perfect_result(has_pre=False)
+    # Shot 1: break q0 and q1 → both strategies must discard.
+    result["c_ps"][1, 0] = result["c"][1, 0]
+    result["c_ps"][1, 1] = result["c"][1, 1]
+
+    mask_legacy = sel_legacy.compute_mask(result, strategy, mode="post")
+    mask_new = sel_new.compute_mask(result, strategy, mode="post")
+    assert np.array_equal(mask_legacy, mask_new)
+    assert not mask_legacy.all(), "expected at least one shot discarded"
+    assert not mask_legacy[1], "shot 1 should be discarded under both strategies"
+
+
+def test_legacy_order_with_custom_spectator_name():
+    """Legacy ordering must thread a non-default ``spectator_creg_name`` through cleanly."""
+    pm = PassManager(_passes_legacy_spec_then_post(spectator_creg_name="watchers"))
+    out = pm.run(_data_circuit())
+    assert {cr.name for cr in out.cregs} == {"c", "watchers", "watchers_ps", "c_ps"}
+
+    selector = PostSelector.from_circuit(out, COUPLING, spectator_cregs=["watchers"])
+    assert selector.summary.spectator_cregs == {"watchers"}
+    assert selector.summary.primary_cregs == {"c", "watchers"}
+
+
+def test_legacy_order_with_multiple_primary_cregs():
+    """A circuit with multiple primary cregs survives the legacy ordering."""
+    qc = QuantumCircuit(5)
+    a = ClassicalRegister(2, "a")
+    b = ClassicalRegister(1, "b")
+    qc.add_register(a)
+    qc.add_register(b)
+    qc.h(0)
+    qc.cx(0, 1)
+    qc.measure(0, a[0])
+    qc.measure(1, a[1])
+    qc.measure(2, b[0])
+
+    pm = PassManager(_passes_legacy_spec_then_post())
+    out = pm.run(qc)
+    # Both primary registers get a paired ``_ps`` counterpart.
+    assert {cr.name for cr in out.cregs} >= {"a", "b", "a_ps", "b_ps"}
+
+    selector = PostSelector.from_circuit(out, COUPLING)
+    assert selector.summary.primary_cregs >= {"a", "b"}
+
+
+def test_legacy_order_inside_manual_box_with_measurements_outside():
+    """Boxed entangler with measurements outside the box: legacy ordering still works."""
+    qc = QuantumCircuit(5, 3)
+    with qc.box():
+        qc.h(0)
+        qc.cx(0, 1)
+        qc.cx(1, 2)
+    qc.measure([0, 1, 2], [0, 1, 2])
+
+    pm = PassManager(_passes_legacy_spec_then_post())
+    out = pm.run(qc)
+    assert {cr.name for cr in out.cregs} == {"c", "spec", "spec_ps", "c_ps"}
+
+    selector = PostSelector.from_circuit(out, COUPLING)
+    result = _perfect_result(has_pre=False)
+    mask = selector.compute_mask(result, "node", mode="post")
+    assert mask.all()
+
+
+def test_post_sel_pass_is_idempotent():
+    """Re-running ``AddPostSelectionMeasures`` on its own output is a no-op.
+
+    Falls out of the same defensive guard that makes legacy ordering safe:
+    every primary already has a paired ``_ps``, so the second pass adds
+    nothing.
+    """
+    once = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")]).run(_data_circuit())
+    twice = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")]).run(once)
+    assert {cr.name for cr in once.cregs} == {cr.name for cr in twice.cregs}
+    # No qubit gets an extra parity-check pulse from the second invocation.
+    pulse_count_once = sum(1 for instr in once.data if instr.operation.name in ("rx", "xslow"))
+    pulse_count_twice = sum(1 for instr in twice.data if instr.operation.name in ("rx", "xslow"))
+    assert pulse_count_once == pulse_count_twice
