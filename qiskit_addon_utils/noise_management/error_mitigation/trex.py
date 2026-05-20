@@ -16,13 +16,11 @@ from typing import Optional
 
 import numpy as np
 from qiskit import ClassicalRegister
-from qiskit.circuit import CircuitError, CircuitInstruction, QuantumCircuit
-from qiskit.circuit.controlflow.box import BoxOp
+from qiskit.circuit import QuantumCircuit
 from qiskit.primitives.containers.estimator_pub import ObservablesArray
-from qiskit.quantum_info import Pauli, PauliLindbladMap, SparsePauliOp
+from qiskit.quantum_info import PauliLindbladMap
 from qiskit.transpiler import generate_preset_pass_manager
 from samplomatic import build
-from samplomatic.annotations import Twirl
 from samplomatic.transpiler import generate_boxing_pass_manager
 
 from qiskit_addon_utils.exp_vals import get_measurement_bases
@@ -30,6 +28,7 @@ from qiskit_addon_utils.exp_vals.expectation_values import (
     _find_measure_basis_to_observable_mapping,
     executor_expectation_values,
 )
+from qiskit_addon_utils.noise_management.error_mitigation.base_mitigator import BaseMitigator
 from qiskit_addon_utils.noise_management.trex_factors import trex_factors
 
 from .execution_inputs import ExecutionInputs, InputsLike
@@ -37,7 +36,7 @@ from .executor_quantum_program import ExecutorQuantumProgram
 from .executor_quantum_program_result import ExecutorQuantumProgramResult
 
 
-class TREX:
+class TREX(BaseMitigator):
     """A class implementing the Twirled Readout Error eXtinction (TREX) error mitigation method.
 
     TREX is a model-free, computationally efficient quantum error mitigation technique used to mitigate State Preparation and Measurement (SPAM) errors for expectation value calculations.
@@ -49,9 +48,7 @@ class TREX:
         self,
         inputs: Optional[list[InputsLike]] = None,
         noise: PauliLindbladMap | None = None,
-        twirl_gates: bool = False,
-        twirling_strategy: str | None = None,
-        twirling_decomposition: str | None = None,
+        boxing_options: dict | None = None,
         twirl_mcm: bool = False,
         shots_per_randomization: int = 64,
         num_randomizations: int = 128,
@@ -63,75 +60,27 @@ class TREX:
         Args:
             inputs: List of ``InputsLike`` objects. Each InputsLike is a tuple in the form of (circuit, list of observables, list of circuit parameters)
             noise: Readout noise learned, in the form of PauliLindbladMap, to be used for the TREX factor post-processing calculation.
-            twirl_gates: If ``True``, find and twirl also two-qubit gate layers and annotate them with `Twirl` annotations.
-            twirling_strategy: The twirling strategy to use. See samplomatic for available strategies.
-            twirling_decomposition: The twirling decomposition to use. See samplomatic for available decompositions.
+            boxing_options: Options used for boxing the circuit using samplomatic ``generate_boxing_pass_manager`` transpiler pass.
             twirl_mcm: If ``True``, twirl also layers of mid-circuit measurements.
             shots_per_randomization: Number of shots for each randomization for the observables execution.
             num_randomizations: Number of randomizations for twirling in the observables execution.
             cal_randomizations: Number of randomizations for twirling in the noise learning execution.
             parameters_outer_product: If ``True``, parameters binding variable must be an array with no empty shape. The shape of the observables and parameters will be broadcasted to create an outer-product calculation.
         """
-        self.inputs: list[ExecutionInputs] | None = None
-        if inputs is not None:
-            self.inputs = [
-                ExecutionInputs.coerce(execution_input, parameters_outer_product)
-                for execution_input in inputs
-            ]
-        self.options = {
-            "twirl_gates": twirl_gates,
-            "twirling_strategy": twirling_strategy,
-            "twirling_decomposition": twirling_decomposition,
-            "twirl_mcm": twirl_mcm,
-            "shots_per_randomization": shots_per_randomization,
-            "num_randomizations": num_randomizations,
-            "cal_randomizations": cal_randomizations,
-        }
-
-        self.noise_learning_layer: QuantumCircuit | None = None
-        self.annotated_circuits: list[QuantumCircuit] | None = None
-        self.basis_dict_list: list[dict[Pauli, list[SparsePauliOp | None]]] = []
-        self.measure_bases_list: list[list[str]] = []
-        self.observables_list: list[ObservablesArray] = []
-        self.noise: PauliLindbladMap = noise
-        self.parameters_outer_product: bool = parameters_outer_product
-
-    def _remove_midcircuit_box_annotations(self, circuit: QuantumCircuit):
-        """Return a new circuit with all annotations removed from every measurement box, besides the final box.
-
-        If the option of twirl_mcm is set to ``True``, keep Twirl annotation also for layers with mid-circuit measurements.
-
-        Args:
-            circuit: The circuit whose box annotations to strip.
-
-        Returns:
-            A new circuit with empty annotation lists on every box, besides the final box.
-        """
-        new_circuit = circuit.copy_empty_like()
-        for instr in circuit.data[:-1]:
-            if instr.operation.name == "box":
-                box = instr.operation
-                if box.num_clbits > 0:  # box containing measurement
-                    if self.options["twirl_mcm"]:
-                        # keep only the twirling annotation
-                        new_box = BoxOp(
-                            body=box.body,
-                            label=box.label,
-                            annotations=[
-                                annotation
-                                for annotation in box.annotations
-                                if isinstance(annotation, Twirl)
-                            ],
-                        )
-                    else:
-                        new_box = BoxOp(body=box.body, label=box.label, annotations=[])
-                else:
-                    new_box = box
-                new_circuit.data.append(CircuitInstruction(new_box, instr.qubits, instr.clbits))
-            else:
-                new_circuit.data.append(instr)
-        new_circuit.data.append(circuit.data[-1])
-        return new_circuit
+        super().__init__(
+            inputs=inputs,
+            noise=noise,
+            boxing_options=boxing_options,
+            twirl_mcm=twirl_mcm,
+            shots_per_randomization=shots_per_randomization,
+            num_randomizations=num_randomizations,
+            parameters_outer_product=parameters_outer_product,
+        )
+        self.options.update(
+            {
+                "cal_randomizations": cal_randomizations,
+            }
+        )
 
     def _annotate_circuit_and_find_layers(self, circuit):
         """Annotate the final measurement layer with ChangeBasis and Twirling annotations.
@@ -149,31 +98,17 @@ class TREX:
         Raises:
             ValueError: If the circuit contains classical register named `_trex_data`.
         """
-        if circuit.layout:
-            qubits_in_layout = circuit.layout.final_index_layout()
-        else:
-            qubits_in_layout = list(range(len(circuit.qubits)))
-        edited_circuit = circuit.remove_final_measurements(inplace=False)
-        contain_mcm = "measure" in edited_circuit.count_ops()
-        data_register = ClassicalRegister(len(qubits_in_layout), "_trex_data")
-        try:
-            edited_circuit.add_register(data_register)
-        except CircuitError as err:
-            raise ValueError(
-                "Register name `_trex_data` is reserved for a dedicated classical register used by this class."
-            ) from err
-        edited_circuit.barrier(qubits_in_layout)
-        edited_circuit.measure(qubits_in_layout, data_register)
+        edited_circuit, contain_mcm = self._create_final_measurement_layer(circuit, "_trex_data")
+        # Required parameters that will overwrite user input
         boxing_params = {
             "enable_measures": True,
             "measure_annotations": "all",
-            "enable_gates": self.options["twirl_gates"],
-            "twirling_strategy": self.options["twirling_strategy"],
-            "twirling_decomposition": self.options["twirling_decomposition"],
         }
-        boxing_params = {k: v for k, v in boxing_params.items() if v is not None}
+        updated_boxing_params = self.boxing_options.copy()
+        updated_boxing_params.update(boxing_params)
+        updated_boxing_params = {k: v for k, v in updated_boxing_params.items() if v is not None}
 
-        boxing_pm = generate_boxing_pass_manager(**boxing_params)
+        boxing_pm = generate_boxing_pass_manager(**updated_boxing_params)
 
         annotated_circuit = boxing_pm.run(edited_circuit)
         if contain_mcm:

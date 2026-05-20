@@ -37,9 +37,7 @@ class TestTREXInit(unittest.TestCase):
         trex = TREX()
         self.assertIsNone(trex.inputs)
         self.assertIsNone(trex.noise)
-        self.assertFalse(trex.options["twirl_gates"])
-        self.assertIsNone(trex.options["twirling_strategy"])
-        self.assertIsNone(trex.options["twirling_decomposition"])
+        self.assertEqual(trex.boxing_options, {})
         self.assertFalse(trex.options["twirl_mcm"])
         self.assertEqual(trex.options["shots_per_randomization"], 64)
         self.assertEqual(trex.options["num_randomizations"], 128)
@@ -54,12 +52,15 @@ class TestTREXInit(unittest.TestCase):
             )
         ]
         noise = PauliLindbladMap.from_sparse_list([], num_qubits=2)
+        boxing_options = {
+            "twirl_gates": True,
+            "twirling_strategy": "active",
+            "twirling_decomposition": "on-the-fly",
+        }
         trex = TREX(
             inputs=inputs,
             noise=noise,
-            twirl_gates=True,
-            twirling_strategy="active",
-            twirling_decomposition="on-the-fly",
+            boxing_options=boxing_options,
             twirl_mcm=True,
             shots_per_randomization=128,
             num_randomizations=256,
@@ -68,9 +69,9 @@ class TestTREXInit(unittest.TestCase):
         execution_input = [ExecutionInputs.coerce(execution_input) for execution_input in inputs]
         self.assertEqual(trex.inputs, execution_input)
         self.assertEqual(trex.noise, noise)
-        self.assertTrue(trex.options["twirl_gates"])
-        self.assertEqual(trex.options["twirling_strategy"], "active")
-        self.assertEqual(trex.options["twirling_decomposition"], "on-the-fly")
+        self.assertTrue(trex.boxing_options["twirl_gates"])
+        self.assertEqual(trex.boxing_options["twirling_strategy"], "active")
+        self.assertEqual(trex.boxing_options["twirling_decomposition"], "on-the-fly")
         self.assertTrue(trex.options["twirl_mcm"])
         self.assertEqual(trex.options["shots_per_randomization"], 128)
         self.assertEqual(trex.options["num_randomizations"], 256)
@@ -163,9 +164,6 @@ class TestTREXAnnotateCircuitAndFindLayers(unittest.TestCase):
 
     def setUp(self):
         self.trex = TREX()
-        self.trex.options["twirl_gates"] = False
-        self.trex.options["twirling_strategy"] = None
-        self.trex.options["twirling_decomposition"] = None
         circuit = QuantumCircuit(3)
         circuit.h(0)
         circuit.cx(0, 1)
@@ -187,7 +185,6 @@ class TestTREXAnnotateCircuitAndFindLayers(unittest.TestCase):
         self.assertEqual(len(result_circ.data[-1].operation.annotations), 2)
         self.assertIsInstance(result_circ.data[-1].operation.annotations[0], Twirl)
         self.assertIsInstance(result_circ.data[-1].operation.annotations[1], ChangeBasis)
-        self.assertNotEqual(result_circ.data[0].operation.name, "box")
 
     def test_annotate_circuit_twirl_gates_annotations(self):
         """Test that Twirl annotations are added if twirl_gates is True."""
@@ -204,6 +201,21 @@ class TestTREXAnnotateCircuitAndFindLayers(unittest.TestCase):
         self.assertEqual(result_circ.data[0].operation.name, "box")
         self.assertEqual(len(result_circ.data[0].operation.annotations), 1)
         self.assertIsInstance(result_circ.data[0].operation.annotations[0], Twirl)
+
+    def test_annotate_circuit_no_twirl_gates_annotations(self):
+        """Test that Twirl annotations are added if twirl_gates is True."""
+        boxing_options = {"enable_gates": False}
+        self.trex.boxing_options = boxing_options
+        result_circ, result_layer = self.trex._annotate_circuit_and_find_layers(self.test_circuit)
+
+        # check layer
+        self.assertEqual(result_layer.operation.name, "box")
+        self.assertEqual(len(result_layer.clbits), 3)
+        # check circuit annotations
+        self.assertEqual(len(result_circ.data[-1].operation.annotations), 2)
+        self.assertIsInstance(result_circ.data[-1].operation.annotations[0], Twirl)
+        self.assertIsInstance(result_circ.data[-1].operation.annotations[1], ChangeBasis)
+        self.assertNotEqual(result_circ.data[0].operation.name, "box")
 
     def test_annotate_circuit_data_register_naming(self):
         """Test that data register names are set correctly."""
@@ -660,7 +672,6 @@ class TestTREXIntegration(unittest.TestCase):
 
         trex = TREX(
             inputs=inputs,
-            twirl_gates=False,
             shots_per_randomization=64,
             num_randomizations=128,
         )
@@ -695,7 +706,6 @@ class TestTREXIntegration(unittest.TestCase):
 
         trex = TREX(
             inputs=inputs,
-            twirl_gates=False,
             shots_per_randomization=64,
             num_randomizations=128,
         )
@@ -734,7 +744,6 @@ class TestTREXIntegration(unittest.TestCase):
 
         trex = TREX(
             inputs=inputs,
-            twirl_gates=False,
             shots_per_randomization=64,
             num_randomizations=128,
         )
@@ -774,7 +783,154 @@ class TestTREXIntegration(unittest.TestCase):
         trex = TREX(
             inputs=inputs,
             noise=PauliLindbladMap.from_sparse_list(noise_list, num_qubits=3),
-            twirl_gates=False,
+            shots_per_randomization=64,
+            num_randomizations=128,
+        )
+        trex_program = trex.prepare()
+        results_data = self._create_res_vector(trex_program, contains_cal=False)
+
+        self.assertIsNotNone(trex.noise)
+
+        exp_vals_list, exp_vars_list = trex.post_process(results_data)
+        self.assertEqual(len(exp_vals_list), len(inputs))
+        self.assertEqual(len(exp_vars_list), len(inputs))
+        self.assertEqual(exp_vals_list[0].shape, (len(observables), len(parameter_values)))
+        self.assertEqual(exp_vars_list[0].shape, (len(observables), len(parameter_values)))
+        self.assertIsNotNone(trex.noise)
+        self.assertIsNotNone(trex.basis_dict_list)
+
+    def test_trex_full_workflow_boxing_options(self):
+        """Test a complete TREX workflow from initialization to post-processing."""
+        num_qubits = 3
+        circuit = QuantumCircuit(num_qubits)
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cx(1, 2)
+        observables = [SparsePauliOp(op) for op in (["YYY"])]
+
+        inputs = [(circuit, observables)]
+
+        boxing_options = {"enable_gates": False}
+        trex = TREX(
+            inputs=inputs,
+            boxing_options=boxing_options,
+            shots_per_randomization=64,
+            num_randomizations=128,
+        )
+        trex_program = trex.prepare()
+        results_data = self._create_res_vector(trex_program, contains_cal=True)
+
+        self.assertIsNone(trex.noise)
+
+        exp_vals_list, exp_vars_list = trex.post_process(results_data)
+        self.assertEqual(len(exp_vals_list), len(inputs))
+        self.assertEqual(len(exp_vars_list), len(inputs))
+        self.assertEqual(exp_vals_list[0].shape, (1,))
+        self.assertEqual(exp_vars_list[0].shape, (1,))
+        self.assertIsNotNone(trex.noise)
+        self.assertIsNotNone(trex.basis_dict_list)
+
+    def test_trex_with_multiple_observables_boxing_options(self):
+        """Test TREX with multiple observables per circuit and parameters."""
+        circuit = QuantumCircuit(3)
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cx(1, 2)
+        circuit.rx(Parameter("th0"), 0)
+        circuit.rx(Parameter("th1"), 1)
+        circuit.rx(Parameter("th2"), 2)
+        observables = [SparsePauliOp(op) for op in (["XIX"], ["ZIZ"])]
+
+        parameter_values = np.array(
+            [[0, 0, 0], [0, 0, np.pi], [0, np.pi, np.pi], [np.pi, np.pi, np.pi]]
+        )
+        inputs = [(circuit, observables, parameter_values)]
+
+        boxing_options = {"enable_gates": False}
+        trex = TREX(
+            inputs=inputs,
+            boxing_options=boxing_options,
+            shots_per_randomization=64,
+            num_randomizations=128,
+        )
+        trex_program = trex.prepare()
+        results_data = self._create_res_vector(trex_program, contains_cal=True)
+
+        self.assertIsNone(trex.noise)
+
+        exp_vals_list, exp_vars_list = trex.post_process(results_data)
+        self.assertEqual(len(exp_vals_list), len(inputs))
+        self.assertEqual(len(exp_vars_list), len(inputs))
+        self.assertEqual(exp_vals_list[0].shape, (len(observables), len(parameter_values)))
+        self.assertEqual(exp_vars_list[0].shape, (len(observables), len(parameter_values)))
+        self.assertIsNotNone(trex.noise)
+        self.assertIsNotNone(trex.basis_dict_list)
+
+    def test_trex_with_multiple_inputs_boxing_options(self):
+        """Test TREX with multiple inputs."""
+        circuit = QuantumCircuit(3)
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cx(1, 2)
+        circuit.rx(Parameter("th0"), 0)
+        circuit.rx(Parameter("th1"), 1)
+        circuit.rx(Parameter("th2"), 2)
+        observables = [SparsePauliOp(op) for op in (["XIX"], ["ZIZ"])]
+        observables2 = [SparsePauliOp(op) for op in (["YYY"])]
+
+        parameter_values = np.array(
+            [[0, 0, 0], [0, 0, np.pi], [0, np.pi, np.pi], [np.pi, np.pi, np.pi]]
+        )
+        inputs = [
+            (circuit, observables, parameter_values),
+            (circuit, observables2, parameter_values),
+        ]
+        boxing_options = {"enable_gates": False}
+
+        trex = TREX(
+            inputs=inputs,
+            boxing_options=boxing_options,
+            shots_per_randomization=64,
+            num_randomizations=128,
+        )
+        trex_program = trex.prepare()
+        results_data = self._create_res_vector(trex_program, contains_cal=True)
+
+        self.assertIsNone(trex.noise)
+
+        exp_vals_list, exp_vars_list = trex.post_process(results_data)
+        self.assertEqual(len(exp_vals_list), len(inputs))
+        self.assertEqual(len(exp_vars_list), len(inputs))
+        self.assertEqual(exp_vals_list[0].shape, (len(observables), len(parameter_values)))
+        self.assertEqual(exp_vars_list[0].shape, (len(observables), len(parameter_values)))
+        self.assertEqual(exp_vals_list[1].shape, (len(observables2), len(parameter_values)))
+        self.assertEqual(exp_vars_list[1].shape, (len(observables2), len(parameter_values)))
+        self.assertIsNotNone(trex.noise)
+        self.assertIsNotNone(trex.basis_dict_list)
+
+    def test_trex_with_noise_pre_learned_boxing_options(self):
+        """Test TREX with noise pre learned."""
+        circuit = QuantumCircuit(3)
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cx(1, 2)
+        circuit.rx(Parameter("th0"), 0)
+        circuit.rx(Parameter("th1"), 1)
+        circuit.rx(Parameter("th2"), 2)
+        observables = [SparsePauliOp(op) for op in (["XIX"], ["ZIZ"])]
+
+        parameter_values = np.array(
+            [[0, 0, 0], [0, 0, np.pi], [0, np.pi, np.pi], [np.pi, np.pi, np.pi]]
+        )
+        inputs = [(circuit, observables, parameter_values)]
+
+        noise_list = [("X", [0], 0.001), ("X", [1], 0.002), ("X", [2], 0.003)]
+
+        boxing_options = {"enable_gates": False}
+        trex = TREX(
+            inputs=inputs,
+            noise=PauliLindbladMap.from_sparse_list(noise_list, num_qubits=3),
+            boxing_options=boxing_options,
             shots_per_randomization=64,
             num_randomizations=128,
         )
