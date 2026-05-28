@@ -476,6 +476,66 @@ def test_spectator_cregs_disabled_with_empty_list():
     assert summary.spectator_cregs == set()
 
 
+def test_spectator_post_selection_with_data_pre_selection():
+    """A spectator primary (``spec`` + ``spec_ps``, no ``spec_pre``) coexists with data pre-selection.
+
+    Combining ``AddPreSelectionMeasures`` (data init checks) with
+    ``AddSpectatorMeasures`` (post-only spectator parity) yields a circuit whose
+    ``spec`` primary has no matching ``spec_pre``. The spectator primary is
+    exempt from the pre-selection partner requirement, so the summary builds.
+    """
+    qreg = QuantumRegister(4, "q")
+    creg_data = ClassicalRegister(3, "c")
+    creg_data_pre = ClassicalRegister(3, "c_pre")
+    creg_data_ps = ClassicalRegister(3, "c_ps")
+    creg_spec = ClassicalRegister(1, "spec")
+    creg_spec_ps = ClassicalRegister(1, "spec_ps")
+    circuit = QuantumCircuit(
+        qreg, creg_data, creg_data_pre, creg_data_ps, creg_spec, creg_spec_ps
+    )
+    # Data qubits: pre-check, primary, post-check. Spectator (q3): primary + post only.
+    for i in range(3):
+        circuit.measure(qreg[i], creg_data_pre[i])
+        circuit.measure(qreg[i], creg_data[i])
+        circuit.measure(qreg[i], creg_data_ps[i])
+    circuit.measure(qreg[3], creg_spec[0])
+    circuit.measure(qreg[3], creg_spec_ps[0])
+
+    summary = PostSelectionSummary.from_circuit(circuit, [(0, 1), (1, 2), (2, 3)])
+
+    assert summary.spectator_cregs == {"spec"}
+    # Pre-selection covers only the data qubits; the spectator has no pre-check.
+    assert set(summary.measure_map_pre) == {0, 1, 2}
+    # The data->spectator edge participates in edge-based post-selection.
+    assert frozenset({2, 3}) in summary.edges
+
+
+def test_spectator_without_pre_partner_still_raises_when_not_a_spectator():
+    """A non-spectator primary lacking a ``_pre`` partner still fails pre-selection validation."""
+    qreg = QuantumRegister(4, "q")
+    creg_data = ClassicalRegister(3, "c")
+    creg_data_pre = ClassicalRegister(3, "c_pre")
+    creg_data_ps = ClassicalRegister(3, "c_ps")
+    creg_spec = ClassicalRegister(1, "spec")
+    creg_spec_ps = ClassicalRegister(1, "spec_ps")
+    circuit = QuantumCircuit(
+        qreg, creg_data, creg_data_pre, creg_data_ps, creg_spec, creg_spec_ps
+    )
+    for i in range(3):
+        circuit.measure(qreg[i], creg_data_pre[i])
+        circuit.measure(qreg[i], creg_data[i])
+        circuit.measure(qreg[i], creg_data_ps[i])
+    circuit.measure(qreg[3], creg_spec[0])
+    circuit.measure(qreg[3], creg_spec_ps[0])
+
+    # Opting out of spectator classification means ``spec`` is a regular primary
+    # and must have a ``spec_pre`` partner, which it does not.
+    with pytest.raises(ValueError, match="missing matching pre selection register"):
+        PostSelectionSummary.from_circuit(
+            circuit, [(0, 1), (1, 2), (2, 3)], spectator_cregs=[]
+        )
+
+
 def test_spectator_cregs_eq():
     """Summaries differing only in ``spectator_cregs`` are not equal."""
     primary = {"alpha", "spec"}

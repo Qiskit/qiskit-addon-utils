@@ -172,11 +172,19 @@ class PostSelectionSummary:
             cregs, post_selection_suffix, pre_selection_suffix
         )
 
-        # Validate that primary registers have corresponding selection registers
+        # Validate that primary registers have corresponding selection registers.
+        # Spectator primaries (e.g. ``spec``) are exempt from the pre-selection
+        # requirement: ``AddSpectatorMeasures`` adds a ``_ps`` partner but no
+        # ``_pre`` one, so a spec primary need not have a matching pre register.
         if ps_cregs:
             _validate_cregs(primary_cregs, ps_cregs, post_selection_suffix)
         if pre_cregs:
-            _validate_cregs(primary_cregs, pre_cregs, pre_selection_suffix)
+            _validate_cregs(
+                primary_cregs,
+                pre_cregs,
+                pre_selection_suffix,
+                exempt_primary=set(spectator_cregs),
+            )
 
         measure_map, measure_map_ps, measure_map_pre = _get_measure_maps(
             dag, primary_cregs, ps_cregs, pre_cregs
@@ -248,6 +256,7 @@ def _validate_cregs(
     primary_cregs: dict[str, ClassicalRegister],
     selection_cregs: dict[str, ClassicalRegister],
     selection_suffix: str,
+    exempt_primary: set[str] | None = None,
 ) -> None:
     """Validate primary and selection registers.
 
@@ -261,12 +270,20 @@ def _validate_cregs(
         primary_cregs: The primary cregs.
         selection_cregs: The selection cregs (either post or pre).
         selection_suffix: The suffix of the selection registers.
+        exempt_primary: Names of primary registers that are *allowed* to lack a
+            matching selection register. Used to exempt spectator primaries
+            (e.g. ``spec``) from the pre-selection requirement, since
+            :class:`.AddSpectatorMeasures` adds only a ``_ps`` partner. A
+            matching register that *is* present is still size-checked.
 
     Raise:
         ValueError: If a primary register is missing its matching selection register.
         ValueError: If a primary/selection size pair does not match.
     """
-    expected_selection_names = {name + selection_suffix for name in primary_cregs}
+    exempt_primary = exempt_primary or set()
+    expected_selection_names = {
+        name + selection_suffix for name in primary_cregs if name not in exempt_primary
+    }
     missing = expected_selection_names - set(selection_cregs)
     if missing:
         sorted_primary_names = ", ".join(sorted(list(primary_cregs)))
@@ -280,11 +297,15 @@ def _validate_cregs(
         )
 
     for name, primary_creg in primary_cregs.items():
-        if len(primary_creg) != len(selection_creg := selection_cregs[name + selection_suffix]):
+        selection_name = name + selection_suffix
+        # Exempt primaries may have no partner; only size-check partners that exist.
+        if selection_name not in selection_cregs:
+            continue
+        if len(primary_creg) != len(selection_creg := selection_cregs[selection_name]):
             selection_type = "post selection" if selection_suffix == "_ps" else "pre selection"
             raise ValueError(
                 f"Primary register {name} has {len(primary_creg)} clbits, but {selection_type} register "
-                f"{name + selection_suffix} has {len(selection_creg)} clbits."
+                f"{selection_name} has {len(selection_creg)} clbits."
             )
 
 

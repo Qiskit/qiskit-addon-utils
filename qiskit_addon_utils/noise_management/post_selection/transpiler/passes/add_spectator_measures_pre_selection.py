@@ -293,7 +293,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
             # Skip xslow and rx gates - they are part of pre/post-selection protocol
             if ("xslow" in node.op.name) or ("rx" in node.op.name):
                 continue
-            elif node.is_standard_gate():
+            elif node.is_standard_gate() or node.op.name == "delay":
                 active_qubits.update(node.qargs)
                 terminated_qubits.difference_update(node.qargs)
             elif (name := node.op.name) == "barrier":

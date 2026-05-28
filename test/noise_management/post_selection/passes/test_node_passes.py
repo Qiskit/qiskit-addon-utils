@@ -246,15 +246,27 @@ def test_pre_selection_only_ignored_registers_returns_unchanged():
 
 def test_unsupported_op_raises():
     """Operations outside the supported set are rejected with a clear error."""
-    from qiskit.circuit import Delay
+    from qiskit.circuit.library import Initialize
     from qiskit.transpiler.exceptions import TranspilerError
+
+    qc = QuantumCircuit(1, 1)
+    qc.append(Initialize("0"), [0])
+    qc.measure(0, 0)
+    pm = PassManager([AddPostSelectionMeasures()])
+    with pytest.raises(TranspilerError, match="not supported"):
+        pm.run(qc)
+
+
+def test_delay_is_supported():
+    """``delay`` instructions are treated as regular (identity) ops and accepted."""
+    from qiskit.circuit import Delay
 
     qc = QuantumCircuit(1, 1)
     qc.append(Delay(100), [0])
     qc.measure(0, 0)
     pm = PassManager([AddPostSelectionMeasures()])
-    with pytest.raises(TranspilerError, match="not supported"):
-        pm.run(qc)
+    # Should run without raising.
+    pm.run(qc)
 
 
 def test_post_selection_skips_user_reset():

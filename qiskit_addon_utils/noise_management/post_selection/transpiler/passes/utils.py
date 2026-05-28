@@ -27,6 +27,7 @@ def validate_op_is_supported(node: DAGOpNode):
         * Barriers.
         * Measurements.
         * Resets.
+        * Delays.
         * Control-flow operations.
 
     Args:
@@ -37,7 +38,7 @@ def validate_op_is_supported(node: DAGOpNode):
     """
     if (
         node.is_standard_gate()
-        or node.op.name in ["barrier", "measure", "reset", "xslow"]
+        or node.op.name in ["barrier", "measure", "reset", "xslow", "delay"]
         or isinstance(node.op, ControlFlowOp)
     ):
         return

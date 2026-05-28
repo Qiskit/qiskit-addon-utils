@@ -156,7 +156,7 @@ class AddPostSelectionMeasures(TransformationPass):
             # Skip reset operations - they are part of pre-selection protocol
             if node.op.name == "reset":
                 continue
-            elif node.is_standard_gate() or (name := node.op.name) == "xslow":
+            elif node.is_standard_gate() or (name := node.op.name) in ("xslow", "delay"):
                 for qarg in node.qargs:
                     terminal_measurements[qarg] = None
             elif (name := node.op.name) == "barrier":

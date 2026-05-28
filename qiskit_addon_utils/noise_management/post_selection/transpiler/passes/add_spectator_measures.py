@@ -424,7 +424,7 @@ class AddSpectatorMeasures(TransformationPass):
             # Skip xslow, rx, and reset gates - they are part of pre/post-selection protocol
             if ("xslow" in node.op.name) or ("rx" in node.op.name) or (node.op.name == "reset"):
                 continue
-            elif node.is_standard_gate():
+            elif node.is_standard_gate() or node.op.name == "delay":
                 # Filter out qargs that participate only in pre-selection — their
                 # standard gates (typically the trailing X in the pre-sel pulse
                 # sequence) are protocol gates, not main-circuit activity.
