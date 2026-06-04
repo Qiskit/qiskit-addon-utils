@@ -1244,12 +1244,12 @@ class TestFindMeasureBasisToObservableMapping(unittest.TestCase):
     def test_y_pauli_terms(self):
         """Test handling of Y Pauli terms which involve both X and Z."""
         # Y commutes with Y, Z commutes with Z
-        obs = SparsePauliOp(["YI", "IZ"], [1.0, 2.0])
-        bases = ["YI", "IZ"]
+        obs = SparsePauliOp(["YX", "IZ"], [1.0, 2.0])
+        bases = ["YX", "IZ"]
         result = _find_measure_basis_to_observable_mapping([obs], bases)
 
-        # YI should map to YI basis, IZ should map to IZ basis
-        y_basis = Pauli("YI")
+        # YX should map to YX basis, IZ should map to IZ basis
+        y_basis = Pauli("YX")
         z_basis = Pauli("IZ")
 
         self.assertIsNotNone(result[y_basis][0])
