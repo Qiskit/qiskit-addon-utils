@@ -130,6 +130,14 @@ class AddSpectatorMeasures(TransformationPass):
             self.pulse_sequence = [RXGate(np.pi / 20)] * 20
 
     def run(self, dag: DAGCircuit):  # noqa: D102
+        # Coupling-map node ``i`` is interpreted as register qubit ``i``, so the circuit must
+        # span the coupling graph (e.g. be laid out on the backend), not just the active qubits.
+        if self.coupling_map.size() > dag.num_qubits():
+            raise TranspilerError(
+                f"Circuit has {dag.num_qubits()} qubits but the coupling map spans "
+                f"{self.coupling_map.size()}; run this pass on a circuit laid out over the "
+                f"full coupling graph."
+            )
         active_qubits, terminated_qubits = self._find_active_and_terminated_qubits(dag)
 
         qubit_map = {qubit: idx for idx, qubit in enumerate(dag.qubits)}

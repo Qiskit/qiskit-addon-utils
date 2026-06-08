@@ -490,9 +490,7 @@ def test_spectator_post_selection_with_data_pre_selection():
     creg_data_ps = ClassicalRegister(3, "c_ps")
     creg_spec = ClassicalRegister(1, "spec")
     creg_spec_ps = ClassicalRegister(1, "spec_ps")
-    circuit = QuantumCircuit(
-        qreg, creg_data, creg_data_pre, creg_data_ps, creg_spec, creg_spec_ps
-    )
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_pre, creg_data_ps, creg_spec, creg_spec_ps)
     # Data qubits: pre-check, primary, post-check. Spectator (q3): primary + post only.
     for i in range(3):
         circuit.measure(qreg[i], creg_data_pre[i])
@@ -518,9 +516,7 @@ def test_spectator_without_pre_partner_still_raises_when_not_a_spectator():
     creg_data_ps = ClassicalRegister(3, "c_ps")
     creg_spec = ClassicalRegister(1, "spec")
     creg_spec_ps = ClassicalRegister(1, "spec_ps")
-    circuit = QuantumCircuit(
-        qreg, creg_data, creg_data_pre, creg_data_ps, creg_spec, creg_spec_ps
-    )
+    circuit = QuantumCircuit(qreg, creg_data, creg_data_pre, creg_data_ps, creg_spec, creg_spec_ps)
     for i in range(3):
         circuit.measure(qreg[i], creg_data_pre[i])
         circuit.measure(qreg[i], creg_data[i])
@@ -531,9 +527,7 @@ def test_spectator_without_pre_partner_still_raises_when_not_a_spectator():
     # Opting out of spectator classification means ``spec`` is a regular primary
     # and must have a ``spec_pre`` partner, which it does not.
     with pytest.raises(ValueError, match="missing matching pre selection register"):
-        PostSelectionSummary.from_circuit(
-            circuit, [(0, 1), (1, 2), (2, 3)], spectator_cregs=[]
-        )
+        PostSelectionSummary.from_circuit(circuit, [(0, 1), (1, 2), (2, 3)], spectator_cregs=[])
 
 
 def test_spectator_cregs_eq():

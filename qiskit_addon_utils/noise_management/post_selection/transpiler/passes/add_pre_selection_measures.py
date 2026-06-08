@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from enum import Enum
 from typing import Any
 
@@ -24,7 +23,6 @@ from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
 from qiskit.circuit.library import Barrier, Measure, RXGate, XGate
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit
-from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
@@ -85,8 +83,7 @@ class AddPreSelectionMeasures(TransformationPass):
             qc.measure([0, 1], [0, 1])
 
             # Add pre-selection measurements
-            coupling_map = [(0, 1)]
-            pm = PassManager([AddPreSelectionMeasures(coupling_map)])
+            pm = PassManager([AddPreSelectionMeasures()])
             qc_with_pre = pm.run(qc)
 
             # The resulting circuit will have:
@@ -97,7 +94,6 @@ class AddPreSelectionMeasures(TransformationPass):
 
     def __init__(
         self,
-        coupling_map: CouplingMap | list[tuple[int, int]],
         x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
@@ -107,7 +103,6 @@ class AddPreSelectionMeasures(TransformationPass):
         """Initialize the pass.
 
         Args:
-            coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
             x_pulse_type: The type of X-pulse to apply for the pre-selection measurements.
             pre_selection_suffix: A fixed suffix to append to the names of the classical registers when copying them.
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
@@ -122,12 +117,6 @@ class AddPreSelectionMeasures(TransformationPass):
             ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_ps"]
         )
         self.ignore_creg_names = ignore_creg_names if ignore_creg_names is not None else ["spec"]
-        self.coupling_map = (
-            deepcopy(coupling_map)
-            if isinstance(coupling_map, CouplingMap)
-            else CouplingMap(couplinglist=coupling_map)
-        )
-        self.coupling_map.make_symmetric()
 
         # Pre-selection sequence: xslow (or rx pulses) + X gate
         if self.x_pulse_type == XPulseType.XSLOW:

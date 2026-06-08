@@ -30,11 +30,6 @@ from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import
     AddPreSelectionMeasures,
 )
 
-# Coupling map used for pre-selection passes that need one. The actual
-# coupling is irrelevant for node-based tests because no spectators are
-# considered, but a valid map must still be provided.
-COUPLING_MAP = [(0, 1), (1, 2)]
-
 
 def _make_circuit() -> QuantumCircuit:
     """3-qubit chain with terminal measurements on every qubit."""
@@ -91,7 +86,7 @@ def test_post_sel_custom_suffix():
 
 def test_pre_sel_default():
     """Pre-selection alone with default suffix: adds ``c_pre``."""
-    pm = PassManager([AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx")])
+    pm = PassManager([AddPreSelectionMeasures(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
     assert _creg_map(result) == {"c": 3, "c_pre": 3}
@@ -101,9 +96,7 @@ def test_pre_sel_default():
 
 def test_pre_sel_custom_suffix():
     """Pre-selection with custom suffix: adds ``c_init``, never ``c_pre``."""
-    pm = PassManager(
-        [AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init")]
-    )
+    pm = PassManager([AddPreSelectionMeasures(x_pulse_type="rx", pre_selection_suffix="_init")])
     result = pm.run(_make_circuit())
 
     assert _creg_map(result) == {"c": 3, "c_init": 3}
@@ -120,7 +113,7 @@ def test_pre_then_post_default():
     """Pre then post (default suffixes). No cross-contamination of registers."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddPostSelectionMeasures(x_pulse_type="rx"),
         ]
     )
@@ -138,7 +131,7 @@ def test_post_then_pre_default():
     pm = PassManager(
         [
             AddPostSelectionMeasures(x_pulse_type="rx"),
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
         ]
     )
     result = pm.run(_make_circuit())
@@ -154,7 +147,7 @@ def test_pre_then_post_custom():
     """Pre then post with custom suffixes; pre must be ignored by post."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init"),
+            AddPreSelectionMeasures(x_pulse_type="rx", pre_selection_suffix="_init"),
             AddPostSelectionMeasures(
                 x_pulse_type="rx",
                 post_selection_suffix="_check",
@@ -177,7 +170,6 @@ def test_post_then_pre_custom():
         [
             AddPostSelectionMeasures(x_pulse_type="rx", post_selection_suffix="_check"),
             AddPreSelectionMeasures(
-                COUPLING_MAP,
                 x_pulse_type="rx",
                 pre_selection_suffix="_init",
                 ignore_creg_suffixes=["_check"],
@@ -208,7 +200,7 @@ def test_empty_circuit_post_selection():
 def test_empty_circuit_pre_selection():
     """Empty circuit is unchanged by ``AddPreSelectionMeasures``."""
     qc = QuantumCircuit(1)
-    pm = PassManager([AddPreSelectionMeasures(COUPLING_MAP)])
+    pm = PassManager([AddPreSelectionMeasures()])
     assert pm.run(qc) == qc
 
 
@@ -221,14 +213,14 @@ def test_invalid_x_pulse_type_post():
 def test_invalid_x_pulse_type_pre():
     """Unknown ``x_pulse_type`` is rejected by pre-selection pass."""
     with pytest.raises(ValueError):
-        AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rz")
+        AddPreSelectionMeasures(x_pulse_type="rz")
 
 
 def test_pre_selection_no_measurements_returns_unchanged():
     """Active qubits but no measurements: pass exits early without modification."""
     qc = QuantumCircuit(1)
     qc.h(0)
-    pm = PassManager([AddPreSelectionMeasures(COUPLING_MAP)])
+    pm = PassManager([AddPreSelectionMeasures()])
     assert pm.run(qc) == qc
 
 
@@ -240,7 +232,7 @@ def test_pre_selection_only_ignored_registers_returns_unchanged():
     qc.h(0)
     qc.measure(0, 0)
     # Default ``ignore_creg_names=["spec"]`` filters out the only register.
-    pm = PassManager([AddPreSelectionMeasures(COUPLING_MAP)])
+    pm = PassManager([AddPreSelectionMeasures()])
     assert pm.run(qc) == qc
 
 

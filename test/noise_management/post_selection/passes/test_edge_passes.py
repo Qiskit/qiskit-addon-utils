@@ -33,6 +33,7 @@ from __future__ import annotations
 import pytest
 from qiskit.circuit import QuantumCircuit
 from qiskit.transpiler import PassManager
+from qiskit.transpiler.exceptions import TranspilerError
 from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
     AddPostSelectionMeasures,
     AddPreSelectionMeasures,
@@ -121,7 +122,7 @@ def test_post_sel_only():
 
 def test_pre_sel_only():
     """Edge variant: pre-selection alone leaves spectator wires untouched."""
-    pm = PassManager([AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx")])
+    pm = PassManager([AddPreSelectionMeasures(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
     assert _creg_map(result) == {"c": 3, "c_pre": 3}
@@ -209,7 +210,7 @@ def test_pre_sel_with_spectators():
     """
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
@@ -311,7 +312,7 @@ def test_full_stack_pre_first():
     """Pre+spec_pre then post+spec produces the full stack."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
             AddPostSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx"),
@@ -326,7 +327,7 @@ def test_full_stack_post_first():
         [
             AddPostSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx"),
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
@@ -342,7 +343,7 @@ def test_default_xslow_pulse_type():
     """Default ``x_pulse_type`` (xslow) wires up the XSlowGate pulse sequence."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP),
+            AddPreSelectionMeasures(),
             AddSpectatorMeasuresPreSelection(COUPLING_MAP),
         ]
     )
@@ -384,7 +385,6 @@ def test_spec_pre_without_data_preselection_returns_unchanged():
 def test_spec_pre_existing_register_size_mismatch_raises():
     """Pre-existing ``spec_pre`` register with the wrong size raises."""
     from qiskit.circuit import ClassicalRegister, QuantumRegister
-    from qiskit.transpiler.exceptions import TranspilerError
 
     qreg = QuantumRegister(5, "q")
     creg = ClassicalRegister(3, "c")
@@ -421,7 +421,7 @@ def test_spec_pre_include_unmeasured_false():
     """``include_unmeasured=False`` skips the unmeasured-active-qubit broadening."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasuresPreSelection(
                 COUPLING_MAP, x_pulse_type="rx", include_unmeasured=False
             ),
@@ -451,7 +451,7 @@ def test_spec_pre_existing_register_correct_size():
 
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
@@ -579,7 +579,7 @@ def test_pre_sel_spectators_do_not_cascade_post_sel_spectators():
 
     pm = PassManager(
         [
-            AddPreSelectionMeasures(coupling, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasuresPreSelection(coupling, x_pulse_type="rx"),
             AddPostSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasures(coupling, x_pulse_type="rx"),
@@ -605,7 +605,7 @@ def test_full_stack_custom_suffixes():
     """Full stack with custom suffixes and a custom spec_pre register name."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx", pre_selection_suffix="_init"),
+            AddPreSelectionMeasures(x_pulse_type="rx", pre_selection_suffix="_init"),
             AddSpectatorMeasuresPreSelection(
                 COUPLING_MAP,
                 x_pulse_type="rx",
@@ -635,3 +635,13 @@ def test_full_stack_custom_suffixes():
         assert _meas_registers(result, q) == ["c_init", "c", "c_check"]
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec_init", "spec", "spec_check"]
+
+
+@pytest.mark.parametrize("pass_cls", [AddSpectatorMeasures, AddSpectatorMeasuresPreSelection])
+def test_spectator_pass_rejects_circuit_smaller_than_coupling_map(pass_cls):
+    """Coupling map larger than the circuit (e.g. virtual circuit + device map) is an error."""
+    qc = QuantumCircuit(3, 3)
+    qc.measure(range(3), range(3))
+    pm = PassManager([pass_cls([(0, 1), (1, 2), (2, 3), (3, 4)])])  # spans 5 qubits, circuit has 3
+    with pytest.raises(TranspilerError, match="coupling map spans"):
+        pm.run(qc)

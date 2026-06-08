@@ -73,7 +73,7 @@ def _passes_post_only():
 
 
 def _passes_pre_only():
-    return [AddPreSelectionMeasures(COUPLING, x_pulse_type="rx")]
+    return [AddPreSelectionMeasures(x_pulse_type="rx")]
 
 
 def _passes_post_with_spec():
@@ -85,7 +85,7 @@ def _passes_post_with_spec():
 
 def _passes_pre_with_spec():
     return [
-        AddPreSelectionMeasures(COUPLING, x_pulse_type="rx"),
+        AddPreSelectionMeasures(x_pulse_type="rx"),
         AddSpectatorMeasuresPreSelection(COUPLING, x_pulse_type="rx"),
     ]
 
@@ -128,7 +128,7 @@ def _passes_full_stack(*, pre_first: bool, custom: bool = False):
         spec_args = {"x_pulse_type": "rx"}
 
     pre_block = [
-        AddPreSelectionMeasures(COUPLING, **pre_args),
+        AddPreSelectionMeasures(**pre_args),
         AddSpectatorMeasuresPreSelection(COUPLING, **spec_pre_args),
     ]
     post_block = [

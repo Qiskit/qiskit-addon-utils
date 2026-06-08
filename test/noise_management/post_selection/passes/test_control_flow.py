@@ -158,7 +158,7 @@ def test_post_selection_if_else_inconsistent():
 
 def test_pre_selection_box():
     """``box`` interior gates count as activity for pre-selection."""
-    pm = PassManager([AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx")])
+    pm = PassManager([AddPreSelectionMeasures(x_pulse_type="rx")])
     result = pm.run(_box_circuit())
 
     assert _creg_names(result) == {"c", "c_pre"}
@@ -173,7 +173,7 @@ def test_pre_selection_if_else():
     ``_find_measurements`` still discovers it, so a ``c_pre`` measurement is
     prepended at the top level.
     """
-    pm = PassManager([AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx")])
+    pm = PassManager([AddPreSelectionMeasures(x_pulse_type="rx")])
     result = pm.run(_if_else_circuit_consistent())
 
     assert _creg_names(result) == {"c", "c_pre"}
@@ -252,7 +252,7 @@ def test_spec_pre_selection_box():
     """Pre-selection spectators wrap correctly around a ``box``-bearing circuit."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
@@ -268,7 +268,7 @@ def test_spec_pre_selection_if_else():
     """Pre-selection spectators handle ``if_else``-driven activity correctly."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreSelectionMeasures(x_pulse_type="rx"),
             AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
