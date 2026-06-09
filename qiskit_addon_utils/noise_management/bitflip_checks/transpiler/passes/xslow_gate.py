@@ -11,10 +11,18 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""A submodule with transpilation passes for post selection."""
+"""XSlow gate."""
 
-from .add_post_selection_measures import AddPostSelectionMeasures, XPulseType
-from .add_spectator_measures import AddSpectatorMeasures
-from .xslow_gate import XSlowGate
+from qiskit.circuit import Gate
 
-__all__ = ["AddPostSelectionMeasures", "AddSpectatorMeasures", "XPulseType", "XSlowGate"]
+
+class XSlowGate(Gate):
+    """The x-slow gate."""
+
+    def __init__(self, label: str = "xslow", xslow_gate_name: str = "xslow") -> None:  # noqa: D107
+        super().__init__(
+            name=xslow_gate_name,
+            num_qubits=1,
+            params=[],
+            label=label,
+        )

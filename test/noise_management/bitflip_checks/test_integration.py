@@ -35,16 +35,16 @@ import numpy as np
 import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit
 from qiskit.transpiler import PassManager
-from qiskit_addon_utils.noise_management.post_selection import (
+from qiskit_addon_utils.noise_management.bitflip_checks import (
     PostSelectionStrategy,
     PostSelectionSummary,
     PostSelector,
 )
-from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
-    AddPostSelectionMeasures,
-    AddPreSelectionMeasures,
-    AddSpectatorMeasures,
-    AddSpectatorMeasuresPreSelection,
+from qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes import (
+    AddPostCircuitBitFlipChecks,
+    AddPreCircuitBitFlipChecks,
+    AddSpectatorPostCircuitBitFlipChecks,
+    AddSpectatorPreCircuitBitFlipChecks,
 )
 
 # 5-qubit register; data qubits 0,1,2 are active.
@@ -69,24 +69,24 @@ def _data_circuit() -> QuantumCircuit:
 
 
 def _passes_post_only():
-    return [AddPostSelectionMeasures(x_pulse_type="rx")]
+    return [AddPostCircuitBitFlipChecks(x_pulse_type="rx")]
 
 
 def _passes_pre_only():
-    return [AddPreSelectionMeasures(x_pulse_type="rx")]
+    return [AddPreCircuitBitFlipChecks(x_pulse_type="rx")]
 
 
 def _passes_post_with_spec():
     return [
-        AddPostSelectionMeasures(x_pulse_type="rx"),
-        AddSpectatorMeasures(COUPLING, x_pulse_type="rx"),
+        AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
+        AddSpectatorPostCircuitBitFlipChecks(COUPLING, x_pulse_type="rx"),
     ]
 
 
 def _passes_pre_with_spec():
     return [
-        AddPreSelectionMeasures(x_pulse_type="rx"),
-        AddSpectatorMeasuresPreSelection(COUPLING, x_pulse_type="rx"),
+        AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+        AddSpectatorPreCircuitBitFlipChecks(COUPLING, x_pulse_type="rx"),
     ]
 
 
@@ -128,12 +128,12 @@ def _passes_full_stack(*, pre_first: bool, custom: bool = False):
         spec_args = {"x_pulse_type": "rx"}
 
     pre_block = [
-        AddPreSelectionMeasures(**pre_args),
-        AddSpectatorMeasuresPreSelection(COUPLING, **spec_pre_args),
+        AddPreCircuitBitFlipChecks(**pre_args),
+        AddSpectatorPreCircuitBitFlipChecks(COUPLING, **spec_pre_args),
     ]
     post_block = [
-        AddPostSelectionMeasures(**post_args),
-        AddSpectatorMeasures(COUPLING, **spec_args),
+        AddPostCircuitBitFlipChecks(**post_args),
+        AddSpectatorPostCircuitBitFlipChecks(COUPLING, **spec_args),
     ]
     return pre_block + post_block if pre_first else post_block + pre_block
 
@@ -165,8 +165,8 @@ def _perfect_result(
     * Same shape for the ``spec`` family if ``has_spec``.
 
     The spec *primary* register is always named ``"spec"`` (the default of
-    ``AddSpectatorMeasures``); the spec *pre* register name follows
-    ``AddSpectatorMeasuresPreSelection`` — ``"spec_pre"`` by default,
+    ``AddSpectatorPostCircuitBitFlipChecks``); the spec *pre* register name follows
+    ``AddSpectatorPreCircuitBitFlipChecks`` — ``"spec_pre"`` by default,
     ``"spec_init"`` in the custom-suffix configuration.
     """
     rng = np.random.default_rng(seed)
@@ -449,14 +449,14 @@ def test_strategy_enum_and_string_equivalent():
 #
 # Older client code typically wrote::
 #
-#     [AddSpectatorMeasures(coupling_map, spectator_creg_name="spec"),
-#      AddPostSelectionMeasures(x_pulse_type)]
+#     [AddSpectatorPostCircuitBitFlipChecks(coupling_map, spectator_creg_name="spec"),
+#      AddPostCircuitBitFlipChecks(x_pulse_type)]
 #
 # i.e. the spec pass first, then the post-sel pass. The new
-# ``AddSpectatorMeasures`` emits its own ``(spec, spec_ps)`` register pair
+# ``AddSpectatorPostCircuitBitFlipChecks`` emits its own ``(spec, spec_ps)`` register pair
 # (rather than just measuring once and letting the post-sel pass add the
 # second measurement). Naive composition under the old ordering would have
-# ``AddPostSelectionMeasures`` attempt to add a duplicate ``spec_ps`` and
+# ``AddPostCircuitBitFlipChecks`` attempt to add a duplicate ``spec_ps`` and
 # crash. The post-sel pass is defensively guarded — it skips primaries whose
 # ``_ps`` counterpart already exists, and skips registers that themselves are
 # ``_ps`` counterparts — so the legacy ordering must continue to produce a
@@ -468,10 +468,10 @@ def test_strategy_enum_and_string_equivalent():
 def _passes_legacy_spec_then_post(*, spectator_creg_name: str = "spec", x_pulse_type: str = "rx"):
     """Old client pattern: spec measurements first, then the post-sel pass."""
     return [
-        AddSpectatorMeasures(
+        AddSpectatorPostCircuitBitFlipChecks(
             COUPLING, x_pulse_type=x_pulse_type, spectator_creg_name=spectator_creg_name
         ),
-        AddPostSelectionMeasures(x_pulse_type=x_pulse_type),
+        AddPostCircuitBitFlipChecks(x_pulse_type=x_pulse_type),
     ]
 
 
@@ -479,7 +479,7 @@ def test_legacy_order_does_not_crash():
     """Spec-then-post ordering must complete without ``DAGCircuitError``.
 
     Regression guard: a duplicate-register crash here would mean the
-    defensive guard in ``AddPostSelectionMeasures`` regressed.
+    defensive guard in ``AddPostCircuitBitFlipChecks`` regressed.
     """
     pm = PassManager(_passes_legacy_spec_then_post())
     out = pm.run(_data_circuit())
@@ -610,14 +610,14 @@ def test_legacy_order_inside_manual_box_with_measurements_outside():
 
 
 def test_post_sel_pass_is_idempotent():
-    """Re-running ``AddPostSelectionMeasures`` on its own output is a no-op.
+    """Re-running ``AddPostCircuitBitFlipChecks`` on its own output is a no-op.
 
     Falls out of the same defensive guard that makes legacy ordering safe:
     every primary already has a paired ``_ps``, so the second pass adds
     nothing.
     """
-    once = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")]).run(_data_circuit())
-    twice = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")]).run(once)
+    once = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")]).run(_data_circuit())
+    twice = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")]).run(once)
     assert {cr.name for cr in once.cregs} == {cr.name for cr in twice.cregs}
     # No qubit gets an extra parity-check pulse from the second invocation.
     pulse_count_once = sum(1 for instr in once.data if instr.operation.name in ("rx", "xslow"))

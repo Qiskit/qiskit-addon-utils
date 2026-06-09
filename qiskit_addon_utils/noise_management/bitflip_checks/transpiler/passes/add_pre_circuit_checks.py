@@ -27,8 +27,8 @@ from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
 from ....constants import DEFAULT_PRE_SELECTION_SUFFIX
-from ....post_selection.transpiler.passes.utils import validate_op_is_supported
-from ....post_selection.transpiler.passes.xslow_gate import XSlowGate
+from .utils import validate_op_is_supported
+from .xslow_gate import XSlowGate
 
 
 class XPulseType(str, Enum):
@@ -41,7 +41,7 @@ class XPulseType(str, Enum):
     """Twenty ``rx`` gates with angles ``pi/20``."""
 
 
-class AddPreSelectionMeasures(TransformationPass):
+class AddPreCircuitBitFlipChecks(TransformationPass):
     """Add a pre-selection measurement at the beginning of the circuit.
 
     A pre-selection measurement is a measurement that precedes the main circuit operations. It
@@ -72,8 +72,8 @@ class AddPreSelectionMeasures(TransformationPass):
 
             from qiskit import QuantumCircuit
             from qiskit.transpiler import PassManager
-            from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
-                AddPreSelectionMeasures,
+            from qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes import (
+                AddPreCircuitBitFlipChecks,
             )
 
             # Create a simple circuit
@@ -83,7 +83,7 @@ class AddPreSelectionMeasures(TransformationPass):
             qc.measure([0, 1], [0, 1])
 
             # Add pre-selection measurements
-            pm = PassManager([AddPreSelectionMeasures()])
+            pm = PassManager([AddPreCircuitBitFlipChecks()])
             qc_with_pre = pm.run(qc)
 
             # The resulting circuit will have:
@@ -181,7 +181,7 @@ class AddPreSelectionMeasures(TransformationPass):
             for gate in self.pulse_sequence:
                 new_dag.apply_operation_back(gate, [qubit])
 
-        # Add barrier before measurements - AddSpectatorMeasuresPreSelection will extend it.
+        # Add barrier before measurements - AddSpectatorPreCircuitBitFlipChecks will extend it.
         # ``qubits_list`` is non-empty: we returned early above when ``qubits_to_preselect``
         # was empty, so this guard is purely defensive.
         if qubits_list:  # pragma: no branch

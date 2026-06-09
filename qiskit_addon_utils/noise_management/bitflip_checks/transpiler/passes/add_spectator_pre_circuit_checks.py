@@ -28,8 +28,8 @@ from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
 from ....constants import DEFAULT_SPECTATOR_PRE_CREG_NAME
-from ....post_selection.transpiler.passes.utils import validate_op_is_supported
-from ....post_selection.transpiler.passes.xslow_gate import XSlowGate
+from .utils import validate_op_is_supported
+from .xslow_gate import XSlowGate
 
 
 class XPulseType(str, Enum):
@@ -42,7 +42,7 @@ class XPulseType(str, Enum):
     """Twenty ``rx`` gates with angles ``pi/20``."""
 
 
-class AddSpectatorMeasuresPreSelection(TransformationPass):
+class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
     """Add pre-selection measurements on spectator qubits.
 
     An **active qubit** is a qubit acted on in the circuit by a non-barrier instruction. A **terminated qubit**
@@ -61,7 +61,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
     ``spectator_creg_name`` (default: ``"spectator_pre"``).
 
     .. note::
-        This pass is designed to work in conjunction with :class:`.AddPreSelectionMeasures`. Typically,
+        This pass is designed to work in conjunction with :class:`.AddPreCircuitBitFlipChecks`. Typically,
         you would use both passes together to add pre-selection measurements on both active and spectator qubits.
 
     Example:
@@ -69,9 +69,9 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
 
             from qiskit import QuantumCircuit
             from qiskit.transpiler import PassManager, CouplingMap
-            from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
-                AddPreSelectionMeasures,
-                AddSpectatorMeasuresPreSelection,
+            from qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes import (
+                AddPreCircuitBitFlipChecks,
+                AddSpectatorPreCircuitBitFlipChecks,
             )
 
             # Create a circuit that uses qubits 0, 1, 2
@@ -86,8 +86,8 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
 
             # Add pre-selection measurements on both active and spectator qubits
             pm = PassManager([
-                AddPreSelectionMeasures(),
-                AddSpectatorMeasuresPreSelection(coupling_map),
+                AddPreCircuitBitFlipChecks(),
+                AddSpectatorPreCircuitBitFlipChecks(coupling_map),
             ])
             qc_with_pre = pm.run(qc)
 
@@ -119,12 +119,12 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
             spectator_creg_name: The name of the classical register added for the measurements on the spectator qubits.
             ignore_spectator_creg_names: List of classical register names to ignore when determining active qubits.
                 Qubits that only have measurements to these registers are not considered active, preventing cascading
-                spectator selection. Defaults to ``["spec"]`` (the default name used by :class:`.AddSpectatorMeasures`).
+                spectator selection. Defaults to ``["spec"]`` (the default name used by :class:`.AddSpectatorPostCircuitBitFlipChecks`).
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored when determining
                 terminated qubits. Qubits with measurements into registers with these suffixes are not considered
                 terminated, allowing pre-selection measurements to be added. By default, registers ending with "_ps"
                 are ignored to allow pre-selection after post-selection.
-            pre_selection_suffix: The suffix used by AddPreSelectionMeasures for pre-selection registers. This is used
+            pre_selection_suffix: The suffix used by AddPreCircuitBitFlipChecks for pre-selection registers. This is used
                 to identify which qubits have pre-selection measurements and which barrier to extend. Defaults to "_pre".
         """
         super().__init__()
@@ -200,7 +200,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
         else:
             new_dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
 
-        # Find all qubits that have pre-selection measurements (from AddPreSelectionMeasures)
+        # Find all qubits that have pre-selection measurements (from AddPreCircuitBitFlipChecks)
         # These are qubits that have measurements into registers ending with the pre_selection_suffix
         data_qubits_with_preselection = set()
         for node in dag.topological_op_nodes():
@@ -231,7 +231,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
             None,
         )
         if first_barrier_idx is None:  # pragma: no cover
-            # Defensive: ``AddPreSelectionMeasures`` always emits a barrier on
+            # Defensive: ``AddPreCircuitBitFlipChecks`` always emits a barrier on
             # the data pre-sel qubits, so this is unreachable in practice.
             return dag
 
@@ -245,7 +245,7 @@ class AddSpectatorMeasuresPreSelection(TransformationPass):
 
         # Spectator-only ops appearing *before* the pre-selection barrier in topological
         # order are logically post-selection ops on the spectator wires (e.g. the
-        # post-sel parity check from a previously-run ``AddSpectatorMeasures``). Defer
+        # post-sel parity check from a previously-run ``AddSpectatorPostCircuitBitFlipChecks``). Defer
         # them so they emerge *after* the extended barrier and the pre-sel measurement
         # on the spec wire. With the current passes this list is normally empty —
         # the post-sel structure depends on data-wire ops (via the full-width

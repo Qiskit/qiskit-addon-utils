@@ -34,11 +34,11 @@ import pytest
 from qiskit.circuit import QuantumCircuit
 from qiskit.transpiler import PassManager
 from qiskit.transpiler.exceptions import TranspilerError
-from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
-    AddPostSelectionMeasures,
-    AddPreSelectionMeasures,
-    AddSpectatorMeasures,
-    AddSpectatorMeasuresPreSelection,
+from qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes import (
+    AddPostCircuitBitFlipChecks,
+    AddPreCircuitBitFlipChecks,
+    AddSpectatorPostCircuitBitFlipChecks,
+    AddSpectatorPreCircuitBitFlipChecks,
 )
 
 # Coupling: 4 -- 0 -- 1 -- 2 -- 3.
@@ -110,7 +110,7 @@ def _barrier_positions(circuit: QuantumCircuit) -> list[int]:
 
 def test_post_sel_only():
     """Edge variant: post-selection alone leaves spectator wires untouched."""
-    pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
+    pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
     assert _creg_map(result) == {"c": 3, "c_ps": 3}
@@ -122,7 +122,7 @@ def test_post_sel_only():
 
 def test_pre_sel_only():
     """Edge variant: pre-selection alone leaves spectator wires untouched."""
-    pm = PassManager([AddPreSelectionMeasures(x_pulse_type="rx")])
+    pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
     assert _creg_map(result) == {"c": 3, "c_pre": 3}
@@ -155,8 +155,8 @@ def test_post_sel_with_spectators():
     """
     pm = PassManager(
         [
-            AddPostSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
     result = pm.run(_make_circuit())
@@ -206,12 +206,12 @@ def test_pre_sel_with_spectators():
 
     The spec wire mirrors the data-wire pre-sel: ``rx*20 -> x -> barrier ->
     measure(spec_pre)``. No reset — the post-sel parity check (added later by
-    ``AddSpectatorMeasures``) only cares that the two readings flip.
+    ``AddSpectatorPostCircuitBitFlipChecks``) only cares that the two readings flip.
     """
     pm = PassManager(
         [
-            AddPreSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
     result = pm.run(_make_circuit())
@@ -239,7 +239,7 @@ def test_spectators_only():
     barrier -> measure`` — three barriers sandwiching the measure/pulse/measure
     sequence so pulse-level scheduling can't reorder the parity check.
     """
-    pm = PassManager([AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx")])
+    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
     cregs = _creg_map(result)
@@ -312,10 +312,10 @@ def test_full_stack_pre_first():
     """Pre+spec_pre then post+spec produces the full stack."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
-            AddPostSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
+            AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
     _assert_full_stack_invariants(pm.run(_make_circuit()))
@@ -325,10 +325,10 @@ def test_full_stack_post_first():
     """Post+spec then pre+spec_pre yields the same full-stack invariants."""
     pm = PassManager(
         [
-            AddPostSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx"),
-            AddPreSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
+            AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
     _assert_full_stack_invariants(pm.run(_make_circuit()))
@@ -343,8 +343,8 @@ def test_default_xslow_pulse_type():
     """Default ``x_pulse_type`` (xslow) wires up the XSlowGate pulse sequence."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(),
-            AddSpectatorMeasuresPreSelection(COUPLING_MAP),
+            AddPreCircuitBitFlipChecks(),
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP),
         ]
     )
     result = pm.run(_make_circuit())
@@ -357,7 +357,7 @@ def test_default_xslow_pulse_type():
 
 def test_spec_no_spectators_returns_unchanged():
     """Active qubits without spectators in the coupling map: pass returns input."""
-    pm = PassManager([AddSpectatorMeasures(coupling_map=[])])
+    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(coupling_map=[])])
     qc = _make_circuit()
     # Empty coupling map ⇒ no spectator neighbours ⇒ no work to do ⇒ same circuit.
     assert pm.run(qc) == qc
@@ -365,19 +365,19 @@ def test_spec_no_spectators_returns_unchanged():
 
 def test_spec_pre_no_spectators_returns_unchanged():
     """Spectator-pre pass on a circuit with no spectators returns the input."""
-    pm = PassManager([AddSpectatorMeasuresPreSelection(coupling_map=[])])
+    pm = PassManager([AddSpectatorPreCircuitBitFlipChecks(coupling_map=[])])
     qc = _make_circuit()
     assert pm.run(qc) == qc
 
 
 def test_spec_pre_without_data_preselection_returns_unchanged():
-    """Spectator-pre pass needs an AddPreSelectionMeasures barrier to splice into.
+    """Spectator-pre pass needs an AddPreCircuitBitFlipChecks barrier to splice into.
 
     With the spectator pass running standalone (no ``c_pre`` registers in the
     circuit) there's no pre-selection barrier to extend, so the pass leaves
     the DAG untouched.
     """
-    pm = PassManager([AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx")])
+    pm = PassManager([AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx")])
     qc = _make_circuit()
     assert pm.run(qc) == qc
 
@@ -395,7 +395,7 @@ def test_spec_pre_existing_register_size_mismatch_raises():
     qc.cx(1, 2)
     qc.measure([0, 1, 2], [0, 1, 2])
 
-    pm = PassManager([AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx")])
+    pm = PassManager([AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx")])
     with pytest.raises(TranspilerError, match="already exists with size"):
         pm.run(qc)
 
@@ -410,8 +410,12 @@ def test_spec_include_unmeasured_toggles_lone_unterminated_qubit():
     qc = QuantumCircuit(1)
     qc.h(0)  # active, never measured
 
-    on = PassManager([AddSpectatorMeasures(coupling_map=[], include_unmeasured=True)])
-    off = PassManager([AddSpectatorMeasures(coupling_map=[], include_unmeasured=False)])
+    on = PassManager(
+        [AddSpectatorPostCircuitBitFlipChecks(coupling_map=[], include_unmeasured=True)]
+    )
+    off = PassManager(
+        [AddSpectatorPostCircuitBitFlipChecks(coupling_map=[], include_unmeasured=False)]
+    )
 
     assert "spec" in {c.name for c in on.run(qc).cregs}
     assert off.run(qc) == qc
@@ -421,8 +425,8 @@ def test_spec_pre_include_unmeasured_false():
     """``include_unmeasured=False`` skips the unmeasured-active-qubit broadening."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasuresPreSelection(
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(
                 COUPLING_MAP, x_pulse_type="rx", include_unmeasured=False
             ),
         ]
@@ -451,8 +455,8 @@ def test_spec_pre_existing_register_correct_size():
 
     pm = PassManager(
         [
-            AddPreSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
     result = pm.run(qc)
@@ -477,7 +481,7 @@ def test_spec_x_gate_followed_by_normal_measure():
     qc.measure(1, 1)
     qc.measure(2, 2)
 
-    pm = PassManager([AddSpectatorMeasures(COUPLING_MAP)])
+    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP)])
     result = pm.run(qc)
     # q0 is treated as fully active (logical X, not pre-sel); spectators are
     # therefore the qubits adjacent to {0, 1, 2}, namely {3, 4}.
@@ -492,7 +496,7 @@ def test_spec_post_sel_register_present_without_matching_barrier():
     """Post-sel measurements pre-existing without a barrier: fall back to standalone.
 
     If the user feeds a circuit where ``c_ps`` measurements exist but no
-    barrier acts exactly on those qubits, ``AddSpectatorMeasures`` cannot
+    barrier acts exactly on those qubits, ``AddSpectatorPostCircuitBitFlipChecks`` cannot
     splice into the data sandwich and instead builds its own standalone
     parity-check sandwich for the spectator qubits.
     """
@@ -511,7 +515,7 @@ def test_spec_post_sel_register_present_without_matching_barrier():
     qc.measure(1, creg_ps[1])
     qc.measure(2, creg_ps[2])
 
-    pm = PassManager([AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx")])
+    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx")])
     result = pm.run(qc)
     creg_names = {c.name for c in result.cregs}
     assert "spec" in creg_names
@@ -543,7 +547,7 @@ def test_spec_x_gate_pre_selection_pattern():
     qc.measure(1, creg[0])
     qc.measure(2, creg[1])
 
-    pm = PassManager([AddSpectatorMeasures([(0, 1), (1, 2)])])
+    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks([(0, 1), (1, 2)])])
     result = pm.run(qc)
     # The pass should run without error and add the ``spec`` and ``spec_ps`` registers.
     # q0, recognised as a pre-selection pattern, becomes a spectator-eligible
@@ -579,10 +583,10 @@ def test_pre_sel_spectators_do_not_cascade_post_sel_spectators():
 
     pm = PassManager(
         [
-            AddPreSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasuresPreSelection(coupling, x_pulse_type="rx"),
-            AddPostSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasures(coupling, x_pulse_type="rx"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(coupling, x_pulse_type="rx"),
+            AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPostCircuitBitFlipChecks(coupling, x_pulse_type="rx"),
         ]
     )
     result = pm.run(qc)
@@ -605,19 +609,19 @@ def test_full_stack_custom_suffixes():
     """Full stack with custom suffixes and a custom spec_pre register name."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(x_pulse_type="rx", pre_selection_suffix="_init"),
-            AddSpectatorMeasuresPreSelection(
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx", pre_selection_suffix="_init"),
+            AddSpectatorPreCircuitBitFlipChecks(
                 COUPLING_MAP,
                 x_pulse_type="rx",
                 spectator_creg_name="spec_init",
                 pre_selection_suffix="_init",
             ),
-            AddPostSelectionMeasures(
+            AddPostCircuitBitFlipChecks(
                 x_pulse_type="rx",
                 post_selection_suffix="_check",
                 ignore_creg_suffixes=["_init"],
             ),
-            AddSpectatorMeasures(
+            AddSpectatorPostCircuitBitFlipChecks(
                 COUPLING_MAP,
                 x_pulse_type="rx",
                 ignore_creg_suffixes=["_init"],
@@ -637,7 +641,9 @@ def test_full_stack_custom_suffixes():
         assert _meas_registers(result, q) == ["spec_init", "spec", "spec_check"]
 
 
-@pytest.mark.parametrize("pass_cls", [AddSpectatorMeasures, AddSpectatorMeasuresPreSelection])
+@pytest.mark.parametrize(
+    "pass_cls", [AddSpectatorPostCircuitBitFlipChecks, AddSpectatorPreCircuitBitFlipChecks]
+)
 def test_spectator_pass_rejects_circuit_smaller_than_coupling_map(pass_cls):
     """Coupling map larger than the circuit (e.g. virtual circuit + device map) is an error."""
     qc = QuantumCircuit(3, 3)

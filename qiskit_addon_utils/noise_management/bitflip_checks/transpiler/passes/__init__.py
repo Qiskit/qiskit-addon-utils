@@ -11,10 +11,19 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""A submodule with transpilation passes for post selection."""
+"""A submodule with transpilation passes for circuit bit-flip checks."""
 
-from .add_post_selection_measures import AddPostSelectionMeasures, XPulseType
-from .add_spectator_measures import AddSpectatorMeasures
+from .add_post_circuit_checks import AddPostCircuitBitFlipChecks, XPulseType
+from .add_pre_circuit_checks import AddPreCircuitBitFlipChecks
+from .add_spectator_post_circuit_checks import AddSpectatorPostCircuitBitFlipChecks
+from .add_spectator_pre_circuit_checks import AddSpectatorPreCircuitBitFlipChecks
 from .xslow_gate import XSlowGate
 
-__all__ = ["AddPostSelectionMeasures", "AddSpectatorMeasures", "XPulseType", "XSlowGate"]
+__all__ = [
+    "AddPostCircuitBitFlipChecks",
+    "AddPreCircuitBitFlipChecks",
+    "AddSpectatorPostCircuitBitFlipChecks",
+    "AddSpectatorPreCircuitBitFlipChecks",
+    "XPulseType",
+    "XSlowGate",
+]

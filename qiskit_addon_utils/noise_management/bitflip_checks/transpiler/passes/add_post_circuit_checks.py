@@ -40,7 +40,7 @@ class XPulseType(str, Enum):
     """Twenty ``rx`` gates with angles ``pi/20``."""
 
 
-class AddPostSelectionMeasures(TransformationPass):
+class AddPostCircuitBitFlipChecks(TransformationPass):
     """Add a post selection measurement after every terminal measurement.
 
     A post selection measurement is a measurement that follows a regular measurement on a given qubit. It
@@ -63,16 +63,22 @@ class AddPostSelectionMeasures(TransformationPass):
         x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
+        ignore_creg_suffixes: list[str] | None = None,
     ):
         """Initialize the pass.
 
         Args:
             x_pulse_type: The type of X-pulse to apply for the post-selection measurements.
             post_selection_suffix: A fixed suffix to append to the names of the classical registers when copying them.
+            ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
+                By default, registers ending with "_pre" are ignored to avoid adding post-selection to pre-selection registers.
         """
         super().__init__()
         self.x_pulse_type = XPulseType(x_pulse_type)
         self.post_selection_suffix = post_selection_suffix
+        self.ignore_creg_suffixes = (
+            ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_pre"]
+        )
 
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate()]
@@ -81,28 +87,53 @@ class AddPostSelectionMeasures(TransformationPass):
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Find what qubits have a terminal measurement
+        all_terminal_measurements = self._find_terminal_measurements(dag)
+
+        # Add the new registers and create a map between the original clbit and the new ones.
+        # Skip three kinds of registers so that this pass can be safely run after one that has
+        # already produced part of the post-selection structure (notably ``AddSpectatorPostCircuitBitFlipChecks``,
+        # which now emits its own ``spec``/``spec_ps`` pair):
+        #   1. registers with ignored suffixes (pre-selection registers by default),
+        #   2. registers whose ``{name}{post_selection_suffix}`` counterpart already exists, and
+        #   3. registers that *are* the ``{name}{post_selection_suffix}`` counterpart of another
+        #      register in the DAG — running this pass on those would chain another ``_ps`` suffix.
+        existing_creg_names = set(dag.cregs)
+        suffix = self.post_selection_suffix
+        clbits_map = {}
+        for name, creg in dag.cregs.items():
+            if any(name.endswith(s) for s in self.ignore_creg_suffixes):
+                continue
+            if name + suffix in existing_creg_names:
+                continue
+            if name.endswith(suffix) and name[: -len(suffix)] in existing_creg_names:
+                continue
+            dag.add_creg(new_creg := ClassicalRegister(creg.size, name + suffix))
+            clbits_map.update({clbit: clbit_ps for clbit, clbit_ps in zip(creg, new_creg)})
+
+        # Filter terminal measurements to only include those with clbits in clbits_map
+        # This excludes measurements into pre-selection registers
         terminal_measurements: dict[Qubit, Clbit] = {
-            qubit: clbit for qubit, clbit in self._find_terminal_measurements(dag).items() if clbit
+            qubit: clbit
+            for qubit, clbit in all_terminal_measurements.items()
+            if clbit and clbit in clbits_map
         }
         if not terminal_measurements:
             return dag
 
-        # Add the new registers and create a map between the original clbit and the new ones
-        clbits_map = {}
-        for name, creg in dag.cregs.items():
-            dag.add_creg(
-                new_creg := ClassicalRegister(creg.size, name + self.post_selection_suffix)
-            )
-            clbits_map.update({clbit: clbit_ps for clbit, clbit_ps in zip(creg, new_creg)})
-
-        # Add a barrier to separate the post selection measurements from the rest of the circuit
+        # Add a barrier before post-selection to ensure all terminal measurements finish
         qubits = tuple(terminal_measurements)
         dag.apply_operation_back(Barrier(len(qubits)), qubits)
 
-        # Append the post selection measurements
-        for qubit, clbit in terminal_measurements.items():
+        # Apply all pulse sequences
+        for qubit in terminal_measurements:
             for gate in self.pulse_sequence:
                 dag.apply_operation_back(gate, [qubit])
+
+        # Add a barrier before measurements - AddSpectatorPostCircuitBitFlipChecks will extend it
+        dag.apply_operation_back(Barrier(len(qubits)), qubits)
+
+        # Then add all measurements
+        for qubit, clbit in terminal_measurements.items():
             dag.apply_operation_back(Measure(), [qubit], [clbits_map[clbit]])
 
         return dag
@@ -122,7 +153,10 @@ class AddPostSelectionMeasures(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            if node.is_standard_gate():
+            # Skip reset operations - they are part of pre-selection protocol
+            if node.op.name == "reset":
+                continue
+            elif node.is_standard_gate() or (name := node.op.name) in ("xslow", "delay"):
                 for qarg in node.qargs:
                     terminal_measurements[qarg] = None
             elif (name := node.op.name) == "barrier":

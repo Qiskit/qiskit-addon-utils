@@ -21,11 +21,11 @@ from __future__ import annotations
 
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit.transpiler import PassManager
-from qiskit_addon_utils.noise_management.post_selection.transpiler.passes import (
-    AddPostSelectionMeasures,
-    AddPreSelectionMeasures,
-    AddSpectatorMeasures,
-    AddSpectatorMeasuresPreSelection,
+from qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes import (
+    AddPostCircuitBitFlipChecks,
+    AddPreCircuitBitFlipChecks,
+    AddSpectatorPostCircuitBitFlipChecks,
+    AddSpectatorPreCircuitBitFlipChecks,
 )
 
 COUPLING_MAP = [(0, 1), (1, 2), (2, 3), (0, 4)]
@@ -102,13 +102,13 @@ def _creg_names(circuit: QuantumCircuit) -> set[str]:
 
 
 # ---------------------------------------------------------------------------
-# AddPostSelectionMeasures with control flow
+# AddPostCircuitBitFlipChecks with control flow
 # ---------------------------------------------------------------------------
 
 
 def test_post_selection_box():
     """Single-block ``box``: every measured qubit is still terminated."""
-    pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
+    pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_box_circuit())
 
     assert _creg_names(result) == {"c", "c_ps"}
@@ -124,7 +124,7 @@ def test_post_selection_if_else_consistent():
     level, so q1 receives no ``c_ps`` measurement. Qubits 0 and 2 are
     terminated at the top and do.
     """
-    pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
+    pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_if_else_circuit_consistent())
 
     assert _creg_names(result) == {"c", "c_ps"}
@@ -139,7 +139,7 @@ def test_post_selection_if_else_inconsistent():
     The branch-only measurements are buried inside the ``if_else`` op, so they
     don't appear at the top level of ``circuit.data`` either.
     """
-    pm = PassManager([AddPostSelectionMeasures(x_pulse_type="rx")])
+    pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_if_else_circuit_inconsistent())
 
     # Only qubit 0 has an unconditional terminal measurement.
@@ -152,13 +152,13 @@ def test_post_selection_if_else_inconsistent():
 
 
 # ---------------------------------------------------------------------------
-# AddPreSelectionMeasures with control flow
+# AddPreCircuitBitFlipChecks with control flow
 # ---------------------------------------------------------------------------
 
 
 def test_pre_selection_box():
     """``box`` interior gates count as activity for pre-selection."""
-    pm = PassManager([AddPreSelectionMeasures(x_pulse_type="rx")])
+    pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_box_circuit())
 
     assert _creg_names(result) == {"c", "c_pre"}
@@ -173,7 +173,7 @@ def test_pre_selection_if_else():
     ``_find_measurements`` still discovers it, so a ``c_pre`` measurement is
     prepended at the top level.
     """
-    pm = PassManager([AddPreSelectionMeasures(x_pulse_type="rx")])
+    pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_if_else_circuit_consistent())
 
     assert _creg_names(result) == {"c", "c_pre"}
@@ -183,13 +183,13 @@ def test_pre_selection_if_else():
 
 
 # ---------------------------------------------------------------------------
-# AddSpectatorMeasures with control flow
+# AddSpectatorPostCircuitBitFlipChecks with control flow
 # ---------------------------------------------------------------------------
 
 
 def test_spectators_box():
     """Spectators of qubits gated only inside a ``box`` are still detected."""
-    pm = PassManager([AddSpectatorMeasures(COUPLING_MAP)])
+    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP)])
     result = pm.run(_box_circuit())
 
     assert _creg_names(result) == {"c", "spec", "spec_ps"}
@@ -201,7 +201,7 @@ def test_spectators_box():
 
 def test_spectators_if_else():
     """``include_unmeasured`` makes branch-only-active qubits become spectators."""
-    pm = PassManager([AddSpectatorMeasures(COUPLING_MAP)])
+    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP)])
     result = pm.run(_if_else_circuit_inconsistent())
 
     assert "spec" in _creg_names(result)
@@ -227,12 +227,12 @@ def test_spectator_with_buried_data_neighbour_measure_falls_through():
     with qc.box():
         qc.measure(2, creg[2])
 
-    # AddPostSelectionMeasures runs first so AddSpectatorMeasures takes the
+    # AddPostCircuitBitFlipChecks runs first so AddSpectatorPostCircuitBitFlipChecks takes the
     # integrate-with-postsel path (where the pairing logic lives).
     pm = PassManager(
         [
-            AddPostSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasures(COUPLING_MAP, x_pulse_type="rx"),
+            AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
     result = pm.run(qc)
@@ -244,7 +244,7 @@ def test_spectator_with_buried_data_neighbour_measure_falls_through():
 
 
 # ---------------------------------------------------------------------------
-# AddSpectatorMeasuresPreSelection with control flow
+# AddSpectatorPreCircuitBitFlipChecks with control flow
 # ---------------------------------------------------------------------------
 
 
@@ -252,8 +252,8 @@ def test_spec_pre_selection_box():
     """Pre-selection spectators wrap correctly around a ``box``-bearing circuit."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
     result = pm.run(_box_circuit())
@@ -268,8 +268,8 @@ def test_spec_pre_selection_if_else():
     """Pre-selection spectators handle ``if_else``-driven activity correctly."""
     pm = PassManager(
         [
-            AddPreSelectionMeasures(x_pulse_type="rx"),
-            AddSpectatorMeasuresPreSelection(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
         ]
     )
     result = pm.run(_if_else_circuit_consistent())
