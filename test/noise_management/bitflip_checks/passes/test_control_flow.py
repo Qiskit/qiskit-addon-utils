@@ -9,7 +9,7 @@
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
-"""Control-flow coverage for the post-selection passes.
+"""Control-flow coverage for the post-check passes.
 
 The :class:`~qiskit.circuit.ControlFlowOp` branches in each pass are exercised
 by feeding circuits with both single-block (``box``) and multi-block
@@ -49,7 +49,7 @@ def _box_circuit() -> QuantumCircuit:
 def _if_else_circuit_consistent() -> QuantumCircuit:
     """5q circuit where both branches measure the same qubit into the same clbit.
 
-    The post-selection pass should treat that qubit as terminated.
+    The post-check pass should treat that qubit as terminated.
     """
     qreg = QuantumRegister(5, "q")
     creg = ClassicalRegister(3, "c")
@@ -106,7 +106,7 @@ def _creg_names(circuit: QuantumCircuit) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_post_selection_box():
+def test_post_check_box():
     """Single-block ``box``: every measured qubit is still terminated."""
     pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_box_circuit())
@@ -116,11 +116,11 @@ def test_post_selection_box():
         assert _meas_registers(result, q) == ["c", "c_ps"]
 
 
-def test_post_selection_if_else_consistent():
+def test_post_check_if_else_consistent():
     """Multi-block ``if_else``: only top-level-terminated qubits get post-sel.
 
     Qubit 1 is measured consistently inside the branches but the trailing
-    ``cx(1, 2)`` un-terminates it before the post-selection pass scans the top
+    ``cx(1, 2)`` un-terminates it before the post-check pass scans the top
     level, so q1 receives no ``c_ps`` measurement. Qubits 0 and 2 are
     terminated at the top and do.
     """
@@ -133,7 +133,7 @@ def test_post_selection_if_else_consistent():
     assert _meas_registers(result, 2) == ["c", "c_ps"]
 
 
-def test_post_selection_if_else_inconsistent():
+def test_post_check_if_else_inconsistent():
     """Branches measure different qubits: neither is terminated, no post-sel added.
 
     The branch-only measurements are buried inside the ``if_else`` op, so they
@@ -156,8 +156,8 @@ def test_post_selection_if_else_inconsistent():
 # ---------------------------------------------------------------------------
 
 
-def test_pre_selection_box():
-    """``box`` interior gates count as activity for pre-selection."""
+def test_pre_check_box():
+    """``box`` interior gates count as activity for pre-check."""
     pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_box_circuit())
 
@@ -166,8 +166,8 @@ def test_pre_selection_box():
         assert _meas_registers(result, q) == ["c_pre", "c"]
 
 
-def test_pre_selection_if_else():
-    """Pre-selection picks up measurements buried inside ``if_else`` blocks.
+def test_pre_check_if_else():
+    """Pre-check picks up measurements buried inside ``if_else`` blocks.
 
     Qubit 1 is only measured inside the if/else branches but the recursive
     ``_find_measurements`` still discovers it, so a ``c_pre`` measurement is
@@ -248,8 +248,8 @@ def test_spectator_with_buried_data_neighbour_measure_falls_through():
 # ---------------------------------------------------------------------------
 
 
-def test_spec_pre_selection_box():
-    """Pre-selection spectators wrap correctly around a ``box``-bearing circuit."""
+def test_spec_pre_check_box():
+    """Pre-check spectators wrap correctly around a ``box``-bearing circuit."""
     pm = PassManager(
         [
             AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
@@ -264,8 +264,8 @@ def test_spec_pre_selection_box():
         assert ops == ["rx"] * 20 + ["x", "barrier", "measure"]
 
 
-def test_spec_pre_selection_if_else():
-    """Pre-selection spectators handle ``if_else``-driven activity correctly."""
+def test_spec_pre_check_if_else():
+    """Pre-check spectators handle ``if_else``-driven activity correctly."""
     pm = PassManager(
         [
             AddPreCircuitBitFlipChecks(x_pulse_type="rx"),

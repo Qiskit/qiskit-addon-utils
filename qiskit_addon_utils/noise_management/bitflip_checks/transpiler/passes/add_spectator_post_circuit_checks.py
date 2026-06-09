@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add post-selection measurements on spectator qubits."""
+"""Transpiler pass to add post-check measurements on spectator qubits."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ....constants import DEFAULT_POST_SELECTION_SUFFIX, DEFAULT_SPECTATOR_CREG_NAME
+from ....constants import DEFAULT_POST_CHECK_SUFFIX, DEFAULT_SPECTATOR_CREG_NAME
 from .utils import validate_op_is_supported
 from .xslow_gate import XSlowGate
 
@@ -43,7 +43,7 @@ class XPulseType(str, Enum):
 
 
 class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
-    """Add post-selection measurements on spectator qubits.
+    """Add post-check measurements on spectator qubits.
 
     An *active* qubit is a qubit acted on in the circuit by a non-barrier
     instruction. A *terminated* qubit is one whose last action is a
@@ -52,21 +52,21 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
 
     For every spectator qubit (and, optionally via ``include_unmeasured``,
     every unterminated active qubit), the pass appends the same parity check
-    used for data-qubit post-selection:
+    used for data-qubit post-check:
 
     1. ``measure`` into the spectator register (expected to read 0).
     2. A narrowband X-pulse — either an ``xslow`` gate or 20 ``rx(pi/20)``
        rotations — that should flip the qubit's state by ``pi``.
-    3. ``measure`` again, into the post-selection spectator register; this
+    3. ``measure`` again, into the post-check spectator register; this
        reading should be the bit-flip of the first.
 
     Two classical registers are added: one named ``spectator_creg_name``
     (default ``"spec"``) holding the first measurement, and one named
-    ``spectator_creg_name + post_selection_suffix`` (default ``"spec_ps"``)
+    ``spectator_creg_name + post_check_suffix`` (default ``"spec_ps"``)
     holding the second. A shot is kept when the two registers disagree on a
     given qubit (the qubit successfully flipped).
 
-    When the input circuit already contains a data-qubit post-selection
+    When the input circuit already contains a data-qubit post-check
     structure produced by :class:`.AddPostCircuitBitFlipChecks`, this pass
     integrates the spectator parity check into that structure: the spectator
     measurements share the existing pre-/post-pulse barriers and the spectator
@@ -87,7 +87,7 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         include_unmeasured: bool = True,
         spectator_creg_name: str = DEFAULT_SPECTATOR_CREG_NAME,
         ignore_creg_suffixes: list[str] | None = None,
-        post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
+        post_check_suffix: str = DEFAULT_POST_CHECK_SUFFIX,
     ):
         """Initialize the pass.
 
@@ -97,14 +97,14 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
             include_unmeasured: Whether qubits that are active but not terminated should also be
                 treated as spectators. If ``True``, the parity check is added to each of them as well.
             spectator_creg_name: The name of the classical register holding the first spectator
-                measurement. The post-selection register is named
-                ``spectator_creg_name + post_selection_suffix``.
+                measurement. The post-check register is named
+                ``spectator_creg_name + post_check_suffix``.
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored
                 when determining active/terminated qubits. By default, registers ending with
-                ``"_pre"`` are ignored so that pre-selection measurements aren't treated as regular
+                ``"_pre"`` are ignored so that pre-check measurements aren't treated as regular
                 terminations.
-            post_selection_suffix: The suffix appended to ``spectator_creg_name`` to form the
-                post-selection register name, and used to identify the data-qubit post-selection
+            post_check_suffix: The suffix appended to ``spectator_creg_name`` to form the
+                post-check register name, and used to identify the data-qubit post-check
                 barriers that the spectator parity check is integrated into. Defaults to ``"_ps"``.
         """
         super().__init__()
@@ -120,7 +120,7 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         self.ignore_creg_suffixes = (
             ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_pre"]
         )
-        self.post_selection_suffix = post_selection_suffix
+        self.post_check_suffix = post_check_suffix
 
         # Same pulse sequence as ``AddPostCircuitBitFlipChecks``: a single full pi rotation
         # delivered as one ``xslow`` or as 20 fine ``rx`` rotations.
@@ -160,10 +160,10 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
 
         spec_creg = ClassicalRegister(num_spectators, self.spectator_creg_name)
         spec_ps_creg = ClassicalRegister(
-            num_spectators, self.spectator_creg_name + self.post_selection_suffix
+            num_spectators, self.spectator_creg_name + self.post_check_suffix
         )
 
-        # Find data qubits already carrying a post-selection measurement (i.e. those
+        # Find data qubits already carrying a post-check measurement (i.e. those
         # touched by ``AddPostCircuitBitFlipChecks``). When present, we integrate the
         # spectator parity check into the existing barrier/pulse/barrier sandwich
         # rather than building our own.
@@ -172,14 +172,14 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
             if node.op.name == "measure" and len(node.cargs) == 1:
                 clbit = node.cargs[0]
                 for creg in dag.cregs.values():
-                    if clbit in creg and creg.name.endswith(self.post_selection_suffix):
+                    if clbit in creg and creg.name.endswith(self.post_check_suffix):
                         data_with_postsel.add(node.qargs[0])
                         break
 
         # Existing post-sel barriers are exactly the pair acting on ``data_with_postsel``;
         # the last two such barriers in topological order are the ones we want to extend.
-        # Earlier matches (e.g. the pre-selection barrier when its qubit set happens to
-        # coincide with the post-selection one) are intentionally ignored.
+        # Earlier matches (e.g. the pre-check barrier when its qubit set happens to
+        # coincide with the post-check one) are intentionally ignored.
         matching_barriers = [
             n
             for n in dag.topological_op_nodes()
@@ -215,7 +215,7 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         spec_creg: ClassicalRegister,
         spec_ps_creg: ClassicalRegister,
     ) -> DAGCircuit:
-        """Append the spectator parity check when no data-qubit post-selection is present."""
+        """Append the spectator parity check when no data-qubit post-check is present."""
         dag.add_creg(spec_creg)
         dag.add_creg(spec_ps_creg)
 
@@ -240,7 +240,7 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         # Sync barrier before the second measurement.
         dag.apply_operation_back(Barrier(len(spectator_qubits_ls)), spectator_qubits_ls)
 
-        # Second spectator measurement (post-selection check).
+        # Second spectator measurement (post-check check).
         for qubit, clbit in zip(spectator_qubits_ls, spec_ps_creg):
             dag.apply_operation_back(Measure(), [qubit], [clbit])
 
@@ -322,7 +322,7 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         deferred_terminal_node_ids = {n._node_id for n in data_terminal_nodes.values()}
 
         # Spectator-only ops that landed *after* the first post-sel barrier in the
-        # topological sort are logically pre-selection ops on the spectator wires
+        # topological sort are logically pre-check ops on the spectator wires
         # (e.g. ``measure -> reset`` from ``AddSpectatorPreCircuitBitFlipChecks``).
         # Defer them so they emerge before the spec parity check on the spec wires.
         spec_qubit_set = set(spectator_qubits_ls)
@@ -410,13 +410,13 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
 
         This method recurses into control flow operations.
         """
-        # Pre-selection-only qubits: their only measurements are into ignored
+        # Pre-check-only qubits: their only measurements are into ignored
         # (pre-sel) registers. Every standard gate on such a qubit is part of
-        # the pre-selection pulse sequence (e.g. the trailing X in
+        # the pre-check pulse sequence (e.g. the trailing X in
         # ``xslow -> X -> measure(_pre)``) and must NOT be counted as making
-        # the qubit "active". Without this, spectator pre-selection qubits
+        # the qubit "active". Without this, spectator pre-check qubits
         # (which only have a pre-sel sequence on them) would be misclassified
-        # as data qubits in the post-selection pass, and *their* neighbours
+        # as data qubits in the post-check pass, and *their* neighbours
         # would in turn be picked up as post-sel spectators.
         pre_select_only_qubits = self._find_pre_select_only_qubits(dag)
 
@@ -429,11 +429,11 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            # Skip xslow, rx, and reset gates - they are part of pre/post-selection protocol
+            # Skip xslow, rx, and reset gates - they are part of pre/post-check protocol
             if ("xslow" in node.op.name) or ("rx" in node.op.name) or (node.op.name == "reset"):
                 continue
             elif node.is_standard_gate() or node.op.name == "delay":
-                # Filter out qargs that participate only in pre-selection — their
+                # Filter out qargs that participate only in pre-check — their
                 # standard gates (typically the trailing X in the pre-sel pulse
                 # sequence) are protocol gates, not main-circuit activity.
                 relevant_qargs = [q for q in node.qargs if q not in pre_select_only_qubits]
@@ -486,11 +486,11 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         return active_qubits, terminated_qubits
 
     def _find_pre_select_only_qubits(self, dag: DAGCircuit) -> set[Qubit]:
-        """Qubits whose only measurements go to ignored (pre-selection) registers.
+        """Qubits whose only measurements go to ignored (pre-check) registers.
 
         Recurses through control flow. Measurements buried inside control-flow
-        blocks are treated as primary measurements — pre-selection
-        measurements are emitted at the top level by the pre-selection passes,
+        blocks are treated as primary measurements — pre-check
+        measurements are emitted at the top level by the pre-check passes,
         so any in-block measurement is by construction a main-circuit one.
         """
         qubits_with_ignored_meas: set[Qubit] = set()

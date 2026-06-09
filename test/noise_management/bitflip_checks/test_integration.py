@@ -95,7 +95,7 @@ def _passes_full_stack(*, pre_first: bool, custom: bool = False):
         pre_suffix, post_suffix, spec_pre_name = "_init", "_check", "spec_init"
         pre_args = {
             "x_pulse_type": "rx",
-            "pre_selection_suffix": pre_suffix,
+            "pre_check_suffix": pre_suffix,
             # When the post block runs first, the pre pass would otherwise
             # mistakenly attach an ``_init`` register to ``c_check`` /
             # ``spec_check``; tell it to ignore the post-sel suffix.
@@ -104,7 +104,7 @@ def _passes_full_stack(*, pre_first: bool, custom: bool = False):
         spec_pre_args = {
             "x_pulse_type": "rx",
             "spectator_creg_name": spec_pre_name,
-            "pre_selection_suffix": pre_suffix,
+            "pre_check_suffix": pre_suffix,
             # Same reason: in post-first ordering the spec qubits' ``spec_check``
             # measurement would otherwise mark them as "active" and exclude them
             # from the spectator set. Default ignores ``_ps``; we replace with
@@ -113,13 +113,13 @@ def _passes_full_stack(*, pre_first: bool, custom: bool = False):
         }
         post_args = {
             "x_pulse_type": "rx",
-            "post_selection_suffix": post_suffix,
+            "post_check_suffix": post_suffix,
             "ignore_creg_suffixes": [pre_suffix],
         }
         spec_args = {
             "x_pulse_type": "rx",
             "ignore_creg_suffixes": [pre_suffix],
-            "post_selection_suffix": post_suffix,
+            "post_check_suffix": post_suffix,
         }
     else:
         pre_args = {"x_pulse_type": "rx"}
@@ -186,7 +186,7 @@ def _perfect_result(
         # Spec primary always lives in "spec".
         out["spec"] = spec
         if has_post:
-            # Spec post-sel uses the (possibly custom) post_selection_suffix on "spec".
+            # Spec post-sel uses the (possibly custom) post_check_suffix on "spec".
             out[f"spec{post_suffix}"] = ~spec
         if has_pre:
             out[spec_pre_name] = np.zeros((n_shots, len(SPEC_QUBITS)), dtype=bool)
@@ -261,7 +261,7 @@ def test_post_edge_keeps_when_at_least_one_neighbour_flips():
     pm = PassManager(_passes_post_with_spec())
     selector = PostSelector.from_circuit(pm.run(_data_circuit()), COUPLING)
     mm = selector.summary.measure_map
-    post_suffix = selector.summary.post_selection_suffix
+    post_suffix = selector.summary.post_check_suffix
 
     def break_flip(qubit_idx: int, shot: int):
         """Make qubit's parity check fail (primary == ps) on the given shot."""
@@ -331,8 +331,8 @@ def test_full_stack_perfect_result_keeps_all(pre_first, custom, strategy, mode):
     selector = PostSelector.from_circuit(
         circuit,
         COUPLING,
-        post_selection_suffix=post_suffix,
-        pre_selection_suffix=pre_suffix,
+        post_check_suffix=post_suffix,
+        pre_check_suffix=pre_suffix,
         spectator_cregs=spectator_cregs,
     )
 
@@ -361,13 +361,13 @@ def test_full_stack_custom_suffixes_propagate():
     selector = PostSelector.from_circuit(
         pm.run(_data_circuit()),
         COUPLING,
-        post_selection_suffix="_check",
-        pre_selection_suffix="_init",
+        post_check_suffix="_check",
+        pre_check_suffix="_init",
     )
     summary = selector.summary
 
-    assert summary.post_selection_suffix == "_check"
-    assert summary.pre_selection_suffix == "_init"
+    assert summary.post_check_suffix == "_check"
+    assert summary.pre_check_suffix == "_init"
     assert summary.primary_cregs == {"c", "spec"}
 
 
@@ -385,7 +385,7 @@ def test_full_stack_spec_only_failure_node_vs_edge():
     pm = PassManager(_passes_full_stack(pre_first=True))
     selector = PostSelector.from_circuit(pm.run(_data_circuit()), COUPLING)
     mm = selector.summary.measure_map
-    post_suffix = selector.summary.post_selection_suffix
+    post_suffix = selector.summary.post_check_suffix
 
     result = _perfect_result()
     # Break only the spec parity check on q3 (edge (2,3) has data q2 still flipping).
@@ -409,21 +409,21 @@ def test_full_stack_spec_only_failure_node_vs_edge():
 def test_mode_pre_raises_when_no_pre_sel_in_circuit():
     pm = PassManager(_passes_post_with_spec())
     selector = PostSelector.from_circuit(pm.run(_data_circuit()), COUPLING)
-    with pytest.raises(ValueError, match="No pre-selection measurements"):
+    with pytest.raises(ValueError, match="No pre-check measurements"):
         selector.compute_mask(_perfect_result(has_pre=False), "node", mode="pre")
 
 
 def test_mode_post_raises_when_no_post_sel_in_circuit():
     pm = PassManager(_passes_pre_with_spec())
     selector = PostSelector.from_circuit(pm.run(_data_circuit()), COUPLING)
-    with pytest.raises(ValueError, match="No post-selection measurements"):
+    with pytest.raises(ValueError, match="No post-check measurements"):
         selector.compute_mask(_perfect_result(has_post=False), "node", mode="post")
 
 
 def test_mode_both_raises_when_either_missing():
     pm = PassManager(_passes_post_with_spec())
     selector = PostSelector.from_circuit(pm.run(_data_circuit()), COUPLING)
-    with pytest.raises(ValueError, match="No pre-selection measurements"):
+    with pytest.raises(ValueError, match="No pre-check measurements"):
         selector.compute_mask(_perfect_result(has_pre=False), "node", mode="both")
 
 

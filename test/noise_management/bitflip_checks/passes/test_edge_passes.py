@@ -9,7 +9,7 @@
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
-"""Tests for edge-based post/pre-selection passes (with spectator measurements).
+"""Tests for edge-based post/pre-check passes (with spectator measurements).
 
 Mirrors the scenarios in ``visualize_edge_passes.py``. The circuit under
 test acts on qubits 0, 1, 2 of a 5-qubit system; under the coupling map
@@ -20,9 +20,9 @@ Tests assert structural invariants:
 * the expected classical registers exist with the right sizes,
 * each data qubit's measurements land in the right registers in the right
   order (e.g. ``c_pre``, ``c``, ``c_ps``),
-* spectator qubits get their pre/post-selection ops in the right order
-  (``measure -> reset`` for pre-selection spectators;
-  ``measure -> pulses -> measure`` for post-selection spectators — the same
+* spectator qubits get their pre/post-check ops in the right order
+  (``measure -> reset`` for pre-check spectators;
+  ``measure -> pulses -> measure`` for post-check spectators — the same
   pi-rotation parity check used on data qubits),
 * the synchronisation barriers are placed where downstream pulse-level
   scheduling expects them.
@@ -109,7 +109,7 @@ def _barrier_positions(circuit: QuantumCircuit) -> list[int]:
 
 
 def test_post_sel_only():
-    """Edge variant: post-selection alone leaves spectator wires untouched."""
+    """Edge variant: post-check alone leaves spectator wires untouched."""
     pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
@@ -121,7 +121,7 @@ def test_post_sel_only():
 
 
 def test_pre_sel_only():
-    """Edge variant: pre-selection alone leaves spectator wires untouched."""
+    """Edge variant: pre-check alone leaves spectator wires untouched."""
     pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
@@ -202,7 +202,7 @@ def test_post_sel_with_spectators():
 
 
 def test_pre_sel_with_spectators():
-    """Pre-selection spectators run the same pulses+X+measure check as data qubits.
+    """Pre-check spectators run the same pulses+X+measure check as data qubits.
 
     The spec wire mirrors the data-wire pre-sel: ``rx*20 -> x -> barrier ->
     measure(spec_pre)``. No reset — the post-sel parity check (added later by
@@ -349,7 +349,7 @@ def test_default_xslow_pulse_type():
     )
     result = pm.run(_make_circuit())
 
-    # Pre-selection pulse on the data qubits is now ``xslow`` (one gate per qubit
+    # Pre-check pulse on the data qubits is now ``xslow`` (one gate per qubit
     # before the X), not 20 ``rx`` rotations.
     op_names = {inst.operation.name for inst in result.data}
     assert "xslow" in op_names
@@ -374,7 +374,7 @@ def test_spec_pre_without_data_preselection_returns_unchanged():
     """Spectator-pre pass needs an AddPreCircuitBitFlipChecks barrier to splice into.
 
     With the spectator pass running standalone (no ``c_pre`` registers in the
-    circuit) there's no pre-selection barrier to extend, so the pass leaves
+    circuit) there's no pre-check barrier to extend, so the pass leaves
     the DAG untouched.
     """
     pm = PassManager([AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx")])
@@ -524,11 +524,11 @@ def test_spec_post_sel_register_present_without_matching_barrier():
         assert _meas_registers(result, q) == ["spec", "spec_ps"]
 
 
-def test_spec_x_gate_pre_selection_pattern():
+def test_spec_x_gate_pre_check_pattern():
     """X-gate immediately followed by ``measure(_pre)`` is treated as pre-sel.
 
     Exercises the look-ahead in ``_find_active_and_terminated_qubits`` that
-    distinguishes a pre-selection X+measure(_pre) sequence from a logical X.
+    distinguishes a pre-check X+measure(_pre) sequence from a logical X.
     """
 
     from qiskit.circuit import ClassicalRegister, QuantumRegister
@@ -550,7 +550,7 @@ def test_spec_x_gate_pre_selection_pattern():
     pm = PassManager([AddSpectatorPostCircuitBitFlipChecks([(0, 1), (1, 2)])])
     result = pm.run(qc)
     # The pass should run without error and add the ``spec`` and ``spec_ps`` registers.
-    # q0, recognised as a pre-selection pattern, becomes a spectator-eligible
+    # q0, recognised as a pre-check pattern, becomes a spectator-eligible
     # neighbour of q1 rather than an active qubit.
     creg_names = {c.name for c in result.cregs}
     assert "spec" in creg_names
@@ -609,30 +609,30 @@ def test_full_stack_custom_suffixes():
     """Full stack with custom suffixes and a custom spec_pre register name."""
     pm = PassManager(
         [
-            AddPreCircuitBitFlipChecks(x_pulse_type="rx", pre_selection_suffix="_init"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx", pre_check_suffix="_init"),
             AddSpectatorPreCircuitBitFlipChecks(
                 COUPLING_MAP,
                 x_pulse_type="rx",
                 spectator_creg_name="spec_init",
-                pre_selection_suffix="_init",
+                pre_check_suffix="_init",
             ),
             AddPostCircuitBitFlipChecks(
                 x_pulse_type="rx",
-                post_selection_suffix="_check",
+                post_check_suffix="_check",
                 ignore_creg_suffixes=["_init"],
             ),
             AddSpectatorPostCircuitBitFlipChecks(
                 COUPLING_MAP,
                 x_pulse_type="rx",
                 ignore_creg_suffixes=["_init"],
-                post_selection_suffix="_check",
+                post_check_suffix="_check",
             ),
         ]
     )
     result = pm.run(_make_circuit())
 
     cregs = _creg_map(result)
-    # Spectator post-sel register is named ``spec + post_selection_suffix`` ⇒ ``spec_check``.
+    # Spectator post-sel register is named ``spec + post_check_suffix`` ⇒ ``spec_check``.
     assert set(cregs) == {"c", "c_init", "spec_init", "c_check", "spec", "spec_check"}
 
     for q in ACTIVE_QUBITS:

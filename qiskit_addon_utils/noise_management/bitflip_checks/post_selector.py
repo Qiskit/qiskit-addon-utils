@@ -23,15 +23,15 @@ from numpy.typing import NDArray
 from qiskit import QuantumCircuit
 from qiskit.transpiler import CouplingMap
 
-from ..constants import DEFAULT_POST_SELECTION_SUFFIX, DEFAULT_PRE_SELECTION_SUFFIX
+from ..constants import DEFAULT_POST_CHECK_SUFFIX, DEFAULT_PRE_CHECK_SUFFIX
 from .post_selection_summary import PostSelectionSummary
 
 
 class PostSelectionStrategy(str, Enum):
     """The supported post-selection strategies.
 
-    Pre- and post-selection are both *post-selection* techniques (they discard
-    shots based on parity checks), so a single strategy enum applies to both.
+    Pre- and post-circuit bit-flip checks are both *post-selection* techniques (they
+    discard shots based on parity checks), so a single strategy enum applies to both.
     """
 
     NODE = "node"
@@ -45,8 +45,8 @@ class PostSelectionStrategy(str, Enum):
 class PostSelector:
     """A class to process the results of quantum programs based on selection measurements.
 
-    This class supports both post-selection (measurements at the end of the circuit to verify
-    bit flips) and pre-selection (measurements at the beginning to verify initialization).
+    This class supports both post-check (measurements at the end of the circuit to verify
+    bit flips) and pre-check (measurements at the beginning to verify initialization).
     It can handle circuits with either type of selection, or both simultaneously.
     """
 
@@ -69,8 +69,8 @@ class PostSelector:
         circuit: QuantumCircuit,
         coupling_map: CouplingMap | list[tuple[int, int]],
         *,
-        post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
-        pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
+        post_check_suffix: str = DEFAULT_POST_CHECK_SUFFIX,
+        pre_check_suffix: str = DEFAULT_PRE_CHECK_SUFFIX,
         spectator_cregs: set[str] | list[str] | None = None,
     ) -> PostSelector:
         """Initialize from quantum circuits.
@@ -78,8 +78,8 @@ class PostSelector:
         Args:
             circuit: The circuit to process the results of.
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
-            post_selection_suffix: A fixed suffix for post-selection classical registers.
-            pre_selection_suffix: A fixed suffix for pre-selection classical registers.
+            post_check_suffix: A fixed suffix for post-check classical registers.
+            pre_check_suffix: A fixed suffix for pre-check classical registers.
             spectator_cregs: Names of primary registers that hold spectator
                 measurements (forwarded to
                 :meth:`.PostSelectionSummary.from_circuit`). Defaults to
@@ -94,8 +94,8 @@ class PostSelector:
         summary = PostSelectionSummary.from_circuit(
             circuit,
             coupling_map,
-            post_selection_suffix=post_selection_suffix,
-            pre_selection_suffix=pre_selection_suffix,
+            post_check_suffix=post_check_suffix,
+            pre_check_suffix=pre_check_suffix,
             spectator_cregs=spectator_cregs,
         )
         return PostSelector(summary)
@@ -109,7 +109,7 @@ class PostSelector:
     ) -> NDArray[np.bool]:
         """Compute boolean masks indicating what shots should be kept or discarded.
 
-        This function examines selection measurements (post-selection, pre-selection, or both)
+        This function examines selection measurements (post-check, pre-check, or both)
         and identifies shots that should be discarded based on the specified strategy.
 
         By construction, the returned mask has the same shape as the arrays in the result, but with one
@@ -120,36 +120,36 @@ class PostSelector:
                 boolean arrays.
             strategy: The selection strategy ("node" or "edge").
             mode: Which type of selection to apply:
-                - "post": Apply post-selection only (default, checks bit flips)
-                - "pre": Apply pre-selection only (checks initialization)
-                - "both": Apply both pre and post-selection (combined mask)
+                - "post": Apply post-check only (default, checks bit flips)
+                - "pre": Apply pre-check only (checks initialization)
+                - "both": Apply both pre and post-check (combined mask)
 
         Returns:
             A boolean mask where True indicates shots to keep, False indicates shots to discard.
 
         Raises:
-            ValueError: If the requested mode is not available (e.g., no pre-selection measurements
+            ValueError: If the requested mode is not available (e.g., no pre-check measurements
                 in the circuit but mode="pre" was requested).
         """
         strategy = PostSelectionStrategy(strategy)
 
         if mode == "post":
             if not self.summary.measure_map_ps:
-                raise ValueError("No post-selection measurements found in circuit.")
+                raise ValueError("No post-check measurements found in circuit.")
             if strategy == PostSelectionStrategy.NODE:
                 return _compute_post_mask_by_node(result, self.summary)
             return _compute_post_mask_by_edge(result, self.summary)
         if mode == "pre":
             if not self.summary.measure_map_pre:
-                raise ValueError("No pre-selection measurements found in circuit.")
+                raise ValueError("No pre-check measurements found in circuit.")
             if strategy == PostSelectionStrategy.NODE:
                 return _compute_pre_mask_by_node(result, self.summary)
             return _compute_pre_mask_by_edge(result, self.summary)
         # mode == "both"
         if not self.summary.measure_map_ps:
-            raise ValueError("No post-selection measurements found in circuit.")
+            raise ValueError("No post-check measurements found in circuit.")
         if not self.summary.measure_map_pre:
-            raise ValueError("No pre-selection measurements found in circuit.")
+            raise ValueError("No pre-check measurements found in circuit.")
 
         # Compute both masks and combine with logical AND
         if strategy == PostSelectionStrategy.NODE:
@@ -165,7 +165,7 @@ class PostSelector:
 def _compute_post_mask_by_node(
     result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary
 ) -> NDArray[np.bool]:
-    """Compute the mask using a node-based post selection strategy.
+    """Compute the mask using a node-based post check strategy.
 
     Mark as ``False`` every shot where one or more results failed to flip, and as ``True``
     every other shot.
@@ -175,7 +175,7 @@ def _compute_post_mask_by_node(
     shape = result[next(iter(summary.primary_cregs))].shape[:-1]
     mask = np.ones(shape, dtype=bool)
     for name, clbit_idx in summary.measure_map.values():
-        name_ps = name + summary.post_selection_suffix
+        name_ps = name + summary.post_check_suffix
         mask &= result[name][..., clbit_idx] != result[name_ps][..., clbit_idx]
     return mask
 
@@ -183,14 +183,14 @@ def _compute_post_mask_by_node(
 def _compute_post_mask_by_edge(
     result: dict[str, Any], summary: PostSelectionSummary
 ) -> NDArray[np.bool]:
-    """Compute the mask using an edge-based post selection strategy.
+    """Compute the mask using an edge-based post check strategy.
 
     Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
     both of the results failed to flip, and as ``True`` every other shot.
 
     Edges where one endpoint lacks a primary measurement (and therefore a
     matching ``_ps`` entry) are skipped — those qubits don't participate in
-    the post-selection parity check.
+    the post-check parity check.
     """
     _validate_post_result(result, summary)
 
@@ -200,10 +200,10 @@ def _compute_post_mask_by_edge(
         if qubit0_idx not in summary.measure_map or qubit1_idx not in summary.measure_map:
             continue
         name0, clbit0_idx = summary.measure_map[qubit0_idx]
-        name0_ps = name0 + summary.post_selection_suffix
+        name0_ps = name0 + summary.post_check_suffix
 
         name1, clbit1_idx = summary.measure_map[qubit1_idx]
-        name1_ps = name1 + summary.post_selection_suffix
+        name1_ps = name1 + summary.post_check_suffix
 
         mask &= (result[name0][..., clbit0_idx] != result[name0_ps][..., clbit0_idx]) | (
             result[name1][..., clbit1_idx] != result[name1_ps][..., clbit1_idx]
@@ -214,9 +214,9 @@ def _compute_post_mask_by_edge(
 def _compute_pre_mask_by_node(
     result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary
 ) -> NDArray[np.bool]:
-    """Compute the mask using a node-based pre selection strategy.
+    """Compute the mask using a node-based pre check strategy.
 
-    Mark as ``False`` every shot where one or more pre-selection measurements returned 1 (bad
+    Mark as ``False`` every shot where one or more pre-check measurements returned 1 (bad
     initialization), and as ``True`` every other shot.
     """
     _validate_pre_result(result, summary)
@@ -225,10 +225,10 @@ def _compute_pre_mask_by_node(
     shape = result[next(iter(summary.primary_cregs))].shape[:-1]
     mask = np.ones(shape, dtype=bool)
 
-    # For pre-selection, we expect the measurements to return 0 (good initialization)
-    # Discard shots where any pre-selection measurement is 1 (bad initialization)
+    # For pre-check, we expect the measurements to return 0 (good initialization)
+    # Discard shots where any pre-check measurement is 1 (bad initialization)
     for name_pre, clbit_idx_pre in summary.measure_map_pre.values():
-        # Keep shots where pre-selection measurement is 0
+        # Keep shots where pre-check measurement is 0
         mask &= result[name_pre][..., clbit_idx_pre] == 0
 
     return mask
@@ -237,13 +237,13 @@ def _compute_pre_mask_by_node(
 def _compute_pre_mask_by_edge(
     result: dict[str, Any], summary: PostSelectionSummary
 ) -> NDArray[np.bool]:
-    """Compute the mask using an edge-based pre selection strategy.
+    """Compute the mask using an edge-based pre check strategy.
 
     Mark as ``False`` every shot where there exists a pair of neighbouring qubits for which
-    both of the pre-selection measurements returned 1 (bad initialization), and as ``True``
+    both of the pre-check measurements returned 1 (bad initialization), and as ``True``
     every other shot.
 
-    Edges where one endpoint lacks a pre-selection measurement are skipped —
+    Edges where one endpoint lacks a pre-check measurement are skipped —
     those qubits don't participate in the initialization check.
     """
     _validate_pre_result(result, summary)
@@ -252,15 +252,15 @@ def _compute_pre_mask_by_edge(
     shape = result[next(iter(summary.primary_cregs))].shape[:-1]
     mask = np.ones(shape, dtype=bool)
 
-    # For each edge, discard shots where both qubits have pre-selection measurement of 1 (bad initialization)
+    # For each edge, discard shots where both qubits have pre-check measurement of 1 (bad initialization)
     for qubit0_idx, qubit1_idx in summary.edges:
         if qubit0_idx not in summary.measure_map_pre or qubit1_idx not in summary.measure_map_pre:
             continue
-        # Use measure_map_pre to get the correct register and clbit index for pre-selection measurements
+        # Use measure_map_pre to get the correct register and clbit index for pre-check measurements
         name0_pre, clbit0_idx_pre = summary.measure_map_pre[qubit0_idx]
         name1_pre, clbit1_idx_pre = summary.measure_map_pre[qubit1_idx]
 
-        # Keep shots where at least one of the pre-selection measurements is 0 (good initialization)
+        # Keep shots where at least one of the pre-check measurements is 0 (good initialization)
         mask &= (result[name0_pre][..., clbit0_idx_pre] == 0) | (
             result[name1_pre][..., clbit1_idx_pre] == 0
         )
@@ -269,7 +269,7 @@ def _compute_pre_mask_by_edge(
 
 
 def _validate_post_result(result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary):
-    """Validate a result against a summary for post-selection.
+    """Validate a result against a summary for post-check.
 
     Args:
         result: A result to post-process.
@@ -280,8 +280,8 @@ def _validate_post_result(result: dict[str, NDArray[np.bool]], summary: PostSele
         ValueError: If ``result`` contains arrays of inconsistent shapes.
     """
     primary_cregs = summary.primary_cregs
-    post_selection_suffix = summary.post_selection_suffix
-    cregs = summary.primary_cregs.union(name + post_selection_suffix for name in primary_cregs)
+    post_check_suffix = summary.post_check_suffix
+    cregs = summary.primary_cregs.union(name + post_check_suffix for name in primary_cregs)
 
     for name in cregs:
         if result.get(name) is None:
@@ -292,7 +292,7 @@ def _validate_post_result(result: dict[str, NDArray[np.bool]], summary: PostSele
 
 
 def _validate_pre_result(result: dict[str, NDArray[np.bool]], summary: PostSelectionSummary):
-    """Validate a result against a summary for pre-selection.
+    """Validate a result against a summary for pre-check.
 
     Args:
         result: A result to post-process.
@@ -302,7 +302,7 @@ def _validate_pre_result(result: dict[str, NDArray[np.bool]], summary: PostSelec
         ValueError: If ``result`` does not contain all of the required registers.
         ValueError: If ``result`` contains arrays of inconsistent shapes.
     """
-    # Every pre-selection register the mask code might index — both the ones
+    # Every pre-check register the mask code might index — both the ones
     # paired with primary cregs and the orphan ones (e.g. ``spec_pre`` from
     # :class:`.AddSpectatorPreCircuitBitFlipChecks` running without a matching
     # spec primary).

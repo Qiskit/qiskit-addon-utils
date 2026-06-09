@@ -19,7 +19,7 @@ from qiskit.transpiler.exceptions import TranspilerError
 
 
 def validate_op_is_supported(node: DAGOpNode):
-    """Raises if the given node contains an operation that is not supported by the post selection passes.
+    """Raises if the given node contains an operation that is not supported by the post check passes.
 
     The supported operations are:
 

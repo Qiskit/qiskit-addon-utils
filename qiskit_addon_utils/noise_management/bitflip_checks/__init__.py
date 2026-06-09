@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Functions and classes for circuit bit-flip checks (pre- and post-selection)."""
+"""Functions and classes for post-selection via circuit bit-flip checks."""
 
 from .post_selection_summary import PostSelectionSummary
 from .post_selector import PostSelectionStrategy, PostSelector

@@ -9,7 +9,7 @@
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
-"""Tests for node-based post/pre-selection passes (no spectators).
+"""Tests for node-based post/pre-check passes (no spectators).
 
 Mirrors the scenarios in ``visualize_passes.py``. Instead of comparing
 rendered circuit diagrams these tests assert structural invariants of the
@@ -65,7 +65,7 @@ def _meas_registers(circuit: QuantumCircuit, qubit_idx: int) -> list[str]:
 
 
 def test_post_sel_default():
-    """Post-selection alone with default suffix: adds ``c_ps``."""
+    """Post-check alone with default suffix: adds ``c_ps``."""
     pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
@@ -75,9 +75,9 @@ def test_post_sel_default():
 
 
 def test_post_sel_custom_suffix():
-    """Post-selection with custom suffix: adds ``c_check``, never ``c_ps``."""
+    """Post-check with custom suffix: adds ``c_check``, never ``c_ps``."""
     pm = PassManager(
-        [AddPostCircuitBitFlipChecks(x_pulse_type="rx", post_selection_suffix="_check")]
+        [AddPostCircuitBitFlipChecks(x_pulse_type="rx", post_check_suffix="_check")]
     )
     result = pm.run(_make_circuit())
 
@@ -87,7 +87,7 @@ def test_post_sel_custom_suffix():
 
 
 def test_pre_sel_default():
-    """Pre-selection alone with default suffix: adds ``c_pre``."""
+    """Pre-check alone with default suffix: adds ``c_pre``."""
     pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
@@ -97,8 +97,8 @@ def test_pre_sel_default():
 
 
 def test_pre_sel_custom_suffix():
-    """Pre-selection with custom suffix: adds ``c_init``, never ``c_pre``."""
-    pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx", pre_selection_suffix="_init")])
+    """Pre-check with custom suffix: adds ``c_init``, never ``c_pre``."""
+    pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx", pre_check_suffix="_init")])
     result = pm.run(_make_circuit())
 
     assert _creg_map(result) == {"c": 3, "c_init": 3}
@@ -123,7 +123,7 @@ def test_pre_then_post_default():
 
     cregs = _creg_map(result)
     assert set(cregs) == {"c", "c_pre", "c_ps"}
-    assert "c_pre_ps" not in cregs  # pre-selection register must not be post-selected
+    assert "c_pre_ps" not in cregs  # pre-check register must not be post-selected
     for q in range(3):
         assert _meas_registers(result, q) == ["c_pre", "c", "c_ps"]
 
@@ -140,7 +140,7 @@ def test_post_then_pre_default():
 
     cregs = _creg_map(result)
     assert set(cregs) == {"c", "c_pre", "c_ps"}
-    assert "c_ps_pre" not in cregs  # post-selection register must not be pre-selected
+    assert "c_ps_pre" not in cregs  # post-check register must not be pre-selected
     for q in range(3):
         assert _meas_registers(result, q) == ["c_pre", "c", "c_ps"]
 
@@ -149,10 +149,10 @@ def test_pre_then_post_custom():
     """Pre then post with custom suffixes; pre must be ignored by post."""
     pm = PassManager(
         [
-            AddPreCircuitBitFlipChecks(x_pulse_type="rx", pre_selection_suffix="_init"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx", pre_check_suffix="_init"),
             AddPostCircuitBitFlipChecks(
                 x_pulse_type="rx",
-                post_selection_suffix="_check",
+                post_check_suffix="_check",
                 ignore_creg_suffixes=["_init"],
             ),
         ]
@@ -170,10 +170,10 @@ def test_post_then_pre_custom():
     """Post then pre with custom suffixes; post must be ignored by pre."""
     pm = PassManager(
         [
-            AddPostCircuitBitFlipChecks(x_pulse_type="rx", post_selection_suffix="_check"),
+            AddPostCircuitBitFlipChecks(x_pulse_type="rx", post_check_suffix="_check"),
             AddPreCircuitBitFlipChecks(
                 x_pulse_type="rx",
-                pre_selection_suffix="_init",
+                pre_check_suffix="_init",
                 ignore_creg_suffixes=["_check"],
             ),
         ]
@@ -192,14 +192,14 @@ def test_post_then_pre_custom():
 # ---------------------------------------------------------------------------
 
 
-def test_empty_circuit_post_selection():
+def test_empty_circuit_post_check():
     """Empty circuit is unchanged by ``AddPostCircuitBitFlipChecks``."""
     qc = QuantumCircuit(1)
     pm = PassManager([AddPostCircuitBitFlipChecks()])
     assert pm.run(qc) == qc
 
 
-def test_empty_circuit_pre_selection():
+def test_empty_circuit_pre_check():
     """Empty circuit is unchanged by ``AddPreCircuitBitFlipChecks``."""
     qc = QuantumCircuit(1)
     pm = PassManager([AddPreCircuitBitFlipChecks()])
@@ -207,18 +207,18 @@ def test_empty_circuit_pre_selection():
 
 
 def test_invalid_x_pulse_type_post():
-    """Unknown ``x_pulse_type`` is rejected by post-selection pass."""
+    """Unknown ``x_pulse_type`` is rejected by post-check pass."""
     with pytest.raises(ValueError):
         AddPostCircuitBitFlipChecks(x_pulse_type="rz")
 
 
 def test_invalid_x_pulse_type_pre():
-    """Unknown ``x_pulse_type`` is rejected by pre-selection pass."""
+    """Unknown ``x_pulse_type`` is rejected by pre-check pass."""
     with pytest.raises(ValueError):
         AddPreCircuitBitFlipChecks(x_pulse_type="rz")
 
 
-def test_pre_selection_no_measurements_returns_unchanged():
+def test_pre_check_no_measurements_returns_unchanged():
     """Active qubits but no measurements: pass exits early without modification."""
     qc = QuantumCircuit(1)
     qc.h(0)
@@ -226,7 +226,7 @@ def test_pre_selection_no_measurements_returns_unchanged():
     assert pm.run(qc) == qc
 
 
-def test_pre_selection_only_ignored_registers_returns_unchanged():
+def test_pre_check_only_ignored_registers_returns_unchanged():
     """All measurements go to an ignored register: pass exits early."""
     from qiskit.circuit import ClassicalRegister, QuantumRegister
 
@@ -263,7 +263,7 @@ def test_delay_is_supported():
     pm.run(qc)
 
 
-def test_post_selection_skips_user_reset():
+def test_post_check_skips_user_reset():
     """User-provided ``reset`` operations are skipped by terminal-measurement detection.
 
     A reset followed by a measurement should still leave the qubit terminated;

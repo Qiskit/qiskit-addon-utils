@@ -9,7 +9,7 @@
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
-"""Tests for ``PostSelector`` (including pre-selection and combined selection)."""
+"""Tests for ``PostSelector`` (including pre-check and combined selection)."""
 
 import numpy as np
 import pytest
@@ -37,8 +37,8 @@ def test_constructors():
     assert post_selector.summary == summary
 
 
-def test_node_based_post_selection():
-    """Test node-based post selection."""
+def test_node_based_post_check():
+    """Test node-based post check."""
     qreg = QuantumRegister(5, "q")
     creg0 = ClassicalRegister(3, "alpha")
     creg0_ps = ClassicalRegister(3, "alpha_ps")
@@ -65,7 +65,7 @@ def test_node_based_post_selection():
     alpha = np.random.randint(0, high=2, size=(*outer_shape, len(creg0)), dtype=bool)
     beta = np.random.randint(0, high=2, size=(*outer_shape, len(creg1)), dtype=bool)
 
-    # Every post selection measurement is correctly flipped
+    # Every post check measurement is correctly flipped
     alpha_ps0 = ~alpha
     beta_ps0 = ~beta
     result0 = {
@@ -79,7 +79,7 @@ def test_node_based_post_selection():
     expected = np.ones(outer_shape, dtype=bool)
     assert np.all(mask == expected)
 
-    # In another round, some post selection measurements fail to flip
+    # In another round, some post check measurements fail to flip
     alpha_ps1 = ~alpha
     beta_ps1 = ~beta
     # In shot `0`, these failures occur on two non-neighboring qubits -> shot discarded
@@ -104,8 +104,8 @@ def test_node_based_post_selection():
     assert np.all(mask == expected)
 
 
-def test_edge_based_post_selection():
-    """Test edge-based post selection."""
+def test_edge_based_post_check():
+    """Test edge-based post check."""
     qreg = QuantumRegister(5, "q")
     creg0 = ClassicalRegister(3, "alpha")
     creg0_ps = ClassicalRegister(3, "alpha_ps")
@@ -132,7 +132,7 @@ def test_edge_based_post_selection():
     alpha = np.random.randint(0, high=2, size=(*outer_shape, len(creg0)), dtype=bool)
     beta = np.random.randint(0, high=2, size=(*outer_shape, len(creg1)), dtype=bool)
 
-    # Every post selection measurement is correctly flipped
+    # Every post check measurement is correctly flipped
     alpha_ps0 = ~alpha
     beta_ps0 = ~beta
     result0 = {
@@ -146,7 +146,7 @@ def test_edge_based_post_selection():
     expected = np.ones(outer_shape, dtype=bool)
     assert np.all(mask == expected)
 
-    # In another round, some post selection measurements fail to flip
+    # In another round, some post check measurements fail to flip
     alpha_ps1 = ~alpha
     beta_ps1 = ~beta
     # In shot `0`, these failures occur on two non-neighboring qubits -> shot kept
@@ -177,7 +177,7 @@ def test_raises():
     creg0 = ClassicalRegister(3, "alpha")
     creg0_ps = ClassicalRegister(3, "alpha_ps")
     circuit = QuantumCircuit(qreg, creg0, creg0_ps)
-    # Add measurements so the circuit has post-selection
+    # Add measurements so the circuit has post-check
     circuit.measure(qreg[0:3], creg0)
     circuit.measure(qreg[0:3], creg0_ps)
 
@@ -195,8 +195,8 @@ def test_raises():
         post_selector.compute_mask(result, strategy="node", mode="post")
 
 
-def test_pre_selection_constructors():
-    """Test the constructors for pre-selection."""
+def test_pre_check_constructors():
+    """Test the constructors for pre-check."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_pre = ClassicalRegister(3, "alpha_pre")
@@ -208,16 +208,16 @@ def test_pre_selection_constructors():
 
     coupling_map = [(0, 1), (1, 2), (2, 3)]
 
-    summary = PostSelectionSummary.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
+    summary = PostSelectionSummary.from_circuit(circuit, coupling_map, pre_check_suffix="_pre")
     selector = PostSelector(summary)
     assert selector.summary == summary
 
-    selector = PostSelector.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
+    selector = PostSelector.from_circuit(circuit, coupling_map, pre_check_suffix="_pre")
     assert selector.summary == summary
 
 
-def test_node_based_pre_selection():
-    """Test node-based pre selection."""
+def test_node_based_pre_check():
+    """Test node-based pre check."""
     qreg = QuantumRegister(5, "q")
     creg0 = ClassicalRegister(3, "alpha")
     creg0_pre = ClassicalRegister(3, "alpha_pre")
@@ -225,7 +225,7 @@ def test_node_based_pre_selection():
     creg1_pre = ClassicalRegister(2, "beta_pre")
 
     circuit = QuantumCircuit(qreg, creg0, creg0_pre, creg1, creg1_pre)
-    # Pre-selection measurements
+    # Pre-check measurements
     circuit.measure(qreg[0], creg0_pre[0])
     circuit.measure(qreg[1], creg0_pre[1])
     circuit.measure(qreg[2], creg0_pre[2])
@@ -240,14 +240,14 @@ def test_node_based_pre_selection():
     circuit.measure(qreg[4], creg1[1])
 
     coupling_map = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 4)]
-    selector = PostSelector.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
+    selector = PostSelector.from_circuit(circuit, coupling_map, pre_check_suffix="_pre")
 
     # Generate results with 12 randomizations and 15 shots
     outer_shape = (12, 15)
     alpha = np.random.randint(0, high=2, size=(*outer_shape, len(creg0)), dtype=bool)
     beta = np.random.randint(0, high=2, size=(*outer_shape, len(creg1)), dtype=bool)
 
-    # Every pre-selection measurement returns 0 (good initialization)
+    # Every pre-check measurement returns 0 (good initialization)
     alpha_pre0 = np.zeros((*outer_shape, len(creg0_pre)), dtype=bool)
     beta_pre0 = np.zeros((*outer_shape, len(creg1_pre)), dtype=bool)
     result0 = {
@@ -261,7 +261,7 @@ def test_node_based_pre_selection():
     expected = np.ones(outer_shape, dtype=bool)
     assert np.all(mask == expected)
 
-    # In another round, some pre-selection measurements return 1 (bad initialization)
+    # In another round, some pre-check measurements return 1 (bad initialization)
     alpha_pre1 = np.zeros((*outer_shape, len(creg0_pre)), dtype=bool)
     beta_pre1 = np.zeros((*outer_shape, len(creg1_pre)), dtype=bool)
     # In shot `0`, these failures occur on two non-neighboring qubits -> shot discarded
@@ -286,8 +286,8 @@ def test_node_based_pre_selection():
     assert np.all(mask == expected)
 
 
-def test_edge_based_pre_selection():
-    """Test edge-based pre selection."""
+def test_edge_based_pre_check():
+    """Test edge-based pre check."""
     qreg = QuantumRegister(5, "q")
     creg0 = ClassicalRegister(3, "alpha")
     creg0_pre = ClassicalRegister(3, "alpha_pre")
@@ -295,7 +295,7 @@ def test_edge_based_pre_selection():
     creg1_pre = ClassicalRegister(2, "beta_pre")
 
     circuit = QuantumCircuit(qreg, creg0, creg0_pre, creg1, creg1_pre)
-    # Pre-selection measurements
+    # Pre-check measurements
     circuit.measure(qreg[0], creg0_pre[0])
     circuit.measure(qreg[1], creg0_pre[1])
     circuit.measure(qreg[2], creg0_pre[2])
@@ -310,14 +310,14 @@ def test_edge_based_pre_selection():
     circuit.measure(qreg[4], creg1[1])
 
     coupling_map = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 4)]
-    selector = PostSelector.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
+    selector = PostSelector.from_circuit(circuit, coupling_map, pre_check_suffix="_pre")
 
     # Generate results with 12 randomizations and 15 shots
     outer_shape = (12, 15)
     alpha = np.random.randint(0, high=2, size=(*outer_shape, len(creg0)), dtype=bool)
     beta = np.random.randint(0, high=2, size=(*outer_shape, len(creg1)), dtype=bool)
 
-    # Every pre-selection measurement returns 0 (good initialization)
+    # Every pre-check measurement returns 0 (good initialization)
     alpha_pre0 = np.zeros((*outer_shape, len(creg0_pre)), dtype=bool)
     beta_pre0 = np.zeros((*outer_shape, len(creg1_pre)), dtype=bool)
     result0 = {
@@ -331,7 +331,7 @@ def test_edge_based_pre_selection():
     expected = np.ones(outer_shape, dtype=bool)
     assert np.all(mask == expected)
 
-    # In another round, some pre-selection measurements return 1 (bad initialization)
+    # In another round, some pre-check measurements return 1 (bad initialization)
     alpha_pre1 = np.zeros((*outer_shape, len(creg0_pre)), dtype=bool)
     beta_pre1 = np.zeros((*outer_shape, len(creg1_pre)), dtype=bool)
     # In shot `0`, these failures occur on two non-neighboring qubits -> shot kept
@@ -356,35 +356,35 @@ def test_edge_based_pre_selection():
     assert np.all(mask == expected)
 
 
-def test_combined_pre_and_post_selection():
-    """Test combined pre and post selection."""
+def test_combined_pre_and_post_check():
+    """Test combined pre and post check."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_pre = ClassicalRegister(3, "alpha_pre")
     creg_ps = ClassicalRegister(3, "alpha_ps")
 
     circuit = QuantumCircuit(qreg, creg, creg_pre, creg_ps)
-    # Pre-selection measurements at the start
+    # Pre-check measurements at the start
     circuit.measure(qreg, creg_pre)
     circuit.barrier()
     # Terminal measurements
     circuit.measure(qreg, creg)
-    # Post-selection measurements
+    # Post-check measurements
     circuit.measure(qreg, creg_ps)
 
     coupling_map = [(0, 1), (1, 2)]
     selector = PostSelector.from_circuit(
         circuit,
         coupling_map,
-        post_selection_suffix="_ps",
-        pre_selection_suffix="_pre",
+        post_check_suffix="_ps",
+        pre_check_suffix="_pre",
     )
 
     # Generate results with 10 shots
     outer_shape = (10,)
     alpha = np.random.randint(0, high=2, size=(*outer_shape, len(creg)), dtype=bool)
 
-    # All pre-selection good, all post-selection good
+    # All pre-check good, all post-check good
     alpha_pre = np.zeros((*outer_shape, len(creg_pre)), dtype=bool)
     alpha_ps = ~alpha
     result_all_good = {
@@ -397,13 +397,13 @@ def test_combined_pre_and_post_selection():
     expected = np.ones(outer_shape, dtype=bool)
     assert np.all(mask == expected)
 
-    # Some pre-selection failures, some post-selection failures
+    # Some pre-check failures, some post-check failures
     alpha_pre_bad = np.zeros((*outer_shape, len(creg_pre)), dtype=bool)
     alpha_ps_bad = ~alpha.copy()
 
-    # Shot 0: pre-selection fails
+    # Shot 0: pre-check fails
     alpha_pre_bad[0, 0] = True
-    # Shot 1: post-selection fails
+    # Shot 1: post-check fails
     alpha_ps_bad[1, 1] = alpha[1, 1]
     # Shot 2: both fail
     alpha_pre_bad[2, 2] = True
@@ -423,8 +423,8 @@ def test_combined_pre_and_post_selection():
     # Test edge strategy for both mode
     mask_edge = selector.compute_mask(result_mixed, strategy="edge", mode="both")
     # With edge strategy:
-    # - Shot 0: pre-selection fails on qubit 0 (non-edge with qubit 2), but no edge failure -> kept
-    # - Shot 1: post-selection fails on qubit 1 (non-edge with qubit 0 or 2 alone), but no edge failure -> kept
+    # - Shot 0: pre-check fails on qubit 0 (non-edge with qubit 2), but no edge failure -> kept
+    # - Shot 1: post-check fails on qubit 1 (non-edge with qubit 0 or 2 alone), but no edge failure -> kept
     # - Shot 2: both pre and post fail, creating edge failures -> discarded
     # Actually, we need to check if failures create edge conditions
     # For this simple 3-qubit case with edges (0,1) and (1,2):
@@ -448,7 +448,7 @@ def test_mode_errors():
     creg = ClassicalRegister(3, "alpha")
     creg_ps = ClassicalRegister(3, "alpha_ps")
 
-    # Circuit with only post-selection
+    # Circuit with only post-check
     circuit_ps_only = QuantumCircuit(qreg, creg, creg_ps)
     circuit_ps_only.measure(qreg, creg)
     circuit_ps_only.measure(qreg, creg_ps)
@@ -464,14 +464,14 @@ def test_mode_errors():
     assert mask.shape == (5,)
 
     # Should fail for pre mode
-    with pytest.raises(ValueError, match="No pre-selection measurements"):
+    with pytest.raises(ValueError, match="No pre-check measurements"):
         selector_ps.compute_mask(result, mode="pre")
 
     # Should fail for both mode
-    with pytest.raises(ValueError, match="No pre-selection measurements"):
+    with pytest.raises(ValueError, match="No pre-check measurements"):
         selector_ps.compute_mask(result, mode="both")
 
-    # Circuit with only pre-selection
+    # Circuit with only pre-check
     creg_pre = ClassicalRegister(3, "alpha_pre")
     circuit_pre_only = QuantumCircuit(qreg, creg, creg_pre)
     circuit_pre_only.measure(qreg, creg_pre)
@@ -479,7 +479,7 @@ def test_mode_errors():
     circuit_pre_only.measure(qreg, creg)
 
     selector_pre = PostSelector.from_circuit(
-        circuit_pre_only, [(0, 1), (1, 2)], pre_selection_suffix="_pre"
+        circuit_pre_only, [(0, 1), (1, 2)], pre_check_suffix="_pre"
     )
 
     # Should work for pre mode
@@ -491,16 +491,16 @@ def test_mode_errors():
     assert mask.shape == (5,)
 
     # Should fail for post mode
-    with pytest.raises(ValueError, match="No post-selection measurements"):
+    with pytest.raises(ValueError, match="No post-check measurements"):
         selector_pre.compute_mask(result_pre, mode="post")
 
     # Should fail for both mode
-    with pytest.raises(ValueError, match="No post-selection measurements"):
+    with pytest.raises(ValueError, match="No post-check measurements"):
         selector_pre.compute_mask(result_pre, mode="both")
 
 
-def test_pre_selection_with_post_selector():
-    """Test that PostSelector works correctly for pre-selection mode."""
+def test_pre_check_with_post_selector():
+    """Test that PostSelector works correctly for pre-check mode."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_pre = ClassicalRegister(3, "alpha_pre")
@@ -512,10 +512,10 @@ def test_pre_selection_with_post_selector():
 
     coupling_map = [(0, 1), (1, 2)]
 
-    # PostSelector should handle pre-selection
-    selector = PostSelector.from_circuit(circuit, coupling_map, pre_selection_suffix="_pre")
+    # PostSelector should handle pre-check
+    selector = PostSelector.from_circuit(circuit, coupling_map, pre_check_suffix="_pre")
 
-    # Test with all good pre-selection measurements
+    # Test with all good pre-check measurements
     result_good = {
         "alpha": np.zeros((5, 3), dtype=bool),
         "alpha_pre": np.zeros((5, 3), dtype=bool),
@@ -525,12 +525,12 @@ def test_pre_selection_with_post_selector():
     assert mask.shape == (5,)
     assert np.all(mask)  # All shots should pass
 
-    # Test with some bad pre-selection measurements
+    # Test with some bad pre-check measurements
     result_bad = {
         "alpha": np.zeros((5, 3), dtype=bool),
         "alpha_pre": np.zeros((5, 3), dtype=bool),
     }
-    result_bad["alpha_pre"][2, 1] = True  # Shot 2 fails pre-selection
+    result_bad["alpha_pre"][2, 1] = True  # Shot 2 fails pre-check
 
     mask = selector.compute_mask(result_bad, mode="pre", strategy="node")
     assert mask.shape == (5,)
@@ -538,8 +538,8 @@ def test_pre_selection_with_post_selector():
     assert not mask[2]  # Shot 2 should be discarded
 
 
-def test_validation_errors_post_selection():
-    """Test validation errors for post-selection."""
+def test_validation_errors_post_check():
+    """Test validation errors for post-check."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_ps = ClassicalRegister(3, "alpha_ps")
@@ -564,8 +564,8 @@ def test_validation_errors_post_selection():
         selector.compute_mask(result_inconsistent, mode="post")
 
 
-def test_validation_errors_pre_selection():
-    """Test validation errors for pre-selection."""
+def test_validation_errors_pre_check():
+    """Test validation errors for pre-check."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_pre = ClassicalRegister(3, "alpha_pre")
@@ -575,7 +575,7 @@ def test_validation_errors_pre_selection():
     circuit.barrier()
     circuit.measure(qreg, creg)
 
-    selector = PostSelector.from_circuit(circuit, [(0, 1), (1, 2)], pre_selection_suffix="_pre")
+    selector = PostSelector.from_circuit(circuit, [(0, 1), (1, 2)], pre_check_suffix="_pre")
 
     # Test missing register error (line 300)
     result_missing = {"alpha": np.zeros((5, 3), dtype=bool)}

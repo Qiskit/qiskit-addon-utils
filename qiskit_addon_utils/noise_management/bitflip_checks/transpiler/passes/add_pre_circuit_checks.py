@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add pre selection measurements."""
+"""Transpiler pass to add pre check measurements."""
 
 from __future__ import annotations
 
@@ -26,13 +26,13 @@ from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ....constants import DEFAULT_PRE_SELECTION_SUFFIX
+from ....constants import DEFAULT_PRE_CHECK_SUFFIX
 from .utils import validate_op_is_supported
 from .xslow_gate import XSlowGate
 
 
 class XPulseType(str, Enum):
-    """The type of X-pulse to apply for the pre-selection measurements."""
+    """The type of X-pulse to apply for the pre-check measurements."""
 
     XSLOW = "xslow"
     """An ``xslow`` gate."""
@@ -42,29 +42,29 @@ class XPulseType(str, Enum):
 
 
 class AddPreCircuitBitFlipChecks(TransformationPass):
-    """Add a pre-selection measurement at the beginning of the circuit.
+    """Add a pre-check measurement at the beginning of the circuit.
 
-    A pre-selection measurement is a measurement that precedes the main circuit operations. It
+    A pre-check measurement is a measurement that precedes the main circuit operations. It
     consists of a narrowband X-pulse (e.g. a sequence of N rx(pi/N) gates), followed by an X gate,
     followed by a measurement. In the absence of noise, it is expected to return ``0`` (since
     the qubit starts in the ground state, gets flipped to the excited state by the two X gate
-    applications, then measured). Shots where the pre-selection measurement returns ``1`` indicate
+    applications, then measured). Shots where the pre-check measurement returns ``1`` indicate
     that the qubit was not properly initialized to the ground state and should be discarded.
 
-    This pass adds pre-selection measurements at the beginning of the circuit for all qubits that:
+    This pass adds pre-check measurements at the beginning of the circuit for all qubits that:
     1. Are active in the circuit (have gates applied to them)
     2. Have terminal measurements
 
     The added measurements write to new classical registers that are copies of the DAG's registers,
     with modified names (by default, appending ``"_pre"`` to the register name).
 
-    The pre-selection protocol works as follows:
+    The pre-check protocol works as follows:
 
     1. **xslow pulse (or rx sequence)**: A narrowband X-pulse that slowly rotates the qubit.
        This can be either a single ``xslow`` gate or 20 ``rx(π/20)`` gates.
     2. **X gate**: A standard X gate to complete the flip from ground to excited state.
     3. **Measurement**: Measures the qubit state. Should return ``0`` if initialization was good.
-    4. **Barrier**: Separates pre-selection measurements from the main circuit.
+    4. **Barrier**: Separates pre-check measurements from the main circuit.
     5. **Main circuit**: The original circuit operations proceed.
 
     Example:
@@ -82,12 +82,12 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
             qc.cx(0, 1)
             qc.measure([0, 1], [0, 1])
 
-            # Add pre-selection measurements
+            # Add pre-check measurements
             pm = PassManager([AddPreCircuitBitFlipChecks()])
             qc_with_pre = pm.run(qc)
 
             # The resulting circuit will have:
-            # 1. Pre-selection measurements at the start (xslow + X + measure to c_pre)
+            # 1. Pre-check measurements at the start (xslow + X + measure to c_pre)
             # 2. A barrier
             # 3. The original circuit (H, CX, measure to c)
     """
@@ -96,29 +96,29 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         self,
         x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
-        pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
+        pre_check_suffix: str = DEFAULT_PRE_CHECK_SUFFIX,
         ignore_creg_suffixes: list[str] | None = None,
         ignore_creg_names: list[str] | None = None,
     ):
         """Initialize the pass.
 
         Args:
-            x_pulse_type: The type of X-pulse to apply for the pre-selection measurements.
-            pre_selection_suffix: A fixed suffix to append to the names of the classical registers when copying them.
+            x_pulse_type: The type of X-pulse to apply for the pre-check measurements.
+            pre_check_suffix: A fixed suffix to append to the names of the classical registers when copying them.
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
-                By default, registers ending with "_ps" are ignored to avoid adding pre-selection to post-selection registers.
+                By default, registers ending with "_ps" are ignored to avoid adding pre-check to post-check registers.
             ignore_creg_names: A list of exact classical register names that should be ignored (not copied).
-                By default, registers named "spec" are ignored to avoid adding pre-selection to spectator registers.
+                By default, registers named "spec" are ignored to avoid adding pre-check to spectator registers.
         """
         super().__init__()
         self.x_pulse_type = XPulseType(x_pulse_type)
-        self.pre_selection_suffix = pre_selection_suffix
+        self.pre_check_suffix = pre_check_suffix
         self.ignore_creg_suffixes = (
             ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_ps"]
         )
         self.ignore_creg_names = ignore_creg_names if ignore_creg_names is not None else ["spec"]
 
-        # Pre-selection sequence: xslow (or rx pulses) + X gate
+        # Pre-check sequence: xslow (or rx pulses) + X gate
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate(), XGate()]
         else:
@@ -142,7 +142,7 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
             return dag
 
         # Add the new registers and create a map between the original clbit and the new ones
-        # Skip registers with ignored suffixes or names (e.g., post-selection or spectator registers)
+        # Skip registers with ignored suffixes or names (e.g., post-check or spectator registers)
         clbits_map = {}
         for name, creg in dag.cregs.items():
             if any(name.endswith(suffix) for suffix in self.ignore_creg_suffixes):
@@ -151,8 +151,8 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
             if name in self.ignore_creg_names:
                 # Skip registers with ignored names
                 continue
-            # Create a pre-selection register with the same size as the original
-            dag.add_creg(new_creg := ClassicalRegister(creg.size, name + self.pre_selection_suffix))
+            # Create a pre-check register with the same size as the original
+            dag.add_creg(new_creg := ClassicalRegister(creg.size, name + self.pre_check_suffix))
             # Map existing clbits to the new register
             clbits_map.update({clbit: new_clbit for clbit, new_clbit in zip(creg, new_creg)})
 
@@ -164,14 +164,14 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         if not qubits_to_preselect:
             return dag
 
-        # Create a new DAG to build the pre-selection circuit
+        # Create a new DAG to build the pre-check circuit
         new_dag = DAGCircuit()
         for qreg in dag.qregs.values():
             new_dag.add_qreg(qreg)
         for creg in dag.cregs.values():
             new_dag.add_creg(creg)
 
-        # Add the pre-selection measurements at the front
+        # Add the pre-check measurements at the front
         # We need to add them in a consistent order based on the qubit-to-clbit mapping
         # Sort by clbit index to ensure consistent ordering
         qubits_list = sorted(qubits_to_preselect, key=lambda q: qubit_to_clbit_map[q]._index)
@@ -219,7 +219,7 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            # Skip xslow, rx, and reset gates - they are part of pre/post-selection protocol
+            # Skip xslow, rx, and reset gates - they are part of pre/post-check protocol
             if ("xslow" in node.op.name) or ("rx" in node.op.name) or (node.op.name == "reset"):
                 continue
             elif node.is_standard_gate() or node.op.name == "delay":

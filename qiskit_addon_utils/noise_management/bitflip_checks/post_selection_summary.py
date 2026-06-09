@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Post selection summary."""
+"""Post-selection summary."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler import CouplingMap
 
 from ..constants import (
-    DEFAULT_POST_SELECTION_SUFFIX,
-    DEFAULT_PRE_SELECTION_SUFFIX,
+    DEFAULT_POST_CHECK_SUFFIX,
+    DEFAULT_PRE_CHECK_SUFFIX,
     DEFAULT_SPECTATOR_CREG_NAME,
 )
 
@@ -32,8 +32,8 @@ from ..constants import (
 class PostSelectionSummary:
     """A helper class to store the properties of a quantum circuit required to post select the results.
 
-    This class handles both traditional post-selection (measurements at the end of the circuit) and
-    pre-selection (measurements at the beginning of the circuit to verify initialization).
+    This class handles both traditional post-check (measurements at the end of the circuit) and
+    pre-check (measurements at the beginning of the circuit to verify initialization).
 
     A primary register may either hold "data" measurements that the user cares about
     (a problem-specific register such as ``c``) or hold the first half of a spectator
@@ -59,24 +59,24 @@ class PostSelectionSummary:
         *,
         measure_map_ps: dict[int, tuple[str, int]] | None = None,
         measure_map_pre: dict[int, tuple[str, int]] | None = None,
-        post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
-        pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
+        post_check_suffix: str = DEFAULT_POST_CHECK_SUFFIX,
+        pre_check_suffix: str = DEFAULT_PRE_CHECK_SUFFIX,
         spectator_cregs: set[str] | None = None,
     ):
         """Initialize a ``PostSelectionSummary`` object.
 
         Args:
             primary_cregs: The names of the "primary" classical registers, namely those that do not end with
-                the post selection or pre selection suffix.
+                the post check or pre check suffix.
             measure_map: A map between qubit indices to the register and clbits that uniquely define a
                 measurement on those qubits (primary measurements).
             edges: A list of tuples defining pairs of neighboring qubits.
-            measure_map_ps: An optional map for post-selection measurements (at end of circuit).
+            measure_map_ps: An optional map for post-check measurements (at end of circuit).
                 If None, defaults to empty dict.
-            measure_map_pre: An optional map for pre-selection measurements (at start of circuit).
+            measure_map_pre: An optional map for pre-check measurements (at start of circuit).
                 If None, defaults to empty dict.
-            post_selection_suffix: The suffix of the post selection registers.
-            pre_selection_suffix: The suffix of the pre selection registers.
+            post_check_suffix: The suffix of the post check registers.
+            pre_check_suffix: The suffix of the pre check registers.
             spectator_cregs: Names of primary registers that hold spectator measurements
                 (the first half of the spectator parity check produced by
                 :class:`.AddSpectatorPostCircuitBitFlipChecks`). Stored intersected with ``primary_cregs``;
@@ -88,8 +88,8 @@ class PostSelectionSummary:
         self._measure_map_ps = measure_map_ps if measure_map_ps is not None else {}
         self._measure_map_pre = measure_map_pre if measure_map_pre is not None else {}
         self._edges = edges
-        self._post_selection_suffix = post_selection_suffix
-        self._pre_selection_suffix = pre_selection_suffix
+        self._post_check_suffix = post_check_suffix
+        self._pre_check_suffix = pre_check_suffix
         self._spectator_cregs = set(spectator_cregs) & primary_cregs if spectator_cregs else set()
 
     @property
@@ -99,17 +99,17 @@ class PostSelectionSummary:
 
     @property
     def measure_map_ps(self) -> dict[int, tuple[str, int]]:
-        """A map from qubit indices to the register and clbit index for post-selection measurements."""
+        """A map from qubit indices to the register and clbit index for post-check measurements."""
         return self._measure_map_ps
 
     @property
     def measure_map_pre(self) -> dict[int, tuple[str, int]]:
-        """A map from qubit indices to the register and clbit index for pre-selection measurements."""
+        """A map from qubit indices to the register and clbit index for pre-check measurements."""
         return self._measure_map_pre
 
     @property
     def edges(self) -> set[frozenset[int]]:
-        """A set of edges to consider for edge-based post selection."""
+        """A set of edges to consider for edge-based post check."""
         return self._edges
 
     @property
@@ -127,14 +127,14 @@ class PostSelectionSummary:
         return self._spectator_cregs
 
     @property
-    def post_selection_suffix(self) -> str:
-        """The suffix of the post selection registers."""
-        return self._post_selection_suffix
+    def post_check_suffix(self) -> str:
+        """The suffix of the post check registers."""
+        return self._post_check_suffix
 
     @property
-    def pre_selection_suffix(self) -> str:
-        """The suffix of the pre selection registers."""
-        return self._pre_selection_suffix
+    def pre_check_suffix(self) -> str:
+        """The suffix of the pre check registers."""
+        return self._pre_check_suffix
 
     @classmethod
     def from_circuit(
@@ -142,8 +142,8 @@ class PostSelectionSummary:
         circuit: QuantumCircuit,
         coupling_map: CouplingMap | list[tuple[int, int]],
         *,
-        post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
-        pre_selection_suffix: str = DEFAULT_PRE_SELECTION_SUFFIX,
+        post_check_suffix: str = DEFAULT_POST_CHECK_SUFFIX,
+        pre_check_suffix: str = DEFAULT_PRE_CHECK_SUFFIX,
         spectator_cregs: set[str] | list[str] | None = None,
     ) -> PostSelectionSummary:
         """Initialize from quantum circuits.
@@ -151,8 +151,8 @@ class PostSelectionSummary:
         Args:
             circuit: The circuit to create a summary of.
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
-            post_selection_suffix: A fixed suffix for post-selection classical registers.
-            pre_selection_suffix: A fixed suffix for pre-selection classical registers.
+            post_check_suffix: A fixed suffix for post-check classical registers.
+            pre_check_suffix: A fixed suffix for pre-check classical registers.
             spectator_cregs: Names of primary registers that hold spectator
                 measurements. Defaults to ``[DEFAULT_SPECTATOR_CREG_NAME]``
                 (i.e. ``["spec"]``), matching the default name used by
@@ -169,20 +169,20 @@ class PostSelectionSummary:
 
         cregs = (dag := circuit_to_dag(circuit)).cregs
         primary_cregs, ps_cregs, pre_cregs = _get_primary_ps_and_pre_cregs(
-            cregs, post_selection_suffix, pre_selection_suffix
+            cregs, post_check_suffix, pre_check_suffix
         )
 
         # Validate that primary registers have corresponding selection registers.
-        # Spectator primaries (e.g. ``spec``) are exempt from the pre-selection
+        # Spectator primaries (e.g. ``spec``) are exempt from the pre-check
         # requirement: ``AddSpectatorPostCircuitBitFlipChecks`` adds a ``_ps`` partner but no
         # ``_pre`` one, so a spec primary need not have a matching pre register.
         if ps_cregs:
-            _validate_cregs(primary_cregs, ps_cregs, post_selection_suffix)
+            _validate_cregs(primary_cregs, ps_cregs, post_check_suffix)
         if pre_cregs:
             _validate_cregs(
                 primary_cregs,
                 pre_cregs,
-                pre_selection_suffix,
+                pre_check_suffix,
                 exempt_primary=set(spectator_cregs),
             )
 
@@ -190,15 +190,15 @@ class PostSelectionSummary:
             dag, primary_cregs, ps_cregs, pre_cregs
         )
 
-        # Post-selection requires a strict 1:1 mapping between primary and ``_ps``
+        # Post-check requires a strict 1:1 mapping between primary and ``_ps``
         # measurements: ``_compute_post_mask_by_*`` indexes ``measure_map_ps`` by
         # every primary qubit, so a missing entry would raise at mask time.
-        # Pre-selection is intrinsically partial (only terminally-measured qubits
+        # Pre-check is intrinsically partial (only terminally-measured qubits
         # are pre-selected), so it's validated leniently.
         if measure_map_ps:
-            _validate_measure_maps(measure_map, measure_map_ps, post_selection_suffix, "strict")
+            _validate_measure_maps(measure_map, measure_map_ps, post_check_suffix, "strict")
         if measure_map_pre:
-            _validate_measure_maps(measure_map, measure_map_pre, pre_selection_suffix, "lenient")
+            _validate_measure_maps(measure_map, measure_map_pre, pre_check_suffix, "lenient")
 
         return PostSelectionSummary(
             set(primary_cregs),
@@ -206,8 +206,8 @@ class PostSelectionSummary:
             _get_edges(coupling_map, measure_map, measure_map_ps, measure_map_pre),
             measure_map_ps=measure_map_ps,
             measure_map_pre=measure_map_pre,
-            post_selection_suffix=post_selection_suffix,
-            pre_selection_suffix=pre_selection_suffix,
+            post_check_suffix=post_check_suffix,
+            pre_check_suffix=pre_check_suffix,
             spectator_cregs=set(spectator_cregs),
         )
 
@@ -219,35 +219,35 @@ class PostSelectionSummary:
             and self.measure_map == other.measure_map
             and self.measure_map_ps == other.measure_map_ps
             and self.measure_map_pre == other.measure_map_pre
-            and self.post_selection_suffix == other.post_selection_suffix
-            and self.pre_selection_suffix == other.pre_selection_suffix
+            and self.post_check_suffix == other.post_check_suffix
+            and self.pre_check_suffix == other.pre_check_suffix
             and self.spectator_cregs == other.spectator_cregs
         )
 
 
 def _get_primary_ps_and_pre_cregs(
     cregs: dict[str, ClassicalRegister],
-    post_selection_suffix: str,
-    pre_selection_suffix: str,
+    post_check_suffix: str,
+    pre_check_suffix: str,
 ) -> tuple[
     dict[str, ClassicalRegister], dict[str, ClassicalRegister], dict[str, ClassicalRegister]
 ]:
-    """Split a dictionary of registers into primary, post-selection, and pre-selection registers.
+    """Split a dictionary of registers into primary, post-check, and pre-check registers.
 
     Args:
         cregs: The dictionary of registers.
-        post_selection_suffix: The suffix of the post selection registers.
-        pre_selection_suffix: The suffix of the pre selection registers.
+        post_check_suffix: The suffix of the post check registers.
+        pre_check_suffix: The suffix of the pre check registers.
     """
-    # Primary registers exclude both post-selection and pre-selection registers
+    # Primary registers exclude both post-check and pre-check registers
     primary_cregs = {
         name: creg
         for name, creg in cregs.items()
-        if not name.endswith(post_selection_suffix) and not name.endswith(pre_selection_suffix)
+        if not name.endswith(post_check_suffix) and not name.endswith(pre_check_suffix)
     }
 
-    ps_cregs = {name: creg for name, creg in cregs.items() if name.endswith(post_selection_suffix)}
-    pre_cregs = {name: creg for name, creg in cregs.items() if name.endswith(pre_selection_suffix)}
+    ps_cregs = {name: creg for name, creg in cregs.items() if name.endswith(post_check_suffix)}
+    pre_cregs = {name: creg for name, creg in cregs.items() if name.endswith(pre_check_suffix)}
 
     return primary_cregs, ps_cregs, pre_cregs
 
@@ -272,7 +272,7 @@ def _validate_cregs(
         selection_suffix: The suffix of the selection registers.
         exempt_primary: Names of primary registers that are *allowed* to lack a
             matching selection register. Used to exempt spectator primaries
-            (e.g. ``spec``) from the pre-selection requirement, since
+            (e.g. ``spec``) from the pre-check requirement, since
             :class:`.AddSpectatorPostCircuitBitFlipChecks` adds only a ``_ps`` partner. A
             matching register that *is* present is still size-checked.
 
@@ -289,7 +289,7 @@ def _validate_cregs(
         sorted_primary_names = ", ".join(sorted(list(primary_cregs)))
         sorted_selection_names = ", ".join(sorted(list(selection_cregs)))
         sorted_missing = ", ".join(sorted(missing))
-        selection_type = "post selection" if selection_suffix == "_ps" else "pre selection"
+        selection_type = "post check" if selection_suffix == "_ps" else "pre check"
         raise ValueError(
             f"Cannot apply {selection_type} for circuit with primary registers {sorted_primary_names} "
             f"and {selection_type} registers {sorted_selection_names}: missing matching {selection_type} "
@@ -302,7 +302,7 @@ def _validate_cregs(
         if selection_name not in selection_cregs:
             continue
         if len(primary_creg) != len(selection_creg := selection_cregs[selection_name]):
-            selection_type = "post selection" if selection_suffix == "_ps" else "pre selection"
+            selection_type = "post check" if selection_suffix == "_ps" else "pre check"
             raise ValueError(
                 f"Primary register {name} has {len(primary_creg)} clbits, but {selection_type} register "
                 f"{selection_name} has {len(selection_creg)} clbits."
@@ -320,8 +320,8 @@ def _get_measure_maps(
     Args:
         dag: The dag circuit.
         primary_cregs: The primary cregs.
-        ps_cregs: The post selection cregs.
-        pre_cregs: The pre selection cregs.
+        ps_cregs: The post check cregs.
+        pre_cregs: The pre check cregs.
     """
     # A map between clbits in the primary registers to the register that owns them and the
     # positions that they occupy in those registers
@@ -331,14 +331,14 @@ def _get_measure_maps(
         for clbit_idx, clbit in enumerate(creg)
     }
 
-    # A map between clbits in the post selection registers
+    # A map between clbits in the post check registers
     clbit_map_ps = {
         clbit: (name, clbit_idx)
         for name, creg in ps_cregs.items()
         for clbit_idx, clbit in enumerate(creg)
     }
 
-    # A map between clbits in the pre selection registers
+    # A map between clbits in the pre check registers
     clbit_map_pre = {
         clbit: (name, clbit_idx)
         for name, creg in pre_cregs.items()
@@ -384,10 +384,10 @@ def _validate_measure_maps(
     Raise:
         ValueError: If validation fails based on the mode.
     """
-    selection_type = "post selection" if selection_suffix == "_ps" else "pre selection"
+    selection_type = "post check" if selection_suffix == "_ps" else "pre check"
 
     if validation_mode == "strict":
-        # Post-selection mode: require equal length and all qubits present in both
+        # Post-check mode: require equal length and all qubits present in both
         if len(measure_map) != len(selection_measure_map):
             raise ValueError(
                 f"Found {len(measure_map)} measurements and {len(selection_measure_map)} "
@@ -412,7 +412,7 @@ def _validate_measure_maps(
                     f"{name_selection}."
                 )
     else:
-        # Pre-selection mode: only validate qubits that have selection measurements
+        # Pre-check mode: only validate qubits that have selection measurements
         for qubit_idx, (name, clbit_idx) in selection_measure_map.items():
             if qubit_idx in measure_map:
                 name_primary, clbit_idx_primary = measure_map[qubit_idx]
@@ -429,7 +429,7 @@ def _get_edges(
     coupling_map: CouplingMap,
     *measure_maps: dict[int, tuple[str, int]],
 ) -> set[frozenset[int]]:
-    """Get the set of edges that are relevant for edge-based post selection.
+    """Get the set of edges that are relevant for edge-based post check.
 
     An edge participates if both of its qubits appear in at least one of the
     supplied ``measure_maps`` (typically ``measure_map``, ``measure_map_ps``,

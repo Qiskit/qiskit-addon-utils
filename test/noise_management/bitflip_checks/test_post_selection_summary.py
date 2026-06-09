@@ -20,7 +20,7 @@ from qiskit_addon_utils.noise_management.bitflip_checks import PostSelectionSumm
 
 def test_init():
     """Test the init constructors."""
-    post_selection_suffix = "my_suffix"
+    post_check_suffix = "my_suffix"
     summary = PostSelectionSummary(
         primary_cregs := {"alpha", "beta"},
         measure_map := {
@@ -31,13 +31,13 @@ def test_init():
             4: ("beta", 1),
         },
         edges := {frozenset(pair) for pair in [(0, 1), (1, 2), (2, 3), (3, 4)]},
-        post_selection_suffix=post_selection_suffix,
+        post_check_suffix=post_check_suffix,
     )
 
     assert summary.primary_cregs == primary_cregs
     assert summary.measure_map == measure_map
     assert summary.edges == edges
-    assert summary.post_selection_suffix == post_selection_suffix
+    assert summary.post_check_suffix == post_check_suffix
 
 
 def test_constructor_from_circuit():
@@ -60,11 +60,11 @@ def test_constructor_from_circuit():
     circuit.measure(qreg[3], creg1_ps[0])
     circuit.measure(qreg[4], creg1_ps[1])
 
-    post_selection_suffix = "_ps"
+    post_check_suffix = "_ps"
     summary = PostSelectionSummary.from_circuit(
         circuit,
         coupling_map := [(0, 1), (1, 2), (2, 3), (3, 4)],
-        post_selection_suffix=post_selection_suffix,
+        post_check_suffix=post_check_suffix,
     )
 
     assert summary.primary_cregs == {"alpha", "beta"}
@@ -76,12 +76,12 @@ def test_constructor_from_circuit():
         4: ("beta", 1),
     }
     assert summary.edges == {frozenset(pair) for pair in coupling_map}
-    assert summary.post_selection_suffix == post_selection_suffix
+    assert summary.post_check_suffix == post_check_suffix
 
 
 def test_eq():
     """Test equality between summaries."""
-    post_selection_suffix = "my_suffix"
+    post_check_suffix = "my_suffix"
     summary = PostSelectionSummary(
         primary_cregs := {"alpha", "beta"},
         measure_map := {
@@ -92,22 +92,22 @@ def test_eq():
             4: ("beta", 1),
         },
         edges := {frozenset(pair) for pair in [(0, 1), (1, 2), (2, 3), (3, 4)]},
-        post_selection_suffix=post_selection_suffix,
+        post_check_suffix=post_check_suffix,
     )
 
     assert summary == deepcopy(summary)
     assert summary != 3
     assert summary != PostSelectionSummary(
-        {"alpha"}, measure_map, edges, post_selection_suffix=post_selection_suffix
+        {"alpha"}, measure_map, edges, post_check_suffix=post_check_suffix
     )
     assert summary != PostSelectionSummary(
-        primary_cregs, {0: ("alpha", 0)}, edges, post_selection_suffix=post_selection_suffix
+        primary_cregs, {0: ("alpha", 0)}, edges, post_check_suffix=post_check_suffix
     )
     assert summary != PostSelectionSummary(
-        primary_cregs, measure_map, {frozenset([0, 1])}, post_selection_suffix=post_selection_suffix
+        primary_cregs, measure_map, {frozenset([0, 1])}, post_check_suffix=post_check_suffix
     )
     assert summary != PostSelectionSummary(
-        primary_cregs, measure_map, edges, post_selection_suffix="ciao"
+        primary_cregs, measure_map, edges, post_check_suffix="ciao"
     )
 
 
@@ -137,13 +137,13 @@ def test_invalid_measure_maps_raises():
     circuit = QuantumCircuit(qreg, creg0, creg0_ps)
     circuit.measure(qreg[0], creg0[0])
     circuit.measure(qreg, creg0_ps)
-    with pytest.raises(ValueError, match="1 measurements and 3 post selection measurements"):
+    with pytest.raises(ValueError, match="1 measurements and 3 post check measurements"):
         PostSelectionSummary.from_circuit(circuit, [])
 
     circuit = QuantumCircuit(qreg, creg0, creg0_ps)
     circuit.measure(qreg[0], creg0[0])
     circuit.measure(qreg[1], creg0_ps[0])
-    with pytest.raises(ValueError, match="Missing post selection measurement on qubit 0"):
+    with pytest.raises(ValueError, match="Missing post check measurement on qubit 0"):
         PostSelectionSummary.from_circuit(circuit, [])
 
     circuit = QuantumCircuit(qreg, creg0, creg0_ps)
@@ -153,8 +153,8 @@ def test_invalid_measure_maps_raises():
         PostSelectionSummary.from_circuit(circuit, [])
 
 
-def test_pre_selection_from_circuit():
-    """Test the constructor from circuit with pre-selection measurements."""
+def test_pre_check_from_circuit():
+    """Test the constructor from circuit with pre-check measurements."""
     qreg = QuantumRegister(5, "q")
     creg0 = ClassicalRegister(3, "alpha")
     creg1 = ClassicalRegister(2, "beta")
@@ -162,7 +162,7 @@ def test_pre_selection_from_circuit():
     creg1_pre = ClassicalRegister(2, "beta_pre")
 
     circuit = QuantumCircuit(qreg, creg0, creg0_pre, creg1, creg1_pre)
-    # Pre-selection measurements at the start
+    # Pre-check measurements at the start
     circuit.measure(qreg[0], creg0_pre[0])
     circuit.measure(qreg[1], creg0_pre[1])
     circuit.measure(qreg[2], creg0_pre[2])
@@ -176,11 +176,11 @@ def test_pre_selection_from_circuit():
     circuit.measure(qreg[3], creg1[0])
     circuit.measure(qreg[4], creg1[1])
 
-    pre_selection_suffix = "_pre"
+    pre_check_suffix = "_pre"
     summary = PostSelectionSummary.from_circuit(
         circuit,
         coupling_map := [(0, 1), (1, 2), (2, 3), (3, 4)],
-        pre_selection_suffix=pre_selection_suffix,
+        pre_check_suffix=pre_check_suffix,
     )
 
     assert summary.primary_cregs == {"alpha", "beta"}
@@ -200,32 +200,32 @@ def test_pre_selection_from_circuit():
     }
     assert summary.measure_map_ps == {}
     assert summary.edges == {frozenset(pair) for pair in coupling_map}
-    assert summary.pre_selection_suffix == pre_selection_suffix
+    assert summary.pre_check_suffix == pre_check_suffix
 
 
-def test_combined_pre_and_post_selection_from_circuit():
-    """Test the constructor from circuit with both pre and post-selection measurements."""
+def test_combined_pre_and_post_check_from_circuit():
+    """Test the constructor from circuit with both pre and post-check measurements."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_pre = ClassicalRegister(3, "alpha_pre")
     creg_ps = ClassicalRegister(3, "alpha_ps")
 
     circuit = QuantumCircuit(qreg, creg, creg_pre, creg_ps)
-    # Pre-selection measurements at the start
+    # Pre-check measurements at the start
     circuit.measure(qreg, creg_pre)
     circuit.barrier()
     # Some gates here...
     circuit.barrier()
     # Terminal measurements
     circuit.measure(qreg, creg)
-    # Post-selection measurements
+    # Post-check measurements
     circuit.measure(qreg, creg_ps)
 
     summary = PostSelectionSummary.from_circuit(
         circuit,
         coupling_map := [(0, 1), (1, 2)],
-        post_selection_suffix="_ps",
-        pre_selection_suffix="_pre",
+        post_check_suffix="_ps",
+        pre_check_suffix="_pre",
     )
 
     assert summary.primary_cregs == {"alpha"}
@@ -245,18 +245,18 @@ def test_combined_pre_and_post_selection_from_circuit():
         2: ("alpha_pre", 2),
     }
     assert summary.edges == {frozenset(pair) for pair in coupling_map}
-    assert summary.post_selection_suffix == "_ps"
-    assert summary.pre_selection_suffix == "_pre"
+    assert summary.post_check_suffix == "_ps"
+    assert summary.pre_check_suffix == "_pre"
 
 
-def test_pre_selection_only_partial_measurements():
-    """Test pre-selection with only some qubits having terminal measurements (lenient mode)."""
+def test_pre_check_only_partial_measurements():
+    """Test pre-check with only some qubits having terminal measurements (lenient mode)."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(2, "alpha")  # Only 2 bits
     creg_pre = ClassicalRegister(2, "alpha_pre")
 
     circuit = QuantumCircuit(qreg, creg, creg_pre)
-    # Pre-selection measurements on 2 qubits
+    # Pre-check measurements on 2 qubits
     circuit.measure(qreg[0], creg_pre[0])
     circuit.measure(qreg[1], creg_pre[1])
     circuit.barrier()
@@ -267,7 +267,7 @@ def test_pre_selection_only_partial_measurements():
     summary = PostSelectionSummary.from_circuit(
         circuit,
         [(0, 1), (1, 2)],
-        pre_selection_suffix="_pre",
+        pre_check_suffix="_pre",
     )
 
     assert summary.primary_cregs == {"alpha"}
@@ -290,8 +290,8 @@ def test_init_with_all_measure_maps():
         edges := {frozenset([0, 1])},
         measure_map_ps={0: ("alpha_ps", 0), 1: ("alpha_ps", 1)},
         measure_map_pre={0: ("alpha_pre", 0), 1: ("alpha_pre", 1)},
-        post_selection_suffix="_ps",
-        pre_selection_suffix="_pre",
+        post_check_suffix="_ps",
+        pre_check_suffix="_pre",
     )
 
     assert summary.primary_cregs == primary_cregs
@@ -299,20 +299,20 @@ def test_init_with_all_measure_maps():
     assert summary.measure_map_ps == {0: ("alpha_ps", 0), 1: ("alpha_ps", 1)}
     assert summary.measure_map_pre == {0: ("alpha_pre", 0), 1: ("alpha_pre", 1)}
     assert summary.edges == edges
-    assert summary.post_selection_suffix == "_ps"
-    assert summary.pre_selection_suffix == "_pre"
+    assert summary.post_check_suffix == "_ps"
+    assert summary.pre_check_suffix == "_pre"
 
 
 def test_eq_with_all_properties():
-    """Test equality with all properties including pre and post selection."""
+    """Test equality with all properties including pre and post check."""
     summary1 = PostSelectionSummary(
         {"alpha"},
         {0: ("alpha", 0)},
         {frozenset([0, 1])},
         measure_map_ps={0: ("alpha_ps", 0)},
         measure_map_pre={0: ("alpha_pre", 0)},
-        post_selection_suffix="_ps",
-        pre_selection_suffix="_pre",
+        post_check_suffix="_ps",
+        pre_check_suffix="_pre",
     )
 
     summary2 = PostSelectionSummary(
@@ -321,8 +321,8 @@ def test_eq_with_all_properties():
         {frozenset([0, 1])},
         measure_map_ps={0: ("alpha_ps", 0)},
         measure_map_pre={0: ("alpha_pre", 0)},
-        post_selection_suffix="_ps",
-        pre_selection_suffix="_pre",
+        post_check_suffix="_ps",
+        pre_check_suffix="_pre",
     )
 
     assert summary1 == summary2
@@ -334,8 +334,8 @@ def test_eq_with_all_properties():
         {frozenset([0, 1])},
         measure_map_ps={0: ("alpha_ps", 1)},  # Different bit
         measure_map_pre={0: ("alpha_pre", 0)},
-        post_selection_suffix="_ps",
-        pre_selection_suffix="_pre",
+        post_check_suffix="_ps",
+        pre_check_suffix="_pre",
     )
     assert summary1 != summary3
 
@@ -346,43 +346,43 @@ def test_eq_with_all_properties():
         {frozenset([0, 1])},
         measure_map_ps={0: ("alpha_ps", 0)},
         measure_map_pre={},  # Empty
-        post_selection_suffix="_ps",
-        pre_selection_suffix="_pre",
+        post_check_suffix="_ps",
+        pre_check_suffix="_pre",
     )
     assert summary1 != summary4
 
-    # Different pre_selection_suffix
+    # Different pre_check_suffix
     summary5 = PostSelectionSummary(
         {"alpha"},
         {0: ("alpha", 0)},
         {frozenset([0, 1])},
         measure_map_ps={0: ("alpha_ps", 0)},
         measure_map_pre={0: ("alpha_pre", 0)},
-        post_selection_suffix="_ps",
-        pre_selection_suffix="_different",
+        post_check_suffix="_ps",
+        pre_check_suffix="_different",
     )
     assert summary1 != summary5
 
 
-def test_pre_selection_invalid_measure_map_raises():
-    """Test that pre-selection validation raises when measure maps don't match."""
+def test_pre_check_invalid_measure_map_raises():
+    """Test that pre-check validation raises when measure maps don't match."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_pre = ClassicalRegister(3, "alpha_pre")
 
-    # Test case: pre-selection measurement writes to wrong bit
+    # Test case: pre-check measurement writes to wrong bit
     circuit = QuantumCircuit(qreg, creg, creg_pre)
     circuit.measure(qreg[0], creg_pre[1])  # Wrong bit index
     circuit.barrier()
     circuit.measure(qreg[0], creg[0])
 
     with pytest.raises(
-        ValueError, match="Pre selection measurement on qubit 0 writes to bit 1 of creg alpha_pre"
+        ValueError, match="Pre check measurement on qubit 0 writes to bit 1 of creg alpha_pre"
     ):
-        PostSelectionSummary.from_circuit(circuit, [], pre_selection_suffix="_pre")
+        PostSelectionSummary.from_circuit(circuit, [], pre_check_suffix="_pre")
 
-    # Test case: pre-selection measurement writes to wrong register (different base name)
-    # This tests the case where the pre-selection register name doesn't match the primary register
+    # Test case: pre-check measurement writes to wrong register (different base name)
+    # This tests the case where the pre-check register name doesn't match the primary register
     creg_beta = ClassicalRegister(3, "beta")
     creg_alpha_pre2 = ClassicalRegister(3, "alpha_pre")
     creg_beta_pre = ClassicalRegister(3, "beta_pre")
@@ -393,9 +393,9 @@ def test_pre_selection_invalid_measure_map_raises():
     circuit2.measure(qreg[1], creg_beta[0])  # Another primary measurement to beta
 
     with pytest.raises(
-        ValueError, match="Pre selection measurement on qubit 0 writes to bit 0 of creg beta_pre"
+        ValueError, match="Pre check measurement on qubit 0 writes to bit 0 of creg beta_pre"
     ):
-        PostSelectionSummary.from_circuit(circuit2, [], pre_selection_suffix="_pre")
+        PostSelectionSummary.from_circuit(circuit2, [], pre_check_suffix="_pre")
 
 
 def test_spectator_cregs_default_picks_up_spec_register():
@@ -476,13 +476,13 @@ def test_spectator_cregs_disabled_with_empty_list():
     assert summary.spectator_cregs == set()
 
 
-def test_spectator_post_selection_with_data_pre_selection():
-    """A spectator primary (``spec`` + ``spec_ps``, no ``spec_pre``) coexists with data pre-selection.
+def test_spectator_post_check_with_data_pre_check():
+    """A spectator primary (``spec`` + ``spec_ps``, no ``spec_pre``) coexists with data pre-check.
 
     Combining ``AddPreCircuitBitFlipChecks`` (data init checks) with
     ``AddSpectatorPostCircuitBitFlipChecks`` (post-only spectator parity) yields a circuit whose
     ``spec`` primary has no matching ``spec_pre``. The spectator primary is
-    exempt from the pre-selection partner requirement, so the summary builds.
+    exempt from the pre-check partner requirement, so the summary builds.
     """
     qreg = QuantumRegister(4, "q")
     creg_data = ClassicalRegister(3, "c")
@@ -502,14 +502,14 @@ def test_spectator_post_selection_with_data_pre_selection():
     summary = PostSelectionSummary.from_circuit(circuit, [(0, 1), (1, 2), (2, 3)])
 
     assert summary.spectator_cregs == {"spec"}
-    # Pre-selection covers only the data qubits; the spectator has no pre-check.
+    # Pre-check covers only the data qubits; the spectator has no pre-check.
     assert set(summary.measure_map_pre) == {0, 1, 2}
-    # The data->spectator edge participates in edge-based post-selection.
+    # The data->spectator edge participates in edge-based post-check.
     assert frozenset({2, 3}) in summary.edges
 
 
 def test_spectator_without_pre_partner_still_raises_when_not_a_spectator():
-    """A non-spectator primary lacking a ``_pre`` partner still fails pre-selection validation."""
+    """A non-spectator primary lacking a ``_pre`` partner still fails pre-check validation."""
     qreg = QuantumRegister(4, "q")
     creg_data = ClassicalRegister(3, "c")
     creg_data_pre = ClassicalRegister(3, "c_pre")
@@ -526,7 +526,7 @@ def test_spectator_without_pre_partner_still_raises_when_not_a_spectator():
 
     # Opting out of spectator classification means ``spec`` is a regular primary
     # and must have a ``spec_pre`` partner, which it does not.
-    with pytest.raises(ValueError, match="missing matching pre selection register"):
+    with pytest.raises(ValueError, match="missing matching pre check register"):
         PostSelectionSummary.from_circuit(circuit, [(0, 1), (1, 2), (2, 3)], spectator_cregs=[])
 
 

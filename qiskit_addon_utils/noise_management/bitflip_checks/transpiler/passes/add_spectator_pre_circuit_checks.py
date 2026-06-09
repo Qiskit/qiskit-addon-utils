@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add pre-selection measurements on spectator qubits."""
+"""Transpiler pass to add pre-check measurements on spectator qubits."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from .xslow_gate import XSlowGate
 
 
 class XPulseType(str, Enum):
-    """The type of X-pulse to apply for the pre-selection measurements."""
+    """The type of X-pulse to apply for the pre-check measurements."""
 
     XSLOW = "xslow"
     """An ``xslow`` gate."""
@@ -43,15 +43,15 @@ class XPulseType(str, Enum):
 
 
 class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
-    """Add pre-selection measurements on spectator qubits.
+    """Add pre-check measurements on spectator qubits.
 
     An **active qubit** is a qubit acted on in the circuit by a non-barrier instruction. A **terminated qubit**
     is one whose last action is a measurement. A **spectator qubit** is a qubit that is inactive, but adjacent
     to an active qubit under the coupling map.
 
-    Each spectator qubit receives the same pre-selection check as the data qubits: an
+    Each spectator qubit receives the same pre-check check as the data qubits: an
     ``xslow`` (or 20 ``rx(pi/20)``) pulse, then an ``X`` gate, then a measurement
-    that should read ``0`` for a well-initialised qubit. Edge-mode pre-selection
+    that should read ``0`` for a well-initialised qubit. Edge-mode pre-check
     accepts a shot when *at least one* of a data/spectator pair reads ``0``.
 
     Optionally via ``include_unmeasured``, active qubits that are not terminated by
@@ -62,7 +62,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
 
     .. note::
         This pass is designed to work in conjunction with :class:`.AddPreCircuitBitFlipChecks`. Typically,
-        you would use both passes together to add pre-selection measurements on both active and spectator qubits.
+        you would use both passes together to add pre-check measurements on both active and spectator qubits.
 
     Example:
         .. code-block:: python
@@ -84,7 +84,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
             # Define coupling map (qubits 3 and 4 are spectators adjacent to active qubits)
             coupling_map = CouplingMap([(0, 1), (1, 2), (2, 3), (1, 4)])
 
-            # Add pre-selection measurements on both active and spectator qubits
+            # Add pre-check measurements on both active and spectator qubits
             pm = PassManager([
                 AddPreCircuitBitFlipChecks(),
                 AddSpectatorPreCircuitBitFlipChecks(coupling_map),
@@ -92,8 +92,8 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
             qc_with_pre = pm.run(qc)
 
             # The resulting circuit will have:
-            # 1. Pre-selection measurements on active qubits 0, 1, 2 (to c_pre register)
-            # 2. Pre-selection measurements on spectator qubits 3, 4 (to spectator_pre register)
+            # 1. Pre-check measurements on active qubits 0, 1, 2 (to c_pre register)
+            # 2. Pre-check measurements on spectator qubits 3, 4 (to spectator_pre register)
             # 3. A barrier
             # 4. The original circuit operations
     """
@@ -107,13 +107,13 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
         spectator_creg_name: str = DEFAULT_SPECTATOR_PRE_CREG_NAME,
         ignore_spectator_creg_names: list[str] | None = None,
         ignore_creg_suffixes: list[str] | None = None,
-        pre_selection_suffix: str = "_pre",
+        pre_check_suffix: str = "_pre",
     ):
         """Initialize the pass.
 
         Args:
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
-            x_pulse_type: The type of X-pulse to apply for the pre-selection measurements.
+            x_pulse_type: The type of X-pulse to apply for the pre-check measurements.
             include_unmeasured: Whether the qubits that are active but are not terminated by a measurement should
                 also be treated as spectators. If ``True``, a terminal measurement is added on each of them.
             spectator_creg_name: The name of the classical register added for the measurements on the spectator qubits.
@@ -122,16 +122,16 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
                 spectator selection. Defaults to ``["spec"]`` (the default name used by :class:`.AddSpectatorPostCircuitBitFlipChecks`).
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored when determining
                 terminated qubits. Qubits with measurements into registers with these suffixes are not considered
-                terminated, allowing pre-selection measurements to be added. By default, registers ending with "_ps"
-                are ignored to allow pre-selection after post-selection.
-            pre_selection_suffix: The suffix used by AddPreCircuitBitFlipChecks for pre-selection registers. This is used
-                to identify which qubits have pre-selection measurements and which barrier to extend. Defaults to "_pre".
+                terminated, allowing pre-check measurements to be added. By default, registers ending with "_ps"
+                are ignored to allow pre-check after post-check.
+            pre_check_suffix: The suffix used by AddPreCircuitBitFlipChecks for pre-check registers. This is used
+                to identify which qubits have pre-check measurements and which barrier to extend. Defaults to "_pre".
         """
         super().__init__()
         self.x_pulse_type = XPulseType(x_pulse_type)
         self.spectator_creg_name = spectator_creg_name
         self.include_unmeasured = include_unmeasured
-        self.pre_selection_suffix = pre_selection_suffix
+        self.pre_check_suffix = pre_check_suffix
         self.ignore_spectator_creg_names = (
             ignore_spectator_creg_names if ignore_spectator_creg_names is not None else ["spec"]
         )
@@ -145,7 +145,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
         )
         self.coupling_map.make_symmetric()
 
-        # Pre-selection sequence: xslow (or rx pulses) + X gate
+        # Pre-check sequence: xslow (or rx pulses) + X gate
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate(), XGate()]
         else:
@@ -182,7 +182,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
         spectator_qubits_ls = list(spectator_qubits)
         spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
 
-        # Create a new DAG to build the circuit with pre-selection at the front
+        # Create a new DAG to build the circuit with pre-check at the front
         new_dag = DAGCircuit()
         for qreg in dag.qregs.values():
             new_dag.add_qreg(qreg)
@@ -200,27 +200,27 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
         else:
             new_dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
 
-        # Find all qubits that have pre-selection measurements (from AddPreCircuitBitFlipChecks)
-        # These are qubits that have measurements into registers ending with the pre_selection_suffix
+        # Find all qubits that have pre-check measurements (from AddPreCircuitBitFlipChecks)
+        # These are qubits that have measurements into registers ending with the pre_check_suffix
         data_qubits_with_preselection = set()
         for node in dag.topological_op_nodes():
             if node.op.name == "measure" and len(node.cargs) == 1:
                 clbit = node.cargs[0]
                 for creg in dag.cregs.values():
-                    if clbit in creg and creg.name.endswith(self.pre_selection_suffix):
+                    if clbit in creg and creg.name.endswith(self.pre_check_suffix):
                         data_qubits_with_preselection.add(node.qargs[0])
                         break
 
         if not data_qubits_with_preselection:
             return dag
 
-        # Combine data qubits with pre-selection and spectator qubits for unified barrier
+        # Combine data qubits with pre-check and spectator qubits for unified barrier
         all_preselection_qubits = sorted(
             data_qubits_with_preselection.union(spectator_qubits_ls),
             key=lambda qubit: qubit_map[qubit],
         )
 
-        # The FIRST barrier acting exactly on the data pre-selection qubits is the one we extend.
+        # The FIRST barrier acting exactly on the data pre-check qubits is the one we extend.
         all_topo_nodes = list(dag.topological_op_nodes())
         first_barrier_idx = next(
             (
@@ -235,7 +235,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
             # the data pre-sel qubits, so this is unreachable in practice.
             return dag
 
-        # Apply the pre-selection pulse sequence (xslow + X, or 20 rx + X) on each
+        # Apply the pre-check pulse sequence (xslow + X, or 20 rx + X) on each
         # spectator qubit *before* anything else. Together with the extended pre-sel
         # barrier and the trailing ``measure(spec_pre)`` this gives the spec wire
         # the same ``pulses -> barrier -> measure`` structure as the data wires.
@@ -243,8 +243,8 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
             for gate in self.pulse_sequence:
                 new_dag.apply_operation_back(gate, [qubit])
 
-        # Spectator-only ops appearing *before* the pre-selection barrier in topological
-        # order are logically post-selection ops on the spectator wires (e.g. the
+        # Spectator-only ops appearing *before* the pre-check barrier in topological
+        # order are logically post-check ops on the spectator wires (e.g. the
         # post-sel parity check from a previously-run ``AddSpectatorPostCircuitBitFlipChecks``). Defer
         # them so they emerge *after* the extended barrier and the pre-sel measurement
         # on the spec wire. With the current passes this list is normally empty —
@@ -273,7 +273,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
                 new_dag.apply_operation_back(
                     Barrier(len(all_preselection_qubits)), all_preselection_qubits
                 )
-                # Spectator pre-selection measurement (no reset: the post-sel parity
+                # Spectator pre-check measurement (no reset: the post-sel parity
                 # check only cares that the two readings flip relative to each other).
                 for qubit, clbit in zip(spectator_qubits_ls, new_reg):
                     new_dag.apply_operation_back(Measure(), [qubit], [clbit])
@@ -298,7 +298,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            # Skip xslow and rx gates - they are part of pre/post-selection protocol
+            # Skip xslow and rx gates - they are part of pre/post-check protocol
             if ("xslow" in node.op.name) or ("rx" in node.op.name):
                 continue
             elif node.is_standard_gate() or node.op.name == "delay":
@@ -327,7 +327,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
                         active_qubits.add(node.qargs[0])
                         terminated_qubits.add(node.qargs[0])
                     # If it IS an ignored measurement, don't mark as terminated
-                    # (so pre-selection can be added)
+                    # (so pre-check can be added)
                 else:  # pragma: no cover
                     active_qubits.add(node.qargs[0])
                     terminated_qubits.add(node.qargs[0])

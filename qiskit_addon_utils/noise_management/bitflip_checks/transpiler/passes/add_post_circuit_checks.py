@@ -11,7 +11,7 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add post selection measurements."""
+"""Transpiler pass to add post check measurements."""
 
 from __future__ import annotations
 
@@ -25,13 +25,13 @@ from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ....constants import DEFAULT_POST_SELECTION_SUFFIX
+from ....constants import DEFAULT_POST_CHECK_SUFFIX
 from .utils import validate_op_is_supported
 from .xslow_gate import XSlowGate
 
 
 class XPulseType(str, Enum):
-    """The type of X-pulse to apply for the post-selection measurements."""
+    """The type of X-pulse to apply for the post-check measurements."""
 
     XSLOW = "xslow"
     """An ``xslow`` gate."""
@@ -41,13 +41,13 @@ class XPulseType(str, Enum):
 
 
 class AddPostCircuitBitFlipChecks(TransformationPass):
-    """Add a post selection measurement after every terminal measurement.
+    """Add a post check measurement after every terminal measurement.
 
-    A post selection measurement is a measurement that follows a regular measurement on a given qubit. It
+    A post check measurement is a measurement that follows a regular measurement on a given qubit. It
     consists of a narrowband X-pulse followed by a regular measurement operation. In the absence of noise,
     it is expected to return ``(b + 1) % 2``, where ``b`` is the outcome of the original measurement.
 
-    This pass adds post selection measurements after every terminal measurement, i.e., after every measurement
+    This pass adds post check measurements after every terminal measurement, i.e., after every measurement
     that is not followed by another operation on the same wire. The added measurements are placed after a
     barrier, and write to new classical registers that are copies of the DAG's registers, with modified
     names.
@@ -62,20 +62,20 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
         self,
         x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
-        post_selection_suffix: str = DEFAULT_POST_SELECTION_SUFFIX,
+        post_check_suffix: str = DEFAULT_POST_CHECK_SUFFIX,
         ignore_creg_suffixes: list[str] | None = None,
     ):
         """Initialize the pass.
 
         Args:
-            x_pulse_type: The type of X-pulse to apply for the post-selection measurements.
-            post_selection_suffix: A fixed suffix to append to the names of the classical registers when copying them.
+            x_pulse_type: The type of X-pulse to apply for the post-check measurements.
+            post_check_suffix: A fixed suffix to append to the names of the classical registers when copying them.
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
-                By default, registers ending with "_pre" are ignored to avoid adding post-selection to pre-selection registers.
+                By default, registers ending with "_pre" are ignored to avoid adding post-check to pre-check registers.
         """
         super().__init__()
         self.x_pulse_type = XPulseType(x_pulse_type)
-        self.post_selection_suffix = post_selection_suffix
+        self.post_check_suffix = post_check_suffix
         self.ignore_creg_suffixes = (
             ignore_creg_suffixes if ignore_creg_suffixes is not None else ["_pre"]
         )
@@ -91,14 +91,14 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
 
         # Add the new registers and create a map between the original clbit and the new ones.
         # Skip three kinds of registers so that this pass can be safely run after one that has
-        # already produced part of the post-selection structure (notably ``AddSpectatorPostCircuitBitFlipChecks``,
+        # already produced part of the post-check structure (notably ``AddSpectatorPostCircuitBitFlipChecks``,
         # which now emits its own ``spec``/``spec_ps`` pair):
-        #   1. registers with ignored suffixes (pre-selection registers by default),
-        #   2. registers whose ``{name}{post_selection_suffix}`` counterpart already exists, and
-        #   3. registers that *are* the ``{name}{post_selection_suffix}`` counterpart of another
+        #   1. registers with ignored suffixes (pre-check registers by default),
+        #   2. registers whose ``{name}{post_check_suffix}`` counterpart already exists, and
+        #   3. registers that *are* the ``{name}{post_check_suffix}`` counterpart of another
         #      register in the DAG — running this pass on those would chain another ``_ps`` suffix.
         existing_creg_names = set(dag.cregs)
-        suffix = self.post_selection_suffix
+        suffix = self.post_check_suffix
         clbits_map = {}
         for name, creg in dag.cregs.items():
             if any(name.endswith(s) for s in self.ignore_creg_suffixes):
@@ -111,7 +111,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
             clbits_map.update({clbit: clbit_ps for clbit, clbit_ps in zip(creg, new_creg)})
 
         # Filter terminal measurements to only include those with clbits in clbits_map
-        # This excludes measurements into pre-selection registers
+        # This excludes measurements into pre-check registers
         terminal_measurements: dict[Qubit, Clbit] = {
             qubit: clbit
             for qubit, clbit in all_terminal_measurements.items()
@@ -120,7 +120,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
         if not terminal_measurements:
             return dag
 
-        # Add a barrier before post-selection to ensure all terminal measurements finish
+        # Add a barrier before post-check to ensure all terminal measurements finish
         qubits = tuple(terminal_measurements)
         dag.apply_operation_back(Barrier(len(qubits)), qubits)
 
@@ -153,7 +153,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
         for node in dag.topological_op_nodes():
             validate_op_is_supported(node)
 
-            # Skip reset operations - they are part of pre-selection protocol
+            # Skip reset operations - they are part of pre-check protocol
             if node.op.name == "reset":
                 continue
             elif node.is_standard_gate() or (name := node.op.name) in ("xslow", "delay"):
