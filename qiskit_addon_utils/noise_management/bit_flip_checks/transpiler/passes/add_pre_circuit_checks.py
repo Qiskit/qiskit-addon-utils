@@ -143,7 +143,8 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
 
         # Add the new registers and create a map between the original clbit and the new ones.
         # Skip registers so the pass is safe to run after one that already produced part of the
-        # pre-check structure (e.g. ``AddSpectatorPreCircuitBitFlipChecks``) and is idempotent:
+        # pre-check structure (e.g. ``AddSpectatorPreCircuitBitFlipChecks``), and so that
+        # re-running this pass adds nothing:
         #   1. registers with ignored suffixes or names (post-check and spectator registers),
         #   2. registers whose ``{name}{pre_check_suffix}`` counterpart already exists, and
         #   3. registers that *are* a ``{pre_check_suffix}`` counterpart (running on those would

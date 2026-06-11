@@ -609,7 +609,7 @@ def test_legacy_order_inside_manual_box_with_measurements_outside():
     assert mask.all()
 
 
-def test_post_sel_pass_is_idempotent():
+def test_post_sel_pass_rerun_is_noop():
     """Re-running ``AddPostCircuitBitFlipChecks`` on its own output is a no-op.
 
     Falls out of the same defensive guard that makes legacy ordering safe:
@@ -625,7 +625,7 @@ def test_post_sel_pass_is_idempotent():
     assert pulse_count_once == pulse_count_twice
 
 
-def test_pre_sel_pass_is_idempotent():
+def test_pre_sel_pass_rerun_is_noop():
     """Re-running ``AddPreCircuitBitFlipChecks`` on its own output is a no-op.
 
     The register guards skip every existing ``_pre`` register (and any base whose ``_pre``
