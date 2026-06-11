@@ -370,16 +370,51 @@ def test_spec_pre_no_spectators_returns_unchanged():
     assert pm.run(qc) == qc
 
 
-def test_spec_pre_without_data_preselection_returns_unchanged():
-    """Spectator-pre pass needs an AddPreCircuitBitFlipChecks barrier to splice into.
+def test_spec_pre_standalone_builds_own_structure():
+    """Spectator-pre pass on its own prepends a self-contained pre-check.
 
-    With the spectator pass running standalone (no ``c_pre`` registers in the
-    circuit) there's no pre-check barrier to extend, so the pass leaves
-    the DAG untouched.
+    With no ``AddPreCircuitBitFlipChecks`` structure to splice into, the pass still adds the
+    ``spec_pre`` register and a ``pulses -> barrier -> measure`` pre-check on each spectator
+    wire, mirroring the standalone behaviour of ``AddSpectatorPostCircuitBitFlipChecks``.
     """
     pm = PassManager([AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx")])
-    qc = _make_circuit()
-    assert pm.run(qc) == qc
+    result = pm.run(_make_circuit())
+
+    cregs = _creg_map(result)
+    assert set(cregs) == {"c", "spec_pre"}
+    assert cregs["spec_pre"] == len(SPECTATOR_QUBITS)
+
+    for q in ACTIVE_QUBITS:
+        assert _meas_registers(result, q) == ["c"]
+    for q in SPECTATOR_QUBITS:
+        assert _meas_registers(result, q) == ["spec_pre"]
+        ops = _ops_for_qubit(result, q)
+        # Standalone spec-pre wire: pulses (rx... + x) -> barrier -> measure.
+        assert ops[-1] == "measure"
+        assert ops[-2] == "barrier"
+        assert ops[-3] == "x"
+        assert all(op == "rx" for op in ops[:-3])
+
+
+def test_spec_pre_before_data_pre_no_duplicate_registers():
+    """Running spectator-pre before the data pre pass matches the normal order.
+
+    The data pre pass skips the standalone ``spec_pre`` register rather than chaining a
+    ``spec_pre_pre``, so inverse order is register-identical to ``pre`` then ``spec-pre``.
+    """
+    normal = PassManager(
+        [
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
+        ]
+    ).run(_make_circuit())
+    inverse = PassManager(
+        [
+            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
+            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
+        ]
+    ).run(_make_circuit())
+    assert set(_creg_map(normal)) == set(_creg_map(inverse)) == {"c", "c_pre", "spec_pre"}
 
 
 def test_spec_pre_existing_register_size_mismatch_raises():

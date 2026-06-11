@@ -141,15 +141,24 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         if not qubits_to_preselect:
             return dag
 
-        # Add the new registers and create a map between the original clbit and the new ones
-        # Skip registers with ignored suffixes or names (e.g., post-check or spectator registers)
+        # Add the new registers and create a map between the original clbit and the new ones.
+        # Skip registers so the pass is safe to run after one that already produced part of the
+        # pre-check structure (e.g. ``AddSpectatorPreCircuitBitFlipChecks``) and is idempotent:
+        #   1. registers with ignored suffixes or names (post-check and spectator registers),
+        #   2. registers whose ``{name}{pre_check_suffix}`` counterpart already exists, and
+        #   3. registers that *are* a ``{pre_check_suffix}`` counterpart (running on those would
+        #      chain another ``_pre`` suffix). Unlike the post-check pass this is unconditional,
+        #      since a pre-check produces a lone ``_pre`` register with no base register.
+        existing_creg_names = set(dag.cregs)
         clbits_map = {}
         for name, creg in dag.cregs.items():
             if any(name.endswith(suffix) for suffix in self.ignore_creg_suffixes):
-                # Skip registers with ignored suffixes
                 continue
             if name in self.ignore_creg_names:
-                # Skip registers with ignored names
+                continue
+            if name + self.pre_check_suffix in existing_creg_names:
+                continue
+            if name.endswith(self.pre_check_suffix):
                 continue
             # Create a pre-check register with the same size as the original
             dag.add_creg(new_creg := ClassicalRegister(creg.size, name + self.pre_check_suffix))

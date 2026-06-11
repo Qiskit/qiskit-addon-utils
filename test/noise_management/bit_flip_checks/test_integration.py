@@ -623,3 +623,17 @@ def test_post_sel_pass_is_idempotent():
     pulse_count_once = sum(1 for instr in once.data if instr.operation.name in ("rx", "xslow"))
     pulse_count_twice = sum(1 for instr in twice.data if instr.operation.name in ("rx", "xslow"))
     assert pulse_count_once == pulse_count_twice
+
+
+def test_pre_sel_pass_is_idempotent():
+    """Re-running ``AddPreCircuitBitFlipChecks`` on its own output is a no-op.
+
+    The register guards skip every existing ``_pre`` register (and any base whose ``_pre``
+    counterpart already exists), so the second pass adds nothing.
+    """
+    once = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")]).run(_data_circuit())
+    twice = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")]).run(once)
+    assert {cr.name for cr in once.cregs} == {cr.name for cr in twice.cregs}
+    pulse_count_once = sum(1 for instr in once.data if instr.operation.name in ("rx", "xslow"))
+    pulse_count_twice = sum(1 for instr in twice.data if instr.operation.name in ("rx", "xslow"))
+    assert pulse_count_once == pulse_count_twice

@@ -61,8 +61,11 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
     ``spectator_creg_name`` (default: ``"spectator_pre"``).
 
     .. note::
-        This pass is designed to work in conjunction with :class:`.AddPreCircuitBitFlipChecks`. Typically,
-        you would use both passes together to add pre-check measurements on both active and spectator qubits.
+        When the circuit already contains a data-qubit pre-check structure produced by
+        :class:`.AddPreCircuitBitFlipChecks`, this pass splices the spectator measurements into
+        it (sharing the front barrier). Otherwise it prepends a self-contained pre-check on the
+        spectator wires, so it adds the ``spectator_pre`` register whether or not
+        :class:`.AddPreCircuitBitFlipChecks` ran first.
 
     Example:
         .. code-block:: python
@@ -212,7 +215,19 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
                         break
 
         if not data_qubits_with_preselection:
-            return dag
+            # No data-qubit pre-check structure to splice into: prepend a self-contained
+            # pre-check on the spectator wires (``pulses -> barrier -> measure``), mirroring
+            # the standalone path of ``AddSpectatorPostCircuitBitFlipChecks`` but at the front
+            # of the circuit. ``new_dag`` already holds the qregs, cregs, and ``spec_pre`` creg.
+            for qubit in spectator_qubits_ls:
+                for gate in self.pulse_sequence:
+                    new_dag.apply_operation_back(gate, [qubit])
+            new_dag.apply_operation_back(Barrier(num_spectators), spectator_qubits_ls)
+            for qubit, clbit in zip(spectator_qubits_ls, new_reg):
+                new_dag.apply_operation_back(Measure(), [qubit], [clbit])
+            for node in dag.topological_op_nodes():
+                new_dag.apply_operation_back(node.op, node.qargs, node.cargs)
+            return new_dag
 
         # Combine data qubits with pre-check and spectator qubits for unified barrier
         all_preselection_qubits = sorted(

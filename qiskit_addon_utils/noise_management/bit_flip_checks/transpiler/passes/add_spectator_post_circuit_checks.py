@@ -70,7 +70,9 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
     structure produced by :class:`.AddPostCircuitBitFlipChecks`, this pass
     integrates the spectator parity check into that structure: the spectator
     measurements share the existing pre-/post-pulse barriers and the spectator
-    pulses run alongside the data-qubit pulses.
+    pulses run alongside the data-qubit pulses. Otherwise it adds a self-contained
+    parity-check structure, so it adds the ``spec``/``spec_ps`` registers whether or not
+    :class:`.AddPostCircuitBitFlipChecks` ran first.
 
     .. note::
         When this pass encounters a control flow operation, it iterates
