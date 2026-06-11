@@ -76,9 +76,7 @@ def test_post_sel_default():
 
 def test_post_sel_custom_suffix():
     """Post-check with custom suffix: adds ``c_check``, never ``c_ps``."""
-    pm = PassManager(
-        [AddPostCircuitBitFlipChecks(x_pulse_type="rx", post_check_suffix="_check")]
-    )
+    pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx", post_check_suffix="_check")])
     result = pm.run(_make_circuit())
 
     assert _creg_map(result) == {"c": 3, "c_check": 3}
