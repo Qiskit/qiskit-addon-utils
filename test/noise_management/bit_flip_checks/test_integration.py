@@ -35,12 +35,12 @@ import numpy as np
 import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit
 from qiskit.transpiler import PassManager
-from qiskit_addon_utils.noise_management.bitflip_checks import (
+from qiskit_addon_utils.noise_management.bit_flip_checks import (
     PostSelectionStrategy,
     PostSelectionSummary,
     PostSelector,
 )
-from qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes import (
+from qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes import (
     AddPostCircuitBitFlipChecks,
     AddPreCircuitBitFlipChecks,
     AddSpectatorPostCircuitBitFlipChecks,

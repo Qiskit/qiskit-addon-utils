@@ -1,7 +1,7 @@
 ---
 features:
   - |
-    Added a new :mod:`qiskit_addon_utils.noise_management.bitflip_checks` sub-package that
+    Added a new :mod:`qiskit_addon_utils.noise_management.bit_flip_checks` sub-package that
     implements *post-selection* (discarding shots after measurement) via bit-flip checks
     inserted into a circuit. A bit-flip check can be placed at the *end* of the circuit (a
     post-circuit check, which flags unwanted bit flips during execution) or at the
@@ -10,28 +10,28 @@ features:
     independently or combined.
 
     New transpiler passes in
-    :mod:`qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes`:
+    :mod:`qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes`:
 
-      * :class:`~qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes.AddPostCircuitBitFlipChecks`
+      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddPostCircuitBitFlipChecks`
         adds a narrowband X-pulse (an ``xslow`` gate, or an ``rx``-based pulse) sandwiched
         between two measurements at the *end* of the circuit for every active qubit with a
         terminal measurement. A parity violation between the two readings indicates an
         unwanted bit flip and the shot is discarded.
-      * :class:`~qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes.AddPreCircuitBitFlipChecks`
+      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddPreCircuitBitFlipChecks`
         adds the analogous narrowband X-pulse, :class:`~qiskit.circuit.library.XGate`, and
         measurement at the *beginning* of the circuit for every active qubit with a terminal
         measurement. Results that read ``1`` indicate a bad initialization and are discarded.
-      * :class:`~qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes.AddSpectatorPostCircuitBitFlipChecks`
+      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddSpectatorPostCircuitBitFlipChecks`
         extends the post-circuit bit-flip check to spectator qubits (and, by default, to
         active but unterminated qubits).
-      * :class:`~qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes.AddSpectatorPreCircuitBitFlipChecks`
+      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddSpectatorPreCircuitBitFlipChecks`
         extends the pre-circuit bit-flip check to spectator qubits, writing to a register
         named ``spec_pre``.
   - |
-    Added :class:`~qiskit_addon_utils.noise_management.bitflip_checks.PostSelector` and
-    :class:`~qiskit_addon_utils.noise_management.bitflip_checks.PostSelectionSummary` for
-    computing shot-selection masks from circuits processed by the ``bitflip_checks`` passes.
-    :meth:`~qiskit_addon_utils.noise_management.bitflip_checks.PostSelector.compute_mask`
+    Added :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.PostSelector` and
+    :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.PostSelectionSummary` for
+    computing shot-selection masks from circuits processed by the ``bit_flip_checks`` passes.
+    :meth:`~qiskit_addon_utils.noise_management.bit_flip_checks.PostSelector.compute_mask`
     accepts a ``mode`` keyword argument with values ``"post"`` (the default), ``"pre"``, or
     ``"both"``. ``"post"`` keeps only shots that passed the post-circuit checks, ``"pre"``
     keeps only shots that passed the pre-circuit checks, and ``"both"`` combines the two
@@ -39,20 +39,20 @@ features:
     not available on the circuit (for example, ``mode="pre"`` on a circuit with no
     pre-circuit check measurements).
   - |
-    :meth:`~qiskit_addon_utils.noise_management.bitflip_checks.PostSelector.from_circuit` and
-    :meth:`~qiskit_addon_utils.noise_management.bitflip_checks.PostSelectionSummary.from_circuit`
+    :meth:`~qiskit_addon_utils.noise_management.bit_flip_checks.PostSelector.from_circuit` and
+    :meth:`~qiskit_addon_utils.noise_management.bit_flip_checks.PostSelectionSummary.from_circuit`
     accept ``pre_check_suffix`` and ``spectator_cregs`` keyword arguments.
     ``spectator_cregs`` labels which primary registers hold spectator measurements
     (defaulting to ``["spec"]`` to match
-    :class:`~qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes.AddSpectatorPostCircuitBitFlipChecks`);
+    :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddSpectatorPostCircuitBitFlipChecks`);
     downstream code that wants only data-measurement registers can compute
     ``summary.primary_cregs - summary.spectator_cregs``.
-    :class:`~qiskit_addon_utils.noise_management.bitflip_checks.PostSelectionSummary` exposes
+    :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.PostSelectionSummary` exposes
     the ``measure_map_ps``, ``measure_map_pre``, ``pre_check_suffix``, and
     ``spectator_cregs`` properties for the separate post- and pre-circuit check measurement
     maps and related metadata.
   - |
-    :class:`~qiskit_addon_utils.noise_management.bitflip_checks.PostSelectionStrategy`
+    :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.PostSelectionStrategy`
     selects between the ``"node"`` and ``"edge"`` parity-check strategies, which apply
     uniformly to pre-circuit checks, post-circuit checks, and combined modes.
   - |

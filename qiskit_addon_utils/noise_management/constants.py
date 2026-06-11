@@ -23,7 +23,7 @@ DEFAULT_SPECTATOR_CREG_NAME = "spec"
 The default name of the classical register used for measuring spectator qubits.
 """
 
-# Constants for the ``bitflip_checks`` sub-package. Both pre- and post-circuit bit-flip
+# Constants for the ``bit_flip_checks`` sub-package. Both pre- and post-circuit bit-flip
 # checks feed a single post-selection routine; the "pre"/"post" labels below distinguish
 # *where in the circuit* the bit-flip check is inserted (start vs. end), not two different
 # selection techniques.

@@ -14,7 +14,7 @@
 import numpy as np
 import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
-from qiskit_addon_utils.noise_management.bitflip_checks import PostSelectionSummary, PostSelector
+from qiskit_addon_utils.noise_management.bit_flip_checks import PostSelectionSummary, PostSelector
 
 
 def test_constructors():

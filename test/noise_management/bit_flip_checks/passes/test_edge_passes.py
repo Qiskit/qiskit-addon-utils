@@ -34,7 +34,7 @@ import pytest
 from qiskit.circuit import QuantumCircuit
 from qiskit.transpiler import PassManager
 from qiskit.transpiler.exceptions import TranspilerError
-from qiskit_addon_utils.noise_management.bitflip_checks.transpiler.passes import (
+from qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes import (
     AddPostCircuitBitFlipChecks,
     AddPreCircuitBitFlipChecks,
     AddSpectatorPostCircuitBitFlipChecks,
