@@ -305,7 +305,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
 
         circuit = QuantumCircuit(QuantumRegister(1), ClassicalRegister(1, "my_name"))
         circuit.x(0)
-        with pytest.raises(DAGCircuitError, match="duplicate register"):
+        with pytest.raises(DAGCircuitError, match="(duplicate register|already exists)"):
             pm.run(circuit)
 
         circuit = QuantumCircuit(1)
