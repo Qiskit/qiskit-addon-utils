@@ -60,13 +60,13 @@ nbtest = [
     "nbmake>=1.5.0",
 ]
 style = [
-    "ruff==0.15.8",
+    "ruff==0.15.17",
     "nbqa>=1.8.5",
 ]
 lint = [
     {include-group = "style"},
     "pylint==4.0.5",
-    "mypy==1.20.0",
+    "mypy==2.1.0",
     "reno>=4.1",
 ]
 notebook-dependencies = [
@@ -79,7 +79,7 @@ notebook-dependencies = [
 ]
 docs = [
     {include-group = "doctest"},
-    "qiskit-sphinx-theme~=2.0.0",
+    "qiskit-sphinx-theme~=2.1.0",
     "jupyter-sphinx",
     "sphinx-design",
     "sphinx-autodoc-typehints",
