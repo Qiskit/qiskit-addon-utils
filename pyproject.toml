@@ -133,7 +133,7 @@ testpaths = ["./src/", "./test/"]
 
 [tool.ruff]
 line-length = 100
-src = ["src", "test"]
+src = ["src/qiskit_addon_utils", "test"]
 target-version = "py39"
 
 [tool.ruff.lint]
