@@ -129,11 +129,11 @@ enable = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["./qiskit_addon_utils/", "./test/"]
+testpaths = ["./src/", "./test/"]
 
 [tool.ruff]
 line-length = 100
-src = ["qiskit_addon_utils", "test"]
+src = ["src", "test"]
 target-version = "py39"
 
 [tool.ruff.lint]
