@@ -4,7 +4,7 @@
   [![Release](https://img.shields.io/pypi/v/qiskit-addon-utils.svg?label=Release)](https://github.com/Qiskit/qiskit-addon-utils/releases)
   ![Platform](https://img.shields.io/badge/%F0%9F%92%BB%20Platform-Linux%20%7C%20macOS%20%7C%20Windows-informational)
   [![Python](https://img.shields.io/pypi/pyversions/qiskit-addon-utils?label=Python&logo=python)](https://www.python.org/)
-  [![Qiskit](https://img.shields.io/badge/Qiskit%20-%20%3E%3D1.2%20-%20%236133BD?logo=Qiskit)](https://github.com/Qiskit/qiskit)
+  [![Qiskit](https://img.shields.io/badge/Qiskit%20-%20%3E%3D2.2%20-%20%236133BD?logo=Qiskit)](https://github.com/Qiskit/qiskit)
 <br />
   [![Docs (stable)](https://img.shields.io/badge/%F0%9F%93%84%20Docs-stable-blue.svg)](https://qiskit.github.io/qiskit-addon-utils/)
   [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13711854.svg)](https://zenodo.org/doi/10.5281/zenodo.13711854)
