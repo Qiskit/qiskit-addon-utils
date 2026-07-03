@@ -93,8 +93,8 @@ fail_under = 70
 show_missing = true
 
 [tool.hatch.build.targets.wheel]
-only-include = [
-    "qiskit_addon_utils",
+packages = [
+    "src/qiskit_addon_utils",
 ]
 
 [tool.hatch.metadata]
@@ -129,11 +129,11 @@ enable = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["./qiskit_addon_utils/", "./test/"]
+testpaths = ["./src/", "./test/"]
 
 [tool.ruff]
 line-length = 100
-src = ["qiskit_addon_utils", "test"]
+src = ["src/qiskit_addon_utils", "test"]
 target-version = "py39"
 
 [tool.ruff.lint]
