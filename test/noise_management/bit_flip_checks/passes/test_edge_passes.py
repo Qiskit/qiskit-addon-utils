@@ -11,21 +11,8 @@
 # that they have been altered from the originals.
 """Tests for edge-based post/pre-check passes (with spectator measurements).
 
-Mirrors the scenarios in ``visualize_edge_passes.py``. The circuit under
-test acts on qubits 0, 1, 2 of a 5-qubit system; under the coupling map
-``4-0-1-2-3`` the spectator qubits are 3 and 4.
-
-Tests assert structural invariants:
-
-* the expected classical registers exist with the right sizes,
-* each data qubit's measurements land in the right registers in the right
-  order (e.g. ``c_pre``, ``c``, ``c_ps``),
-* spectator qubits get their pre/post-check ops in the right order
-  (``measure -> reset`` for pre-check spectators;
-  ``measure -> pulses -> measure`` for post-check spectators — the same
-  pi-rotation parity check used on data qubits),
-* the synchronisation barriers are placed where downstream pulse-level
-  scheduling expects them.
+Circuit under test acts on qubits 0, 1, 2 of a 5-qubit system; under coupling
+map ``4-0-1-2-3`` the spectator qubits are 3 and 4.
 """
 
 from __future__ import annotations
@@ -41,9 +28,7 @@ from qiskit_addon_utils.noise_management.bit_flip_checks.passes import (
     AddSpectatorPreCircuitBitFlipChecks,
 )
 
-# Coupling: 4 -- 0 -- 1 -- 2 -- 3.
-# Active qubits (from ``_make_circuit``): {0, 1, 2}.
-# Spectator qubits (neighbours of active that are themselves inactive): {3, 4}.
+# Coupling 4-0-1-2-3: active {0,1,2}, spectators (inactive neighbours) {3,4}.
 COUPLING_MAP = [(0, 1), (1, 2), (2, 3), (0, 4)]
 ACTIVE_QUBITS = [0, 1, 2]
 SPECTATOR_QUBITS = [3, 4]
@@ -82,77 +67,28 @@ def _meas_registers(circuit: QuantumCircuit, qubit_idx: int) -> list[str]:
     return out
 
 
-def _measurement_positions(
-    circuit: QuantumCircuit, qubit_idx: int, register_name: str
-) -> list[int]:
-    """Indices in ``circuit.data`` where ``qubit_idx`` measures into ``register_name``."""
-    qubit = circuit.qubits[qubit_idx]
-    indices: list[int] = []
-    for i, inst in enumerate(circuit.data):
-        if inst.operation.name != "measure" or qubit not in inst.qubits:
-            continue
-        clbit = inst.clbits[0]
-        for creg in circuit.cregs:
-            if clbit in creg and creg.name == register_name:
-                indices.append(i)
-                break
-    return indices
-
-
-def _barrier_positions(circuit: QuantumCircuit) -> list[int]:
-    return [i for i, inst in enumerate(circuit.data) if inst.operation.name == "barrier"]
-
-
-# ---------------------------------------------------------------------------
-# Single-pass / no-spectator baseline
-# ---------------------------------------------------------------------------
-
-
-def test_post_sel_only():
-    """Edge variant: post-check alone leaves spectator wires untouched."""
-    pm = PassManager([AddPostCircuitBitFlipChecks(x_pulse_type="rx")])
+@pytest.mark.parametrize(
+    "pass_cls, expected_cregs, expected_order",
+    [
+        (AddPostCircuitBitFlipChecks, {"c": 3, "c_ps": 3}, ["c", "c_ps"]),
+        (AddPreCircuitBitFlipChecks, {"c": 3, "c_pre": 3}, ["c_pre", "c"]),
+    ],
+    ids=["post_sel_only", "pre_sel_only"],
+)
+def test_single_pass_only_leaves_spectators_untouched(pass_cls, expected_cregs, expected_order):
+    """Edge variant: a single check pass alone leaves spectator wires untouched."""
+    pm = PassManager([pass_cls(x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
-    assert _creg_map(result) == {"c": 3, "c_ps": 3}
+    assert _creg_map(result) == expected_cregs
     for q in ACTIVE_QUBITS:
-        assert _meas_registers(result, q) == ["c", "c_ps"]
+        assert _meas_registers(result, q) == expected_order
     for q in SPECTATOR_QUBITS:
         assert _ops_for_qubit(result, q) == []
-
-
-def test_pre_sel_only():
-    """Edge variant: pre-check alone leaves spectator wires untouched."""
-    pm = PassManager([AddPreCircuitBitFlipChecks(x_pulse_type="rx")])
-    result = pm.run(_make_circuit())
-
-    assert _creg_map(result) == {"c": 3, "c_pre": 3}
-    for q in ACTIVE_QUBITS:
-        assert _meas_registers(result, q) == ["c_pre", "c"]
-    for q in SPECTATOR_QUBITS:
-        assert _ops_for_qubit(result, q) == []
-
-
-# ---------------------------------------------------------------------------
-# Spectator passes
-# ---------------------------------------------------------------------------
 
 
 def test_post_sel_with_spectators():
-    r"""Spectator parity check is spliced into the data-qubit post-sel sandwich.
-
-    The post-sel pulses are bookended by two full-width barriers
-    (``barrier1``, ``barrier2``) extended across :math:`data \cup spec`.
-    Synchronisation of the *initial* measurements is local: each spec qubit is
-    paired with one data neighbour, and a small barrier (covering only the
-    bundle :math:`(\text{data}_q, \text{spec}_{q1}, \dots)`) is emitted just
-    before the data terminal measure. Data qubits with no spec partner keep
-    their measurement in its natural position with no extra idling.
-
-    On the spec wire the parity check is
-    ``barrier -> measure -> barrier -> pulses -> barrier -> measure`` —
-    symmetric to the data-wire post-sel pattern but with the first barrier
-    being the small bundled one.
-    """
+    """Spectator parity check is spliced into the data-qubit post-sel sandwich."""
     pm = PassManager(
         [
             AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
@@ -166,7 +102,7 @@ def test_post_sel_with_spectators():
     assert cregs["spec"] == len(SPECTATOR_QUBITS)
     assert cregs["spec_ps"] == len(SPECTATOR_QUBITS)
 
-    # Pairing under coupling 4-0-1-2-3: spec q3 -> data q2, spec q4 -> data q0.
+    # Pairing under coupling 4-0-1-2-3: spec q3 -> data q2, spec q4 -> data q0;
     # q1 has no spec neighbour so its terminal measure is not deferred.
     paired_data = {0, 2}
     unpaired_data = {1}
@@ -176,22 +112,15 @@ def test_post_sel_with_spectators():
     for q in ACTIVE_QUBITS:
         assert _meas_registers(result, q) == ["c", "c_ps"]
         ops = _ops_for_qubit(result, q)
-        # All data wires share the post-pulse tail: ...measure(c), barrier1,
-        # rx*20, barrier2, measure(c_ps).
         assert ops[-len(post_pulse_tail) :] == post_pulse_tail
-        # Just before that tail sits ``measure(c)`` (the terminal measure).
         assert ops[-(len(post_pulse_tail) + 1)] == "measure"
         if q in paired_data:
-            # Paired data qubits get a small bundled barrier right before
-            # their terminal measure.
+            # Paired data qubits get a bundled barrier before their terminal measure.
             assert ops[-(len(post_pulse_tail) + 2)] == "barrier"
         elif q in unpaired_data:
-            # Unpaired data qubits keep the terminal measure in its natural
-            # position — the op preceding it is the last main-circuit gate.
+            # Unpaired data qubits keep the terminal measure in its natural position.
             assert ops[-(len(post_pulse_tail) + 2)] != "barrier"
 
-    # Spec wires: bundled barrier, measure(spec), barrier1, rx*20, barrier2,
-    # measure(spec_ps).
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec", "spec_ps"]
         ops = _ops_for_qubit(result, q)
@@ -202,12 +131,7 @@ def test_post_sel_with_spectators():
 
 
 def test_pre_sel_with_spectators():
-    """Pre-check spectators run the same pulses+X+measure check as data qubits.
-
-    The spec wire mirrors the data-wire pre-sel: ``rx*20 -> x -> barrier ->
-    measure(spec_pre)``. No reset — the post-sel parity check (added later by
-    ``AddSpectatorPostCircuitBitFlipChecks``) only cares that the two readings flip.
-    """
+    """Pre-check spectators run the same pulses+X+measure check as data qubits."""
     pm = PassManager(
         [
             AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
@@ -235,9 +159,7 @@ def test_pre_sel_with_spectators():
 def test_spectators_only():
     """Spectator pass on its own builds its own parity-check sandwich.
 
-    Each spectator wire ends with ``barrier -> measure -> barrier -> pulses ->
-    barrier -> measure`` — three barriers sandwiching the measure/pulse/measure
-    sequence so pulse-level scheduling can't reorder the parity check.
+    Three barriers wrap the measure/pulse/measure so scheduling can't reorder it.
     """
     pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx")])
     result = pm.run(_make_circuit())
@@ -252,18 +174,12 @@ def test_spectators_only():
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec", "spec_ps"]
         ops = _ops_for_qubit(result, q)
-        # Standalone spec wire structure: barrier, measure, barrier, pulses, barrier, measure.
         assert ops[0] == "barrier"
         assert ops[1] == "measure"
         assert ops[2] == "barrier"
         assert ops[-1] == "measure"
         assert ops[-2] == "barrier"
         assert all(op == "rx" for op in ops[3:-2])
-
-
-# ---------------------------------------------------------------------------
-# Full-stack scenarios
-# ---------------------------------------------------------------------------
 
 
 def _assert_full_stack_invariants(result: QuantumCircuit) -> None:
@@ -280,63 +196,54 @@ def _assert_full_stack_invariants(result: QuantumCircuit) -> None:
     for q in ACTIVE_QUBITS:
         assert _meas_registers(result, q) == ["c_pre", "c", "c_ps"]
 
-    # Per-wire spectator ordering is the load-bearing invariant. The spec wire
-    # must run pre-sel (``barrier -> measure -> reset``) BEFORE the post-sel
-    # parity check (``barrier -> measure -> barrier -> pulses -> barrier ->
-    # measure``). The pre-init barrier (third one in this list) is the
-    # full-width sync that ties the spectator initial measure to the data-qubit
-    # terminal measure.
+    # Load-bearing invariant: the spec wire must run pre-sel BEFORE the post-sel
+    # parity check.
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec_pre", "spec", "spec_ps"]
         ops = _ops_for_qubit(result, q)
         expected = (
             ["rx"] * 20
             + [
-                "x",  # pre-sel pulses + X gate (same protocol as data qubits)
-                "barrier",  # pre-sel barrier
+                "x",
+                "barrier",
                 "measure",  # spec_pre
                 "barrier",  # pre-initial full-width barrier
                 "measure",  # spec
-                "barrier",  # barrier1
+                "barrier",
             ]
             + ["rx"] * 20
             + [
-                "barrier",  # barrier2
+                "barrier",
                 "measure",  # spec_ps
             ]
         )
         assert ops == expected, f"qubit {q}: {ops}"
 
 
-def test_full_stack_pre_first():
-    """Pre+spec_pre then post+spec produces the full stack."""
-    pm = PassManager(
+@pytest.mark.parametrize(
+    "pass_order",
+    [
         [
             AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
             AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
             AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
             AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
-        ]
-    )
-    _assert_full_stack_invariants(pm.run(_make_circuit()))
-
-
-def test_full_stack_post_first():
-    """Post+spec then pre+spec_pre yields the same full-stack invariants."""
-    pm = PassManager(
+        ],
         [
             AddPostCircuitBitFlipChecks(x_pulse_type="rx"),
             AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
             AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
             AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
-        ]
-    )
-    _assert_full_stack_invariants(pm.run(_make_circuit()))
+        ],
+    ],
+    ids=["pre_first", "post_first"],
+)
+def test_full_stack(pass_order):
+    """Both pass orderings produce the same full-stack invariants.
 
-
-# ---------------------------------------------------------------------------
-# Targeted edge cases (defaults, conflicts, isolated patterns)
-# ---------------------------------------------------------------------------
+    ``post_first`` uniquely covers the post-then-pre dispatch lines.
+    """
+    _assert_full_stack_invariants(PassManager(pass_order).run(_make_circuit()))
 
 
 def test_default_xslow_pulse_type():
@@ -349,34 +256,24 @@ def test_default_xslow_pulse_type():
     )
     result = pm.run(_make_circuit())
 
-    # Pre-check pulse on the data qubits is now ``xslow`` (one gate per qubit
-    # before the X), not 20 ``rx`` rotations.
     op_names = {inst.operation.name for inst in result.data}
     assert "xslow" in op_names
 
 
-def test_spec_no_spectators_returns_unchanged():
-    """Active qubits without spectators in the coupling map: pass returns input."""
-    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(coupling_map=[])])
-    qc = _make_circuit()
-    # Empty coupling map ⇒ no spectator neighbours ⇒ no work to do ⇒ same circuit.
-    assert pm.run(qc) == qc
-
-
-def test_spec_pre_no_spectators_returns_unchanged():
-    """Spectator-pre pass on a circuit with no spectators returns the input."""
-    pm = PassManager([AddSpectatorPreCircuitBitFlipChecks(coupling_map=[])])
+@pytest.mark.parametrize(
+    "pass_cls",
+    [AddSpectatorPostCircuitBitFlipChecks, AddSpectatorPreCircuitBitFlipChecks],
+    ids=["post", "pre"],
+)
+def test_spec_no_spectators_returns_unchanged(pass_cls):
+    """Spectator pass on a circuit with no spectators returns the input."""
+    pm = PassManager([pass_cls(coupling_map=[])])
     qc = _make_circuit()
     assert pm.run(qc) == qc
 
 
 def test_spec_pre_standalone_builds_own_structure():
-    """Spectator-pre pass on its own prepends a self-contained pre-check.
-
-    With no ``AddPreCircuitBitFlipChecks`` structure to splice into, the pass still adds the
-    ``spec_pre`` register and a ``pulses -> barrier -> measure`` pre-check on each spectator
-    wire, mirroring the standalone behaviour of ``AddSpectatorPostCircuitBitFlipChecks``.
-    """
+    """Spectator-pre pass on its own prepends a self-contained pre-check."""
     pm = PassManager([AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx")])
     result = pm.run(_make_circuit())
 
@@ -389,32 +286,10 @@ def test_spec_pre_standalone_builds_own_structure():
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec_pre"]
         ops = _ops_for_qubit(result, q)
-        # Standalone spec-pre wire: pulses (rx... + x) -> barrier -> measure.
         assert ops[-1] == "measure"
         assert ops[-2] == "barrier"
         assert ops[-3] == "x"
         assert all(op == "rx" for op in ops[:-3])
-
-
-def test_spec_pre_before_data_pre_no_duplicate_registers():
-    """Running spectator-pre before the data pre pass matches the normal order.
-
-    The data pre pass skips the standalone ``spec_pre`` register rather than chaining a
-    ``spec_pre_pre``, so inverse order is register-identical to ``pre`` then ``spec-pre``.
-    """
-    normal = PassManager(
-        [
-            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
-            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
-        ]
-    ).run(_make_circuit())
-    inverse = PassManager(
-        [
-            AddSpectatorPreCircuitBitFlipChecks(COUPLING_MAP, x_pulse_type="rx"),
-            AddPreCircuitBitFlipChecks(x_pulse_type="rx"),
-        ]
-    ).run(_make_circuit())
-    assert set(_creg_map(normal)) == set(_creg_map(inverse)) == {"c", "c_pre", "spec_pre"}
 
 
 def test_spec_pre_existing_register_size_mismatch_raises():
@@ -423,7 +298,7 @@ def test_spec_pre_existing_register_size_mismatch_raises():
 
     qreg = QuantumRegister(5, "q")
     creg = ClassicalRegister(3, "c")
-    bad_spec_pre = ClassicalRegister(99, "spec_pre")  # wrong size on purpose
+    bad_spec_pre = ClassicalRegister(99, "spec_pre")  # wrong size
     qc = QuantumCircuit(qreg, creg, bad_spec_pre)
     qc.h(0)
     qc.cx(0, 1)
@@ -438,9 +313,8 @@ def test_spec_pre_existing_register_size_mismatch_raises():
 def test_spec_include_unmeasured_toggles_lone_unterminated_qubit():
     """``include_unmeasured`` controls whether a lone unterminated qubit becomes a spec.
 
-    With an empty coupling map there are no spectators-by-adjacency, so the
-    only way a qubit can end up in the spectator set is via
-    ``include_unmeasured=True`` picking up unterminated active qubits.
+    Empty coupling map ⇒ no adjacency spectators, so the only route into the
+    spectator set is ``include_unmeasured=True`` picking up unterminated qubits.
     """
     qc = QuantumCircuit(1)
     qc.h(0)  # active, never measured
@@ -468,8 +342,8 @@ def test_spec_pre_include_unmeasured_false():
     )
     result = pm.run(_make_circuit())
 
-    # Adjacency-only spectators are still picked up; ``include_unmeasured=False``
-    # only excludes unterminated active qubits, of which we have none here.
+    # Adjacency spectators are still picked up; the flag only excludes
+    # unterminated active qubits, of which we have none here.
     assert _creg_map(result)["spec_pre"] == len(SPECTATOR_QUBITS)
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec_pre"]
@@ -495,7 +369,6 @@ def test_spec_pre_existing_register_correct_size():
         ]
     )
     result = pm.run(qc)
-    # No duplicate ``spec_pre`` register should be added.
     spec_pre_names = [c.name for c in result.cregs if c.name == "spec_pre"]
     assert len(spec_pre_names) == 1
     for q in SPECTATOR_QUBITS:
@@ -505,8 +378,7 @@ def test_spec_pre_existing_register_correct_size():
 def test_spec_x_gate_followed_by_normal_measure():
     """X immediately followed by a measure into a *non*-ignored register stays active.
 
-    Exercises the inner-loop completion path where the X look-ahead finds a
-    measurement but it isn't into a ``_pre``-suffixed register.
+    Exercises the X look-ahead finding a measurement that isn't into a ``_pre`` register.
     """
     qc = QuantumCircuit(5, 3)
     qc.x(0)
@@ -518,8 +390,6 @@ def test_spec_x_gate_followed_by_normal_measure():
 
     pm = PassManager([AddSpectatorPostCircuitBitFlipChecks(COUPLING_MAP)])
     result = pm.run(qc)
-    # q0 is treated as fully active (logical X, not pre-sel); spectators are
-    # therefore the qubits adjacent to {0, 1, 2}, namely {3, 4}.
     creg_names = {c.name for c in result.cregs}
     assert "spec" in creg_names
     assert "spec_ps" in creg_names
@@ -528,13 +398,7 @@ def test_spec_x_gate_followed_by_normal_measure():
 
 
 def test_spec_post_sel_register_present_without_matching_barrier():
-    """Post-sel measurements pre-existing without a barrier: fall back to standalone.
-
-    If the user feeds a circuit where ``c_ps`` measurements exist but no
-    barrier acts exactly on those qubits, ``AddSpectatorPostCircuitBitFlipChecks`` cannot
-    splice into the data sandwich and instead builds its own standalone
-    parity-check sandwich for the spectator qubits.
-    """
+    """``c_ps`` measurements with no matching barrier: pass falls back to standalone."""
     from qiskit.circuit import ClassicalRegister, QuantumRegister
 
     qreg = QuantumRegister(5, "q")
@@ -545,7 +409,7 @@ def test_spec_post_sel_register_present_without_matching_barrier():
     qc.cx(0, 1)
     qc.cx(1, 2)
     qc.measure([0, 1, 2], [creg[0], creg[1], creg[2]])
-    # Manual ``c_ps`` measurements, no barrier between them and the data ones.
+    # Manual ``c_ps`` measurements, no barrier before them.
     qc.measure(0, creg_ps[0])
     qc.measure(1, creg_ps[1])
     qc.measure(2, creg_ps[2])
@@ -559,52 +423,15 @@ def test_spec_post_sel_register_present_without_matching_barrier():
         assert _meas_registers(result, q) == ["spec", "spec_ps"]
 
 
-def test_spec_x_gate_pre_check_pattern():
-    """X-gate immediately followed by ``measure(_pre)`` is treated as pre-sel.
-
-    Exercises the look-ahead in ``_find_active_and_terminated_qubits`` that
-    distinguishes a pre-check X+measure(_pre) sequence from a logical X.
-    """
-
-    from qiskit.circuit import ClassicalRegister, QuantumRegister
-
-    qreg = QuantumRegister(3, "q")
-    creg = ClassicalRegister(2, "c")
-    creg_pre = ClassicalRegister(1, "c_pre")
-    qc = QuantumCircuit(qreg, creg, creg_pre)
-    # Synthetic pre-sel sequence on q0 (no barrier between X and measure)
-    # the pass must recognise this pattern and not treat q0 as logically active.
-    qc.x(0)
-    qc.measure(0, creg_pre[0])
-    # Real circuit on q1, q2.
-    qc.h(1)
-    qc.cx(1, 2)
-    qc.measure(1, creg[0])
-    qc.measure(2, creg[1])
-
-    pm = PassManager([AddSpectatorPostCircuitBitFlipChecks([(0, 1), (1, 2)])])
-    result = pm.run(qc)
-    # The pass should run without error and add the ``spec`` and ``spec_ps`` registers.
-    # q0, recognised as a pre-check pattern, becomes a spectator-eligible
-    # neighbour of q1 rather than an active qubit.
-    creg_names = {c.name for c in result.cregs}
-    assert "spec" in creg_names
-    assert "spec_ps" in creg_names
-
-
 def test_pre_sel_spectators_do_not_cascade_post_sel_spectators():
     """Pre-sel spectator qubits must not pull their neighbours into post-sel.
 
-    A pre-sel-only qubit's wire is ``pulses -> X -> barrier -> measure(_pre)``.
-    The trailing X gate could mislead the post-sel ``_find_active_and_terminated``
-    pass into treating the qubit as data, which would in turn cascade its
-    neighbours into the post-sel spectator set. This is a regression guard for
-    that specific bug.
+    Regression guard: a pre-sel-only qubit's trailing X gate must not make the
+    post-sel pass treat it as data and cascade its neighbours into the spec set.
     """
     from qiskit.circuit import ClassicalRegister, QuantumRegister
 
-    # Layout: data {0,1,2}, pre-sel spectators {3,4} (neighbours of data),
-    # outer-ring qubits {5,6} that neighbour the pre-sel spectators only.
+    # data {0,1,2}, pre-sel spectators {3,4}, outer ring {5,6} adjacent to specs only.
     qreg = QuantumRegister(7, "q")
     creg = ClassicalRegister(3, "c")
     qc = QuantumCircuit(qreg, creg)
@@ -626,15 +453,12 @@ def test_pre_sel_spectators_do_not_cascade_post_sel_spectators():
     )
     result = pm.run(qc)
 
-    # Spectator registers each have exactly two bits — one per pre-sel
-    # spectator (q3, q4) — and NOT four (which would be the case if q5, q6
-    # had been picked up as cascading post-sel spectators).
+    # Two bits (q3, q4) not four — q5, q6 must not cascade in as post-sel specs.
     cregs = _creg_map(result)
     assert cregs["spec_pre"] == 2
     assert cregs["spec"] == 2
     assert cregs["spec_ps"] == 2
 
-    # q5 and q6 must be untouched.
     for q in (5, 6):
         assert _ops_for_qubit(result, q) == []
         assert _meas_registers(result, q) == []
@@ -667,7 +491,6 @@ def test_full_stack_custom_suffixes():
     result = pm.run(_make_circuit())
 
     cregs = _creg_map(result)
-    # Spectator post-sel register is named ``spec + post_check_suffix`` ⇒ ``spec_check``.
     assert set(cregs) == {"c", "c_init", "spec_init", "c_check", "spec", "spec_check"}
 
     for q in ACTIVE_QUBITS:

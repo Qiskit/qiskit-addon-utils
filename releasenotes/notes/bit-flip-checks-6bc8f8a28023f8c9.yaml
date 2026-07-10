@@ -10,21 +10,21 @@ features:
     independently or combined.
 
     New transpiler passes in
-    :mod:`qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes`:
+    :mod:`qiskit_addon_utils.noise_management.bit_flip_checks.passes`:
 
-      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddPostCircuitBitFlipChecks`
+      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.passes.AddPostCircuitBitFlipChecks`
         adds a narrowband X-pulse (an ``xslow`` gate, or an ``rx``-based pulse) sandwiched
         between two measurements at the *end* of the circuit for every active qubit with a
         terminal measurement. A parity violation between the two readings indicates an
         unwanted bit flip and the shot is discarded.
-      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddPreCircuitBitFlipChecks`
+      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.passes.AddPreCircuitBitFlipChecks`
         adds the analogous narrowband X-pulse, :class:`~qiskit.circuit.library.XGate`, and
         measurement at the *beginning* of the circuit for every active qubit with a terminal
         measurement. Results that read ``1`` indicate a bad initialization and are discarded.
-      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddSpectatorPostCircuitBitFlipChecks`
+      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.passes.AddSpectatorPostCircuitBitFlipChecks`
         extends the post-circuit bit-flip check to spectator qubits (and, by default, to
         active but unterminated qubits).
-      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddSpectatorPreCircuitBitFlipChecks`
+      * :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.passes.AddSpectatorPreCircuitBitFlipChecks`
         extends the pre-circuit bit-flip check to spectator qubits, writing to a register
         named ``spec_pre``.
   - |
@@ -44,7 +44,7 @@ features:
     accept ``pre_check_suffix`` and ``spectator_cregs`` keyword arguments.
     ``spectator_cregs`` labels which primary registers hold spectator measurements
     (defaulting to ``["spec"]`` to match
-    :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes.AddSpectatorPostCircuitBitFlipChecks`);
+    :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.passes.AddSpectatorPostCircuitBitFlipChecks`);
     downstream code that wants only data-measurement registers can compute
     ``summary.primary_cregs - summary.spectator_cregs``.
     :class:`~qiskit_addon_utils.noise_management.bit_flip_checks.PostSelectionSummary` exposes
