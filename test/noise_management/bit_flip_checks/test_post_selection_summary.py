@@ -554,7 +554,7 @@ def test_from_circuit_does_not_recurse_into_control_flow_ops():
     summary builder needs the same treatment to lift this restriction.
     """
     from qiskit.transpiler import PassManager
-    from qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes import (
+    from qiskit_addon_utils.noise_management.bit_flip_checks.passes import (
         AddPostCircuitBitFlipChecks,
     )
 

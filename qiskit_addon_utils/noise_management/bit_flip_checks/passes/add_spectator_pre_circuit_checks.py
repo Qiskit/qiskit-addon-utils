@@ -27,7 +27,7 @@ from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ....constants import DEFAULT_SPECTATOR_PRE_CREG_NAME
+from ...constants import DEFAULT_SPECTATOR_PRE_CREG_NAME
 from .utils import validate_op_is_supported
 from .xslow_gate import XSlowGate
 
@@ -72,7 +72,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
 
             from qiskit import QuantumCircuit
             from qiskit.transpiler import PassManager, CouplingMap
-            from qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes import (
+            from qiskit_addon_utils.noise_management.bit_flip_checks.passes import (
                 AddPreCircuitBitFlipChecks,
                 AddSpectatorPreCircuitBitFlipChecks,
             )

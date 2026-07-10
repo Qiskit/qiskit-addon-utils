@@ -40,7 +40,7 @@ from qiskit_addon_utils.noise_management.bit_flip_checks import (
     PostSelectionSummary,
     PostSelector,
 )
-from qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes import (
+from qiskit_addon_utils.noise_management.bit_flip_checks.passes import (
     AddPostCircuitBitFlipChecks,
     AddPreCircuitBitFlipChecks,
     AddSpectatorPostCircuitBitFlipChecks,

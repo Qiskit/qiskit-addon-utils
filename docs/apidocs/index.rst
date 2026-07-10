@@ -11,7 +11,7 @@ This package contains functionality which is meant to supplement workflows invol
    qiskit_addon_utils.noise_management
    qiskit_addon_utils.noise_management.post_selection.transpiler.passes
    qiskit_addon_utils.noise_management.bit_flip_checks
-   qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes
+   qiskit_addon_utils.noise_management.bit_flip_checks.passes
    qiskit_addon_utils.problem_generators
    qiskit_addon_utils.slicing
    qiskit_addon_utils.slicing.transpiler.passes

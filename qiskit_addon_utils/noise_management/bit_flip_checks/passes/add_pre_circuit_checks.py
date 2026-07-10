@@ -26,7 +26,7 @@ from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ....constants import DEFAULT_PRE_CHECK_SUFFIX
+from ...constants import DEFAULT_PRE_CHECK_SUFFIX
 from .utils import validate_op_is_supported
 from .xslow_gate import XSlowGate
 
@@ -72,7 +72,7 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
 
             from qiskit import QuantumCircuit
             from qiskit.transpiler import PassManager
-            from qiskit_addon_utils.noise_management.bit_flip_checks.transpiler.passes import (
+            from qiskit_addon_utils.noise_management.bit_flip_checks.passes import (
                 AddPreCircuitBitFlipChecks,
             )
 
