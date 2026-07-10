@@ -124,16 +124,15 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         )
         self.post_check_suffix = post_check_suffix
 
-        # Same pulse sequence as ``AddPostCircuitBitFlipChecks``: a single full pi rotation
-        # delivered as one ``xslow`` or as 20 fine ``rx`` rotations.
+        # Same pulse sequence as ``AddPostCircuitBitFlipChecks``: one full pi rotation.
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate()]
         else:
             self.pulse_sequence = [RXGate(np.pi / 20)] * 20
 
     def run(self, dag: DAGCircuit):  # noqa: D102
-        # Coupling-map node ``i`` is interpreted as register qubit ``i``, so the circuit must
-        # span the coupling graph (e.g. be laid out on the backend), not just the active qubits.
+        # Coupling-map node ``i`` maps to register qubit ``i``, so the circuit must span the
+        # full coupling graph (e.g. be laid out on the backend), not just the active qubits.
         if self.coupling_map.size() > dag.num_qubits():
             raise TranspilerError(
                 f"Circuit has {dag.num_qubits()} qubits but the coupling map spans "
@@ -165,10 +164,9 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
             num_spectators, self.spectator_creg_name + self.post_check_suffix
         )
 
-        # Find data qubits already carrying a post-check measurement (i.e. those
-        # touched by ``AddPostCircuitBitFlipChecks``). When present, we integrate the
-        # spectator parity check into the existing barrier/pulse/barrier sandwich
-        # rather than building our own.
+        # Data qubits already carrying a post-check measurement (from
+        # ``AddPostCircuitBitFlipChecks``); when present we splice into its existing
+        # barrier/pulse/barrier sandwich instead of building our own.
         data_with_postsel: set[Qubit] = set()
         for node in dag.topological_op_nodes():
             if node.op.name == "measure" and len(node.cargs) == 1:
@@ -178,10 +176,9 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
                         data_with_postsel.add(node.qargs[0])
                         break
 
-        # Existing post-sel barriers are exactly the pair acting on ``data_with_postsel``;
-        # the last two such barriers in topological order are the ones we want to extend.
-        # Earlier matches (e.g. the pre-check barrier when its qubit set happens to
-        # coincide with the post-check one) are intentionally ignored.
+        # The post-sel barriers are the pair acting exactly on ``data_with_postsel``; take the
+        # last two in topological order (earlier coincidental matches, e.g. a pre-check barrier
+        # on the same qubit set, are intentionally ignored).
         matching_barriers = [
             n
             for n in dag.topological_op_nodes()
@@ -281,10 +278,9 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         all_topo_nodes = list(dag.topological_op_nodes())
         barrier1_idx = next(i for i, n in enumerate(all_topo_nodes) if n._node_id == barrier1_id)
 
-        # Pair each spec qubit with one data neighbour: deterministic, choose
-        # the neighbour with the smallest qubit index. A spec qubit whose only
-        # data neighbour has its terminal measurement buried inside control flow
-        # is unpaired and falls through to the (extended) ``barrier1`` for sync.
+        # Pair each spec qubit with one data neighbour (smallest qubit index, deterministic).
+        # A spec whose only data neighbour has its terminal measure buried in control flow stays
+        # unpaired and falls through to the extended ``barrier1`` for sync.
         data_terminal_nodes_full: dict[Qubit, DAGOpNode] = {}
         for node in all_topo_nodes[:barrier1_idx]:
             if (
@@ -315,18 +311,16 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         for specs in data_to_specs.values():
             specs.sort(key=lambda q: qubit_map[q])
 
-        # Defer ONLY the data terminal measure nodes that are paired with at
-        # least one spec qubit. Unpaired data qubits keep their measurement in
-        # its natural position.
+        # Defer only the data terminal measures paired with a spec qubit; unpaired data qubits
+        # keep their measurement in its natural position.
         data_terminal_nodes: dict[Qubit, DAGOpNode] = {
             q: data_terminal_nodes_full[q] for q in data_to_specs
         }
         deferred_terminal_node_ids = {n._node_id for n in data_terminal_nodes.values()}
 
-        # Spectator-only ops that landed *after* the first post-sel barrier in the
-        # topological sort are logically pre-check ops on the spectator wires
-        # (e.g. ``measure -> reset`` from ``AddSpectatorPreCircuitBitFlipChecks``).
-        # Defer them so they emerge before the spec parity check on the spec wires.
+        # Spectator-only ops after the first post-sel barrier are logically pre-check ops on the
+        # spec wires (e.g. ``measure -> reset`` from ``AddSpectatorPreCircuitBitFlipChecks``);
+        # defer them so they emerge before the spec parity check.
         spec_qubit_set = set(spectator_qubits_ls)
         late_spec_nodes = [
             n
@@ -365,14 +359,12 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
             if node._node_id in late_spec_node_ids or node._node_id in deferred_terminal_node_ids:
                 continue
             if node._node_id == barrier1_id:
-                # Flush deferred spec-only ops so they appear before the spec
-                # parity check on the spec wires.
+                # Flush deferred spec-only ops before the spec parity check.
                 for spec_node in late_spec_nodes:
                     new_dag.apply_operation_back(spec_node.op, spec_node.qargs, spec_node.cargs)
-                # For each (data qubit, paired specs) bundle: emit a small
-                # barrier on (data + specs), then the data terminal measure,
-                # then each spec's first measurement. Synchronises just the
-                # bundle without idling any other data qubit.
+                # For each (data qubit, paired specs) bundle: a small barrier on (data + specs),
+                # then the data terminal measure, then each spec's first measure — synchronises
+                # just the bundle without idling any other data qubit.
                 for data_q in bundled_data_qubits:
                     specs = data_to_specs[data_q]
                     bundle_old = sorted([data_q, *specs], key=lambda q: qubit_map[q])
@@ -383,8 +375,7 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
                     for spec_q in specs:
                         spec_q_n, spec_clbit = spec_clbit_for[spec_q]
                         new_dag.apply_operation_back(Measure(), [spec_q_n], [spec_clbit])
-                # Spec qubits with no paired data neighbour still need their
-                # first measurement before the extended barrier1.
+                # Spec qubits with no paired data neighbour still need their first measure here.
                 for spec_q in spectator_qubits_ls:
                     if spec_q in spec_to_data:
                         continue
@@ -412,14 +403,10 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
 
         This method recurses into control flow operations.
         """
-        # Pre-check-only qubits: their only measurements are into ignored
-        # (pre-sel) registers. Every standard gate on such a qubit is part of
-        # the pre-check pulse sequence (e.g. the trailing X in
-        # ``xslow -> X -> measure(_pre)``) and must NOT be counted as making
-        # the qubit "active". Without this, spectator pre-check qubits
-        # (which only have a pre-sel sequence on them) would be misclassified
-        # as data qubits in the post-check pass, and *their* neighbours
-        # would in turn be picked up as post-sel spectators.
+        # Pre-check-only qubits measure only into ignored (pre-sel) registers. Their standard
+        # gates are pre-check pulses (e.g. the trailing X in ``xslow -> X -> measure(_pre)``) and
+        # must NOT count as "active": otherwise a spectator pre-check qubit would be misclassified
+        # as a data qubit here, and *its* neighbours would in turn be picked up as post-sel spectators.
         pre_select_only_qubits = self._find_pre_select_only_qubits(dag)
 
         # The qubits that undergo any non-barrier action
@@ -435,9 +422,8 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
             if ("xslow" in node.op.name) or ("rx" in node.op.name) or (node.op.name == "reset"):
                 continue
             elif node.is_standard_gate() or node.op.name == "delay":
-                # Filter out qargs that participate only in pre-check — their
-                # standard gates (typically the trailing X in the pre-sel pulse
-                # sequence) are protocol gates, not main-circuit activity.
+                # Drop qargs that participate only in pre-check: their standard gates are
+                # protocol pulses (the trailing X), not main-circuit activity.
                 relevant_qargs = [q for q in node.qargs if q not in pre_select_only_qubits]
                 if relevant_qargs:
                     active_qubits.update(relevant_qargs)

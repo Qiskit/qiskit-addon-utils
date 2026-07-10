@@ -89,14 +89,10 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
         # Find what qubits have a terminal measurement
         all_terminal_measurements = self._find_terminal_measurements(dag)
 
-        # Add the new registers and create a map between the original clbit and the new ones.
-        # Skip three kinds of registers so that this pass can be safely run after one that has
-        # already produced part of the post-check structure (notably ``AddSpectatorPostCircuitBitFlipChecks``,
-        # which now emits its own ``spec``/``spec_ps`` pair):
-        #   1. registers with ignored suffixes (pre-check registers by default),
-        #   2. registers whose ``{name}{post_check_suffix}`` counterpart already exists, and
-        #   3. registers that *are* the ``{name}{post_check_suffix}`` counterpart of another
-        #      register in the DAG — running this pass on those would chain another ``_ps`` suffix.
+        # Add the new registers and map each original clbit to its post-check copy. Skip registers
+        # with ignored suffixes, registers whose post-check counterpart already exists, and registers
+        # that *are* a post-check counterpart (re-suffixing them would chain another ``_ps``), so the
+        # pass is safe to re-run and to run after ``AddSpectatorPostCircuitBitFlipChecks``.
         existing_creg_names = set(dag.cregs)
         suffix = self.post_check_suffix
         clbits_map = {}
@@ -110,8 +106,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
             dag.add_creg(new_creg := ClassicalRegister(creg.size, name + suffix))
             clbits_map.update({clbit: clbit_ps for clbit, clbit_ps in zip(creg, new_creg)})
 
-        # Filter terminal measurements to only include those with clbits in clbits_map
-        # This excludes measurements into pre-check registers
+        # Keep only terminal measurements whose clbit got a post-check copy (excludes pre-check registers)
         terminal_measurements: dict[Qubit, Clbit] = {
             qubit: clbit
             for qubit, clbit in all_terminal_measurements.items()
@@ -187,12 +182,10 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
                     )
 
                 if len(all_terminal_measurements) == 1:
-                    # If the control-flow op has a single block (e.g., it contains a BoxOp),
-                    # simply update the terminal measurements.
+                    # Single block (e.g. a BoxOp): just merge its terminal measurements.
                     terminal_measurements.update(all_terminal_measurements[0])
                 else:
-                    # Otherwise, make sure to mark as terminated only those qubits that
-                    # write to the same clbit in every block
+                    # Multiple blocks: a qubit is terminated only if it writes the same clbit in every block.
                     for qubit in node.qargs:
                         clbits = {d.get(qubit) for d in all_terminal_measurements}
                         if len(clbits) == 1:

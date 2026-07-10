@@ -172,10 +172,8 @@ class PostSelectionSummary:
             cregs, post_check_suffix, pre_check_suffix
         )
 
-        # Validate that primary registers have corresponding selection registers.
-        # Spectator primaries (e.g. ``spec``) are exempt from the pre-check
-        # requirement: ``AddSpectatorPostCircuitBitFlipChecks`` adds a ``_ps`` partner but no
-        # ``_pre`` one, so a spec primary need not have a matching pre register.
+        # Spectator primaries (e.g. ``spec``) are exempt from the pre-check requirement:
+        # ``AddSpectatorPostCircuitBitFlipChecks`` adds a ``_ps`` partner but no ``_pre`` one.
         if ps_cregs:
             _validate_cregs(primary_cregs, ps_cregs, post_check_suffix)
         if pre_cregs:
@@ -190,11 +188,9 @@ class PostSelectionSummary:
             dag, primary_cregs, ps_cregs, pre_cregs
         )
 
-        # Post-check requires a strict 1:1 mapping between primary and ``_ps``
-        # measurements: ``_compute_post_mask_by_*`` indexes ``measure_map_ps`` by
-        # every primary qubit, so a missing entry would raise at mask time.
-        # Pre-check is intrinsically partial (only terminally-measured qubits
-        # are pre-selected), so it's validated leniently.
+        # Post-check needs a strict 1:1 primary/``_ps`` mapping (the mask indexes
+        # ``measure_map_ps`` by every primary qubit); pre-check is intrinsically partial
+        # (only terminally-measured qubits are pre-selected), so it's validated leniently.
         if measure_map_ps:
             _validate_measure_maps(measure_map, measure_map_ps, post_check_suffix, "strict")
         if measure_map_pre:
@@ -323,8 +319,7 @@ def _get_measure_maps(
         ps_cregs: The post check cregs.
         pre_cregs: The pre check cregs.
     """
-    # A map between clbits in the primary registers to the register that owns them and the
-    # positions that they occupy in those registers
+    # A map between clbits in the primary registers and their (register name, position).
     clbit_map = {
         clbit: (name, clbit_idx)
         for name, creg in primary_cregs.items()

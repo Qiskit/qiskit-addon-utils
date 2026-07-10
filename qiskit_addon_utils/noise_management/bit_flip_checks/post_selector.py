@@ -225,8 +225,6 @@ def _compute_pre_mask_by_node(
     shape = result[next(iter(summary.primary_cregs))].shape[:-1]
     mask = np.ones(shape, dtype=bool)
 
-    # For pre-check, we expect the measurements to return 0 (good initialization)
-    # Discard shots where any pre-check measurement is 1 (bad initialization)
     for name_pre, clbit_idx_pre in summary.measure_map_pre.values():
         # Keep shots where pre-check measurement is 0
         mask &= result[name_pre][..., clbit_idx_pre] == 0
@@ -302,10 +300,7 @@ def _validate_pre_result(result: dict[str, NDArray[np.bool]], summary: PostSelec
         ValueError: If ``result`` does not contain all of the required registers.
         ValueError: If ``result`` contains arrays of inconsistent shapes.
     """
-    # Every pre-check register the mask code might index — both the ones
-    # paired with primary cregs and the orphan ones (e.g. ``spec_pre`` from
-    # :class:`.AddSpectatorPreCircuitBitFlipChecks` running without a matching
-    # spec primary).
+    # Include orphan pre-check registers (e.g. ``spec_pre`` with no matching spec primary).
     pre_cregs = {name for name, _ in summary.measure_map_pre.values()}
     cregs = summary.primary_cregs | pre_cregs
 

@@ -131,8 +131,7 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         if not active_qubits:
             return dag
 
-        # Find which classical bit each qubit measures into by scanning the circuit
-        # This needs to handle measurements inside control flow operations (boxes, if/else, etc.)
+        # Map each qubit to the clbit it measures into (handles control flow blocks).
         qubit_to_clbit_map = self._find_measurements(dag)
 
         # Only pre-select qubits that have measurements
@@ -141,15 +140,11 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         if not qubits_to_preselect:
             return dag
 
-        # Add the new registers and create a map between the original clbit and the new ones.
-        # Skip registers so the pass is safe to run after one that already produced part of the
-        # pre-check structure (e.g. ``AddSpectatorPreCircuitBitFlipChecks``), and so that
-        # re-running this pass adds nothing:
-        #   1. registers with ignored suffixes or names (post-check and spectator registers),
-        #   2. registers whose ``{name}{pre_check_suffix}`` counterpart already exists, and
-        #   3. registers that *are* a ``{pre_check_suffix}`` counterpart (running on those would
-        #      chain another ``_pre`` suffix). Unlike the post-check pass this is unconditional,
-        #      since a pre-check produces a lone ``_pre`` register with no base register.
+        # Add the new registers and map each original clbit to its pre-check copy. Skip registers
+        # with ignored suffixes/names, registers whose pre-check counterpart already exists, and any
+        # register already ending in the pre-check suffix -- the last check is unconditional (unlike
+        # the post-check pass), since a pre-check leaves a lone ``_pre`` register with no base. This
+        # keeps the pass safe to re-run and to run after ``AddSpectatorPreCircuitBitFlipChecks``.
         existing_creg_names = set(dag.cregs)
         clbits_map = {}
         for name, creg in dag.cregs.items():
@@ -181,9 +176,7 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         for creg in dag.cregs.values():
             new_dag.add_creg(creg)
 
-        # Add the pre-check measurements at the front
-        # We need to add them in a consistent order based on the qubit-to-clbit mapping
-        # Sort by clbit index to ensure consistent ordering
+        # Sort by clbit index so pre-check measurements are added in a consistent order.
         qubits_list = sorted(qubits_to_preselect, key=lambda q: qubit_to_clbit_map[q]._index)
 
         # Apply all pulse sequences first
@@ -192,8 +185,7 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
                 new_dag.apply_operation_back(gate, [qubit])
 
         # Add barrier before measurements - AddSpectatorPreCircuitBitFlipChecks will extend it.
-        # ``qubits_list`` is non-empty: we returned early above when ``qubits_to_preselect``
-        # was empty, so this guard is purely defensive.
+        # ``qubits_list`` is non-empty here (we returned early otherwise); the guard is defensive.
         if qubits_list:  # pragma: no branch
             new_dag.apply_operation_back(Barrier(len(qubits_list)), qubits_list)
 
@@ -205,12 +197,6 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
 
         # Copy all operations from the original DAG to the new DAG
         for node in dag.topological_op_nodes():
-            # do this to preserve meas ordering
-            # if node.op.name == "measure" and len(node.qargs) == 1:
-            #     qubit = node.qargs[0]
-            #     clbit = qubit_to_clbit_map[qubit]
-            #     new_dag.apply_operation_back(Measure(), [qubit], [clbit])
-            # else:
             new_dag.apply_operation_back(node.op, node.qargs, node.cargs)
 
         return new_dag
@@ -294,10 +280,8 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
                         for block_clbit, clbit in zip(block_dag.clbits, node.cargs)
                     }
 
-                    # Find measurements in the block and map them back to parent circuit.
-                    # The ``in`` checks are defensive: every block qubit/clbit produced by
-                    # ``_find_measurements`` should already appear in the maps we built
-                    # from ``node.qargs`` / ``node.cargs``.
+                    # Find measurements in the block and map them back to the parent circuit. The
+                    # ``in`` checks are defensive: these qubits/clbits should already be in the maps.
                     block_measurements = self._find_measurements(block_dag)
                     for block_qubit, block_clbit in block_measurements.items():
                         if (

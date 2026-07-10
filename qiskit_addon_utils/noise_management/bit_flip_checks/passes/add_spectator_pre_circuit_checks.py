@@ -155,8 +155,8 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
             self.pulse_sequence = [RXGate(np.pi / 20)] * 20 + [XGate()]
 
     def run(self, dag: DAGCircuit):  # noqa: D102
-        # Coupling-map node ``i`` is interpreted as register qubit ``i``, so the circuit must
-        # span the coupling graph (e.g. be laid out on the backend), not just the active qubits.
+        # Coupling-map node ``i`` maps to register qubit ``i``, so the circuit must span the
+        # full coupling graph (e.g. be laid out on the backend), not just the active qubits.
         if self.coupling_map.size() > dag.num_qubits():
             raise TranspilerError(
                 f"Circuit has {dag.num_qubits()} qubits but the coupling map spans "
@@ -203,8 +203,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
         else:
             new_dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
 
-        # Find all qubits that have pre-check measurements (from AddPreCircuitBitFlipChecks)
-        # These are qubits that have measurements into registers ending with the pre_check_suffix
+        # Data qubits with pre-check measurements (registers ending with ``pre_check_suffix``).
         data_qubits_with_preselection = set()
         for node in dag.topological_op_nodes():
             if node.op.name == "measure" and len(node.cargs) == 1:
@@ -216,9 +215,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
 
         if not data_qubits_with_preselection:
             # No data-qubit pre-check structure to splice into: prepend a self-contained
-            # pre-check on the spectator wires (``pulses -> barrier -> measure``), mirroring
-            # the standalone path of ``AddSpectatorPostCircuitBitFlipChecks`` but at the front
-            # of the circuit. ``new_dag`` already holds the qregs, cregs, and ``spec_pre`` creg.
+            # pre-check on the spectator wires (``pulses -> barrier -> measure``).
             for qubit in spectator_qubits_ls:
                 for gate in self.pulse_sequence:
                     new_dag.apply_operation_back(gate, [qubit])
@@ -246,26 +243,19 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
             None,
         )
         if first_barrier_idx is None:  # pragma: no cover
-            # Defensive: ``AddPreCircuitBitFlipChecks`` always emits a barrier on
-            # the data pre-sel qubits, so this is unreachable in practice.
+            # Defensive: ``AddPreCircuitBitFlipChecks`` always emits this barrier, so unreachable.
             return dag
 
-        # Apply the pre-check pulse sequence (xslow + X, or 20 rx + X) on each
-        # spectator qubit *before* anything else. Together with the extended pre-sel
-        # barrier and the trailing ``measure(spec_pre)`` this gives the spec wire
-        # the same ``pulses -> barrier -> measure`` structure as the data wires.
+        # Pre-check pulses on each spec qubit first; with the extended barrier and trailing
+        # ``measure(spec_pre)`` this mirrors the data wires' ``pulses -> barrier -> measure``.
         for qubit in spectator_qubits_ls:
             for gate in self.pulse_sequence:
                 new_dag.apply_operation_back(gate, [qubit])
 
-        # Spectator-only ops appearing *before* the pre-check barrier in topological
-        # order are logically post-check ops on the spectator wires (e.g. the
-        # post-sel parity check from a previously-run ``AddSpectatorPostCircuitBitFlipChecks``). Defer
-        # them so they emerge *after* the extended barrier and the pre-sel measurement
-        # on the spec wire. With the current passes this list is normally empty —
-        # the post-sel structure depends on data-wire ops (via the full-width
-        # pre-init barrier) and so always lands after the pre-sel barrier in topo
-        # order — but the deferral is kept as a safety net.
+        # Spectator-only ops before the pre-check barrier are logically post-check ops on the spec
+        # wires (e.g. a prior ``AddSpectatorPostCircuitBitFlipChecks`` parity check); defer them
+        # past the extended barrier and pre-sel measure. Normally empty (post-sel ops depend on
+        # data wires and land after the barrier), but the deferral is kept as a safety net.
         spec_qubit_set = set(spectator_qubits_ls)
         early_spec_nodes = [
             n
@@ -288,8 +278,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
                 new_dag.apply_operation_back(
                     Barrier(len(all_preselection_qubits)), all_preselection_qubits
                 )
-                # Spectator pre-check measurement (no reset: the post-sel parity
-                # check only cares that the two readings flip relative to each other).
+                # Spectator pre-check measurement (no reset: the parity check only cares that the two readings flip).
                 for qubit, clbit in zip(spectator_qubits_ls, new_reg):
                     new_dag.apply_operation_back(Measure(), [qubit], [clbit])
                 # Flush deferred early-spec ops in original relative order.
@@ -341,8 +330,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
                     if not is_ignored_measurement:
                         active_qubits.add(node.qargs[0])
                         terminated_qubits.add(node.qargs[0])
-                    # If it IS an ignored measurement, don't mark as terminated
-                    # (so pre-check can be added)
+                    # An ignored measurement is not marked terminated, so pre-check can be added.
                 else:  # pragma: no cover
                     active_qubits.add(node.qargs[0])
                     terminated_qubits.add(node.qargs[0])
@@ -370,9 +358,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
 
                 terminated_qubits.update(set.intersection(*all_terminated_qubits))
             elif "xslow" in node.op.name:  # pragma: no cover
-                # Unreachable: caught by the earlier ``continue`` near the top of
-                # the loop. Kept as defensive code in case the early-skip
-                # condition is ever loosened.
+                # Unreachable: caught by the earlier ``continue``; kept in case that skip is loosened.
                 continue
             else:  # pragma: no cover
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")
