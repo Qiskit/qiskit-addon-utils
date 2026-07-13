@@ -17,4 +17,3 @@ bit_flip_checks_passes (:mod:`qiskit_addon_utils.noise_management.bit_flip_check
    AddPreCircuitBitFlipChecks
    AddSpectatorPostCircuitBitFlipChecks
    AddSpectatorPreCircuitBitFlipChecks
-   XSlowGate

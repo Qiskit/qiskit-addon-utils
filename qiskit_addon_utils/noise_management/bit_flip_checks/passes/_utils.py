@@ -10,8 +10,7 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""XSlow gate."""
+"""Internal helpers shared by the bit-flip check passes."""
 
 from qiskit.circuit import ControlFlowOp
 from qiskit.dagcircuit import DAGOpNode

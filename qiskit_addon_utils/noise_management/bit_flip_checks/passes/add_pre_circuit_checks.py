@@ -27,8 +27,8 @@ from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
 from ...constants import DEFAULT_PRE_CHECK_SUFFIX
-from .utils import validate_op_is_supported
-from .xslow_gate import XSlowGate
+from ..xslow_gate import XSlowGate
+from ._utils import validate_op_is_supported
 
 
 class XPulseType(str, Enum):

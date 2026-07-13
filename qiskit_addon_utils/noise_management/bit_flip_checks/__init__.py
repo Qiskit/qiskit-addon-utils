@@ -15,9 +15,11 @@
 
 from .post_selection_summary import PostSelectionSummary
 from .post_selector import PostSelectionStrategy, PostSelector
+from .xslow_gate import XSlowGate
 
 __all__ = [
     "PostSelectionStrategy",
     "PostSelectionSummary",
     "PostSelector",
+    "XSlowGate",
 ]

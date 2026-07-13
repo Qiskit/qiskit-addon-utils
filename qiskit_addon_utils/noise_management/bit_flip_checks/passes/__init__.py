@@ -17,7 +17,6 @@ from .add_post_circuit_checks import AddPostCircuitBitFlipChecks, XPulseType
 from .add_pre_circuit_checks import AddPreCircuitBitFlipChecks
 from .add_spectator_post_circuit_checks import AddSpectatorPostCircuitBitFlipChecks
 from .add_spectator_pre_circuit_checks import AddSpectatorPreCircuitBitFlipChecks
-from .xslow_gate import XSlowGate
 
 __all__ = [
     "AddPostCircuitBitFlipChecks",
@@ -25,5 +24,4 @@ __all__ = [
     "AddSpectatorPostCircuitBitFlipChecks",
     "AddSpectatorPreCircuitBitFlipChecks",
     "XPulseType",
-    "XSlowGate",
 ]

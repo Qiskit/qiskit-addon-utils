@@ -12,3 +12,4 @@ bit_flip_checks (:mod:`qiskit_addon_utils.noise_management.bit_flip_checks`)
 .. autoclass:: PostSelectionSummary
 .. autoclass:: PostSelector
 .. autoclass:: PostSelectionStrategy
+.. autoclass:: XSlowGate
