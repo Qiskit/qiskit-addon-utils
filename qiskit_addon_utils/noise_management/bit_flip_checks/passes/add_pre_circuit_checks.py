@@ -290,6 +290,3 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
                             qubit_to_clbit_map[qubit_map[block_qubit]] = clbit_map[block_clbit]
 
         return qubit_to_clbit_map
-
-
-# Made with Bob

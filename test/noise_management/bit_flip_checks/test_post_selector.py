@@ -328,6 +328,3 @@ def test_post_selector_forwards_spectator_cregs():
     assert PostSelector.from_circuit(circuit, [(0, 1), (1, 2)]).summary.spectator_cregs == {"spec"}
     selector_off = PostSelector.from_circuit(circuit, [(0, 1), (1, 2)], spectator_cregs=[])
     assert selector_off.summary.spectator_cregs == set()
-
-
-# Made with Bob

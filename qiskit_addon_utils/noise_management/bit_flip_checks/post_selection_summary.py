@@ -440,6 +440,3 @@ def _get_edges(
         for edge in coupling_map.get_edges()
         if edge[0] in measured and edge[1] in measured
     }
-
-
-# Made with Bob

@@ -364,6 +364,3 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")
 
         return active_qubits, terminated_qubits
-
-
-# Made with Bob
