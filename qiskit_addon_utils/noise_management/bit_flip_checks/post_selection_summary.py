@@ -30,26 +30,7 @@ from ..constants import (
 
 
 class PostSelectionSummary:
-    """A helper class to store the properties of a quantum circuit required to post select the results.
-
-    This class handles both traditional post-check (measurements at the end of the circuit) and
-    pre-check (measurements at the beginning of the circuit to verify initialization).
-
-    A primary register may either hold "data" measurements that the user cares about
-    (a problem-specific register such as ``c``) or hold the first half of a spectator
-    parity check (a register such as ``spec`` produced by
-    :class:`.AddSpectatorPostCircuitBitFlipChecks`). The :attr:`spectator_cregs` property labels which
-    primary registers fall into the spectator category. The mask computation treats
-    both the same — every primary register participates in the parity check — but
-    downstream code that wants to extract observables from data measurements only
-    can use ``primary_cregs - spectator_cregs`` to find the data registers.
-
-    .. note::
-        With :class:`.AddSpectatorPostCircuitBitFlipChecks` configured with ``include_unmeasured=True``,
-        active-but-unterminated qubits are also written into the spectator register.
-        :attr:`spectator_cregs` therefore reflects the *register identity*, not a
-        guarantee that every qubit writing into it was an idle neighbour.
-    """
+    """A helper class to store the properties of a quantum circuit required to postselect based on bit-flip checks."""
 
     def __init__(
         self,
@@ -67,21 +48,17 @@ class PostSelectionSummary:
 
         Args:
             primary_cregs: The names of the "primary" classical registers, namely those that do not end with
-                the post check or pre check suffix.
+                the pre- and post-circuit check suffixes.
             measure_map: A map between qubit indices to the register and clbits that uniquely define a
                 measurement on those qubits (primary measurements).
             edges: A list of tuples defining pairs of neighboring qubits.
-            measure_map_ps: An optional map for post-check measurements (at end of circuit).
-                If None, defaults to empty dict.
-            measure_map_pre: An optional map for pre-check measurements (at start of circuit).
-                If None, defaults to empty dict.
-            post_check_suffix: The suffix of the post check registers.
-            pre_check_suffix: The suffix of the pre check registers.
+            measure_map_ps: An optional map for post-circuit check measurements.
+            measure_map_pre: An optional map for pre-circuit check measurements.
+            post_check_suffix: The suffix of the post-circuit check registers.
+            pre_check_suffix: The suffix of the pre-circuit check registers.
             spectator_cregs: Names of primary registers that hold spectator measurements
                 (the first half of the spectator parity check produced by
-                :class:`.AddSpectatorPostCircuitBitFlipChecks`). Stored intersected with ``primary_cregs``;
-                names not present in the circuit are silently dropped. Defaults to the
-                empty set.
+                :class:`.AddSpectatorPostCircuitBitFlipChecks`).
         """
         self._primary_cregs = primary_cregs
         self._measure_map = measure_map
@@ -99,22 +76,22 @@ class PostSelectionSummary:
 
     @property
     def measure_map_ps(self) -> dict[int, tuple[str, int]]:
-        """A map from qubit indices to the register and clbit index for post-check measurements."""
+        """A map from qubit indices to the register and clbit index for post-circuit check measurements."""
         return self._measure_map_ps
 
     @property
     def measure_map_pre(self) -> dict[int, tuple[str, int]]:
-        """A map from qubit indices to the register and clbit index for pre-check measurements."""
+        """A map from qubit indices to the register and clbit index for pre-circuit check measurements."""
         return self._measure_map_pre
 
     @property
     def edges(self) -> set[frozenset[int]]:
-        """A set of edges to consider for edge-based post check."""
+        """A set of edges to consider for edge-based postselection."""
         return self._edges
 
     @property
     def primary_cregs(self) -> set[str]:
-        """The names of the "primary" classical registers."""
+        """The names of the primary classical registers."""
         return self._primary_cregs
 
     @property
@@ -128,12 +105,12 @@ class PostSelectionSummary:
 
     @property
     def post_check_suffix(self) -> str:
-        """The suffix of the post check registers."""
+        """The suffix of the post-circuit check registers."""
         return self._post_check_suffix
 
     @property
     def pre_check_suffix(self) -> str:
-        """The suffix of the pre check registers."""
+        """The suffix of the pre-circuit check registers."""
         return self._pre_check_suffix
 
     @classmethod
@@ -149,15 +126,13 @@ class PostSelectionSummary:
         """Initialize from quantum circuits.
 
         Args:
-            circuit: The circuit to create a summary of.
+            circuit: The circuit containing bit-flip checks..
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
-            post_check_suffix: A fixed suffix for post-check classical registers.
-            pre_check_suffix: A fixed suffix for pre-check classical registers.
+            post_check_suffix: A fixed suffix for post-circuit check classical registers.
+            pre_check_suffix: A fixed suffix for pre-circuit check classical registers.
             spectator_cregs: Names of primary registers that hold spectator
-                measurements. Defaults to ``[DEFAULT_SPECTATOR_CREG_NAME]``
-                (i.e. ``["spec"]``), matching the default name used by
-                :class:`.AddSpectatorPostCircuitBitFlipChecks`. Names absent from the circuit
-                are silently dropped.
+                measurements. Defaults to ``["spec"]``, matching the default name used by
+                :class:`.AddSpectatorPostCircuitBitFlipChecks`.
         """
         if spectator_cregs is None:
             spectator_cregs = [DEFAULT_SPECTATOR_CREG_NAME]

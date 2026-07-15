@@ -28,39 +28,29 @@ from .post_selection_summary import PostSelectionSummary
 
 
 class PostSelectionStrategy(str, Enum):
-    """The supported post-selection strategies.
-
-    Pre- and post-circuit bit-flip checks are both *post-selection* techniques (they
-    discard shots based on parity checks), so a single strategy enum applies to both.
-    """
+    """The supported postselection strategies."""
 
     NODE = "node"
-    """Discard every shot where one or more checks fail. Keep every other shot."""
+    """Discard every shot where one or more checks fail."""
 
     EDGE = "edge"
-    """Discard every shot where there exists a pair of neighbouring qubits for which both
-    checks fail. Keep every other shot."""
+    """Discard every shot where there exists a pair of neighbouring qubits for which both checks fail."""
 
 
 class PostSelector:
-    """A class to process the results of quantum programs based on selection measurements.
-
-    This class supports both post-check (measurements at the end of the circuit to verify
-    bit flips) and pre-check (measurements at the beginning to verify initialization).
-    It can handle circuits with either type of selection, or both simultaneously.
-    """
+    """A class to process the results of bit-flip checks."""
 
     def __init__(self, summary: PostSelectionSummary):
         """Initialize a ``PostSelector`` object.
 
         Args:
-            summary: A summary of the circuit being selected.
+            summary: A summary of the circuit containing bit-flip checks.
         """
         self._summary = summary
 
     @property
     def summary(self) -> PostSelectionSummary:
-        """A summary of the circuit being selected."""
+        """A summary of the circuit containing bit-flip checks."""
         return self._summary
 
     @classmethod
@@ -73,17 +63,16 @@ class PostSelector:
         pre_check_suffix: str = DEFAULT_PRE_CHECK_SUFFIX,
         spectator_cregs: set[str] | list[str] | None = None,
     ) -> PostSelector:
-        """Initialize from quantum circuits.
+        """Initialize from a quantum circuit.
 
         Args:
-            circuit: The circuit to process the results of.
+            circuit: The circuit containing bit-flip checks.
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
-            post_check_suffix: A fixed suffix for post-check classical registers.
-            pre_check_suffix: A fixed suffix for pre-check classical registers.
-            spectator_cregs: Names of primary registers that hold spectator
-                measurements (forwarded to
-                :meth:`.PostSelectionSummary.from_circuit`). Defaults to
-                ``["spec"]`` to match :class:`.AddSpectatorPostCircuitBitFlipChecks`.
+            post_check_suffix: A fixed suffix for classical registers associated with post-circuit checks.
+            pre_check_suffix: A fixed suffix for classical registers associated with pre-circuit checks.
+            spectator_cregs: Names of registers that hold spectator measurements (the first half of the
+                spectator parity check produced by :class:`.AddSpectatorPostCircuitBitFlipChecks`). Defaults
+                to ``["spec"]`` to match :class:`.AddSpectatorPostCircuitBitFlipChecks`.
         """
         coupling_map = (
             coupling_map
@@ -103,14 +92,11 @@ class PostSelector:
     def compute_mask(
         self,
         result: dict[str, NDArray[np.bool]],
-        strategy: str | PostSelectionStrategy = PostSelectionStrategy.NODE,
+        strategy: Literal["node", "edge"] | PostSelectionStrategy = PostSelectionStrategy.NODE,
         *,
         mode: Literal["post", "pre", "both"] = "post",
     ) -> NDArray[np.bool]:
         """Compute boolean masks indicating what shots should be kept or discarded.
-
-        This function examines selection measurements (post-check, pre-check, or both)
-        and identifies shots that should be discarded based on the specified strategy.
 
         By construction, the returned mask has the same shape as the arrays in the result, but with one
         fewer dimension (the last axis of every array, over clbits, is not present in the mask).
@@ -118,11 +104,11 @@ class PostSelector:
         Args:
             result: The result to post-process. Must be a dictionary mapping register names to
                 boolean arrays.
-            strategy: The selection strategy ("node" or "edge").
-            mode: Which type of selection to apply:
-                - "post": Apply post-check only (default, checks bit flips)
-                - "pre": Apply pre-check only (checks initialization)
-                - "both": Apply both pre and post-check (combined mask)
+            strategy: The postselection strategy ("node" or "edge").
+            mode: Which type of postselection to apply:
+                - "post": Apply post-circuit checks only
+                - "pre": Apply pre-circuit checks only
+                - "both": Apply both pre and post-check
 
         Returns:
             A boolean mask where True indicates shots to keep, False indicates shots to discard.
