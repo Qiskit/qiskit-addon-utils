@@ -11,12 +11,12 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add post-check measurements on spectator qubits."""
+"""Transpiler pass to add post-circuit bit-flip checks on spectator qubits."""
 
 from __future__ import annotations
 
 from copy import deepcopy
-from enum import Enum
+from typing import Literal
 
 import numpy as np
 from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
@@ -30,61 +30,32 @@ from qiskit.transpiler.exceptions import TranspilerError
 from ...constants import DEFAULT_POST_CHECK_SUFFIX, DEFAULT_SPECTATOR_CREG_NAME
 from ..xslow_gate import XSlowGate
 from ._utils import validate_op_is_supported
-
-
-class XPulseType(str, Enum):
-    """The type of X-pulse to apply between the two spectator measurements."""
-
-    XSLOW = "xslow"
-    """An ``xslow`` gate."""
-
-    RX = "rx"
-    """Twenty ``rx`` gates with angles ``pi/20``."""
+from .x_pulse_type import XPulseType
 
 
 class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
-    """Add post-check measurements on spectator qubits.
+    r"""Add bit-flip checks at the end of the circuit on qubits adjacent to active qubits.
 
-    An *active* qubit is a qubit acted on in the circuit by a non-barrier
-    instruction. A *terminated* qubit is one whose last action is a
-    measurement. A *spectator* qubit is a qubit that is inactive, but adjacent
-    to an active qubit under the coupling map.
+    Each spectator qubit receives a post-circuit bit-flip check: a measurement, then a narrowband X-pulse
+    that flips the qubit's state (:math:`|x\rangle\mapsto|x\oplus1\rangle`), then a second measurement.
+    If the QPU fails to flip the qubit between the two measurements on a given shot, that sample may be
+    considered unreliable and discarded. Postselecting only samples that pass all checks can improve the
+    fidelity of distributions sampled from the QPU. Optionally via ``include_unmeasured``, active qubits
+    that are not terminated by a measurement are also treated as spectators.
 
-    For every spectator qubit (and, optionally via ``include_unmeasured``,
-    every unterminated active qubit), the pass appends the same parity check
-    used for data-qubit post-check:
-
-    1. ``measure`` into the spectator register (expected to read 0).
-    2. A narrowband X-pulse — either an ``xslow`` gate or 20 ``rx(pi/20)``
-       rotations — that should flip the qubit's state by ``pi``.
-    3. ``measure`` again, into the post-check spectator register; this
-       reading should be the bit-flip of the first.
-
-    Two classical registers are added: one named ``spectator_creg_name``
-    (default ``"spec"``) holding the first measurement, and one named
-    ``spectator_creg_name + post_check_suffix`` (default ``"spec_ps"``)
-    holding the second. A shot is kept when the two registers disagree on a
-    given qubit (the qubit successfully flipped).
-
-    When the input circuit already contains a data-qubit post-check
-    structure produced by :class:`.AddPostCircuitBitFlipChecks`, this pass
-    integrates the spectator parity check into that structure: the spectator
-    measurements share the existing pre-/post-pulse barriers and the spectator
-    pulses run alongside the data-qubit pulses. Otherwise it adds a self-contained
-    parity-check structure, so it adds the ``spec``/``spec_ps`` registers whether or not
-    :class:`.AddPostCircuitBitFlipChecks` ran first.
+    Two classical registers are added, each with one bit per spectator qubit: ``spectator_creg_name``
+    (default ``"spec"``) holds the first measurement and ``spectator_creg_name + post_check_suffix``
+    (default ``"spec_ps"``) holds the second, and a shot is kept when the two disagree.
 
     .. note::
-        When this pass encounters a control flow operation, it iterates
-        through all of its blocks. It marks as *active* every qubit that is
-        active within at least one of the blocks, and as *terminated* every
-        qubit that is terminated in every one of the blocks.
+
+      These passes are only supported on Heron QPUs where `fractional gates <http://quantum.cloud.ibm.com/docs/guides/fractional-gates>`__ are supported.
     """
 
     def __init__(
         self,
         coupling_map: CouplingMap | list[tuple[int, int]],
-        x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
+        x_pulse_type: Literal["xslow", "rx"] | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         include_unmeasured: bool = True,
         spectator_creg_name: str = DEFAULT_SPECTATOR_CREG_NAME,
@@ -95,7 +66,7 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
 
         Args:
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
-            x_pulse_type: The type of X-pulse to apply between the two spectator measurements.
+            x_pulse_type: The type of X-pulse to apply between the two spectator measurements. Either ``"xslow"`` or ``"rx"``.
             include_unmeasured: Whether qubits that are active but not terminated should also be
                 treated as spectators. If ``True``, the parity check is added to each of them as well.
             spectator_creg_name: The name of the classical register holding the first spectator

@@ -13,10 +13,11 @@
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
 """A submodule with transpilation passes for circuit bit-flip checks."""
 
-from .add_post_circuit_checks import AddPostCircuitBitFlipChecks, XPulseType
+from .add_post_circuit_checks import AddPostCircuitBitFlipChecks
 from .add_pre_circuit_checks import AddPreCircuitBitFlipChecks
 from .add_spectator_post_circuit_checks import AddSpectatorPostCircuitBitFlipChecks
 from .add_spectator_pre_circuit_checks import AddSpectatorPreCircuitBitFlipChecks
+from .x_pulse_type import XPulseType
 
 __all__ = [
     "AddPostCircuitBitFlipChecks",

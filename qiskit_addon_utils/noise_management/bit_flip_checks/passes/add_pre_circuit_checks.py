@@ -11,12 +11,11 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add pre check measurements."""
+"""Transpiler pass to add pre-circuit bit-flip checks."""
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
@@ -29,72 +28,30 @@ from qiskit.transpiler.exceptions import TranspilerError
 from ...constants import DEFAULT_PRE_CHECK_SUFFIX
 from ..xslow_gate import XSlowGate
 from ._utils import validate_op_is_supported
-
-
-class XPulseType(str, Enum):
-    """The type of X-pulse to apply for the pre-check measurements."""
-
-    XSLOW = "xslow"
-    """An ``xslow`` gate."""
-
-    RX = "rx"
-    """Twenty ``rx`` gates with angles ``pi/20``."""
+from .x_pulse_type import XPulseType
 
 
 class AddPreCircuitBitFlipChecks(TransformationPass):
-    """Add a pre-check measurement at the beginning of the circuit.
+    r"""Add bit-flip checks at the beginning of the circuit on active qubits terminated by a measurement.
 
-    A pre-check measurement is a measurement that precedes the main circuit operations. It
-    consists of a narrowband X-pulse (e.g. a sequence of N rx(pi/N) gates), followed by an X gate,
-    followed by a measurement. In the absence of noise, it is expected to return ``0`` (since
-    the qubit starts in the ground state, gets flipped to the excited state by the two X gate
-    applications, then measured). Shots where the pre-check measurement returns ``1`` indicate
-    that the qubit was not properly initialized to the ground state and should be discarded.
-
-    This pass adds pre-check measurements at the beginning of the circuit for all qubits that:
-    1. Are active in the circuit (have gates applied to them)
-    2. Have terminal measurements
+    A pre-circuit bit-flip check consists of a narrowband X-pulse that rotates the qubit from
+    :math:`|0\rangle\mapsto|1\rangle` followed by a normal X-pulse that rotates the qubit back
+    to the ground state :math:`|0\rangle` and a measurement. If the QPU fails to flip the qubit from
+    :math:`|0\rangle\mapsto|1\rangle\mapsto|0\rangle` on a given shot, that sample may be considered
+    unreliable and discarded. Postselecting only samples that pass all checks can improve the fidelity
+    of distributions sampled from the QPU.
 
     The added measurements write to new classical registers that are copies of the DAG's registers,
     with modified names (by default, appending ``"_pre"`` to the register name).
 
-    The pre-check protocol works as follows:
+    .. note::
 
-    1. **xslow pulse (or rx sequence)**: A narrowband X-pulse that slowly rotates the qubit.
-       This can be either a single ``xslow`` gate or 20 ``rx(π/20)`` gates.
-    2. **X gate**: A standard X gate to complete the flip from ground to excited state.
-    3. **Measurement**: Measures the qubit state. Should return ``0`` if initialization was good.
-    4. **Barrier**: Separates pre-check measurements from the main circuit.
-    5. **Main circuit**: The original circuit operations proceed.
-
-    Example:
-        .. code-block:: python
-
-            from qiskit import QuantumCircuit
-            from qiskit.transpiler import PassManager
-            from qiskit_addon_utils.noise_management.bit_flip_checks.passes import (
-                AddPreCircuitBitFlipChecks,
-            )
-
-            # Create a simple circuit
-            qc = QuantumCircuit(2, 2)
-            qc.h(0)
-            qc.cx(0, 1)
-            qc.measure([0, 1], [0, 1])
-
-            # Add pre-check measurements
-            pm = PassManager([AddPreCircuitBitFlipChecks()])
-            qc_with_pre = pm.run(qc)
-
-            # The resulting circuit will have:
-            # 1. Pre-check measurements at the start (xslow + X + measure to c_pre)
-            # 2. A barrier
-            # 3. The original circuit (H, CX, measure to c)
+      These passes are only supported on Heron QPUs where `fractional gates <http://quantum.cloud.ibm.com/docs/guides/fractional-gates>`__ are supported.
     """
 
     def __init__(
         self,
-        x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
+        x_pulse_type: Literal["xslow", "rx"] | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         pre_check_suffix: str = DEFAULT_PRE_CHECK_SUFFIX,
         ignore_creg_suffixes: list[str] | None = None,
@@ -103,7 +60,7 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         """Initialize the pass.
 
         Args:
-            x_pulse_type: The type of X-pulse to apply for the pre-check measurements.
+            x_pulse_type: The type of X-pulse to apply for the pre-check measurements. Either ``"xslow"`` or ``"rx"``.
             pre_check_suffix: A fixed suffix to append to the names of the classical registers when copying them.
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
                 By default, registers ending with "_ps" are ignored to avoid adding pre-check to post-check registers.

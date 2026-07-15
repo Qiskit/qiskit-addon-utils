@@ -11,11 +11,11 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add post check measurements."""
+"""Transpiler pass to add post-circuit bit-flip checks."""
 
 from __future__ import annotations
 
-from enum import Enum
+from typing import Literal
 
 import numpy as np
 from qiskit.circuit import ClassicalRegister, Clbit, ControlFlowOp, Qubit
@@ -28,39 +28,29 @@ from qiskit.transpiler.exceptions import TranspilerError
 from ...constants import DEFAULT_POST_CHECK_SUFFIX
 from ..xslow_gate import XSlowGate
 from ._utils import validate_op_is_supported
-
-
-class XPulseType(str, Enum):
-    """The type of X-pulse to apply for the post-check measurements."""
-
-    XSLOW = "xslow"
-    """An ``xslow`` gate."""
-
-    RX = "rx"
-    """Twenty ``rx`` gates with angles ``pi/20``."""
+from .x_pulse_type import XPulseType
 
 
 class AddPostCircuitBitFlipChecks(TransformationPass):
-    """Add a post check measurement after every terminal measurement.
+    r"""Add bit-flip checks at the end of the circuit on active qubits terminated by a measurement.
 
-    A post check measurement is a measurement that follows a regular measurement on a given qubit. It
-    consists of a narrowband X-pulse followed by a regular measurement operation. In the absence of noise,
-    it is expected to return ``(b + 1) % 2``, where ``b`` is the outcome of the original measurement.
+    A post-circuit bit-flip check consists of a narrowband X-pulse located after a terminal measurement
+    that flips the state of the qubit from the measured state :math:`|x\rangle\mapsto|x\oplus1\rangle`.
+    The state is then measured, and if the QPU failed to flip the qubit on a given shot, that sample may
+    be considered unreliable and discarded. Postselecting only samples that pass all checks can improve
+    the fidelity of distributions sampled from the QPU.
 
-    This pass adds post check measurements after every terminal measurement, i.e., after every measurement
-    that is not followed by another operation on the same wire. The added measurements are placed after a
-    barrier, and write to new classical registers that are copies of the DAG's registers, with modified
-    names.
+    The added measurements write to new classical registers that are copies of the DAG's registers,
+    with modified names (by default, appending ``"_pre"`` to the register name).
 
     .. note::
-        When this pass encounters a control flow operation, it iterates through all of its blocks. It marks
-        as "terminated" only those qubits that are terminated in every one of the blocks, and it treats as
-        unterminated every other qubit.
+
+      These passes are only supported on Heron QPUs where `fractional gates <http://quantum.cloud.ibm.com/docs/guides/fractional-gates>`__ are supported.
     """
 
     def __init__(
         self,
-        x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
+        x_pulse_type: Literal["xslow", "rx"] | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         post_check_suffix: str = DEFAULT_POST_CHECK_SUFFIX,
         ignore_creg_suffixes: list[str] | None = None,
@@ -68,7 +58,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
         """Initialize the pass.
 
         Args:
-            x_pulse_type: The type of X-pulse to apply for the post-check measurements.
+            x_pulse_type: The type of X-pulse to apply for the post-check measurements. Either "xslow" or "rx".
             post_check_suffix: A fixed suffix to append to the names of the classical registers when copying them.
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
                 By default, registers ending with "_pre" are ignored to avoid adding post-check to pre-check registers.

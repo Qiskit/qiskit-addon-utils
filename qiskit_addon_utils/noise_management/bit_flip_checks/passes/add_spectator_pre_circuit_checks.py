@@ -11,12 +11,12 @@
 # that they have been altered from the originals.
 
 # Reminder: update the RST file in docs/apidocs when adding new interfaces.
-"""Transpiler pass to add pre-check measurements on spectator qubits."""
+"""Transpiler pass to add pre-circuit bit-flip checks on spectator qubits."""
 
 from __future__ import annotations
 
 from copy import deepcopy
-from enum import Enum
+from typing import Literal
 
 import numpy as np
 from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
@@ -30,81 +30,30 @@ from qiskit.transpiler.exceptions import TranspilerError
 from ...constants import DEFAULT_SPECTATOR_PRE_CREG_NAME
 from ..xslow_gate import XSlowGate
 from ._utils import validate_op_is_supported
-
-
-class XPulseType(str, Enum):
-    """The type of X-pulse to apply for the pre-check measurements."""
-
-    XSLOW = "xslow"
-    """An ``xslow`` gate."""
-
-    RX = "rx"
-    """Twenty ``rx`` gates with angles ``pi/20``."""
+from .x_pulse_type import XPulseType
 
 
 class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
-    """Add pre-check measurements on spectator qubits.
+    r"""Add bit-flip checks at the beginning of the circuit on qubits adjacent to active qubits.
 
-    An **active qubit** is a qubit acted on in the circuit by a non-barrier instruction. A **terminated qubit**
-    is one whose last action is a measurement. A **spectator qubit** is a qubit that is inactive, but adjacent
-    to an active qubit under the coupling map.
+    Each spectator qubit receives a pre-circuit bit-flip check: A narrowband X-pulse
+    that flips the qubit's state (:math:`|x\rangle\mapsto|x\oplus1\rangle`), then a regular X-pulse
+    followed by a measurement. If the QPU fails to flip the qubit from :math:`|0\rangle\mapsto|1\rangle\mapsto|0\rangle`,
+    that sample may be considered unreliable and discarded. Postselecting only samples that pass all
+    checks can improve the fidelity of distributions sampled from the QPU. Optionally via
+    ``include_unmeasured``, active qubits that are not terminated by a measurement are also treated as spectators.
 
-    Each spectator qubit receives the same pre-check check as the data qubits: an
-    ``xslow`` (or 20 ``rx(pi/20)``) pulse, then an ``X`` gate, then a measurement
-    that should read ``0`` for a well-initialised qubit. Edge-mode pre-check
-    accepts a shot when *at least one* of a data/spectator pair reads ``0``.
-
-    Optionally via ``include_unmeasured``, active qubits that are not terminated by
-    a measurement are also treated as spectators.
-
-    The added measurements write to a new classical register with one bit per spectator qubit and name
-    ``spectator_creg_name`` (default: ``"spectator_pre"``).
+    The added measurements write to a new classical register with one bit per spectator qubit, named
+    ``spectator_creg_name`` (default ``"spectator_pre"``).
 
     .. note::
-        When the circuit already contains a data-qubit pre-check structure produced by
-        :class:`.AddPreCircuitBitFlipChecks`, this pass splices the spectator measurements into
-        it (sharing the front barrier). Otherwise it prepends a self-contained pre-check on the
-        spectator wires, so it adds the ``spectator_pre`` register whether or not
-        :class:`.AddPreCircuitBitFlipChecks` ran first.
 
-    Example:
-        .. code-block:: python
-
-            from qiskit import QuantumCircuit
-            from qiskit.transpiler import PassManager, CouplingMap
-            from qiskit_addon_utils.noise_management.bit_flip_checks.passes import (
-                AddPreCircuitBitFlipChecks,
-                AddSpectatorPreCircuitBitFlipChecks,
-            )
-
-            # Create a circuit that uses qubits 0, 1, 2
-            qc = QuantumCircuit(5, 3)  # 5 qubits total, 3 classical bits
-            qc.h(0)
-            qc.cx(0, 1)
-            qc.cx(1, 2)
-            qc.measure([0, 1, 2], [0, 1, 2])
-
-            # Define coupling map (qubits 3 and 4 are spectators adjacent to active qubits)
-            coupling_map = CouplingMap([(0, 1), (1, 2), (2, 3), (1, 4)])
-
-            # Add pre-check measurements on both active and spectator qubits
-            pm = PassManager([
-                AddPreCircuitBitFlipChecks(),
-                AddSpectatorPreCircuitBitFlipChecks(coupling_map),
-            ])
-            qc_with_pre = pm.run(qc)
-
-            # The resulting circuit will have:
-            # 1. Pre-check measurements on active qubits 0, 1, 2 (to c_pre register)
-            # 2. Pre-check measurements on spectator qubits 3, 4 (to spectator_pre register)
-            # 3. A barrier
-            # 4. The original circuit operations
+      These passes are only supported on Heron QPUs where `fractional gates <http://quantum.cloud.ibm.com/docs/guides/fractional-gates>`__ are supported.
     """
-
     def __init__(
         self,
         coupling_map: CouplingMap | list[tuple[int, int]],
-        x_pulse_type: str | XPulseType = XPulseType.XSLOW,  # type: ignore
+        x_pulse_type: Literal["xslow", "rx"] | XPulseType = XPulseType.XSLOW,  # type: ignore
         *,
         include_unmeasured: bool = True,
         spectator_creg_name: str = DEFAULT_SPECTATOR_PRE_CREG_NAME,
@@ -116,7 +65,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
 
         Args:
             coupling_map: A coupling map or a list of tuples indicating pairs of neighboring qubits.
-            x_pulse_type: The type of X-pulse to apply for the pre-check measurements.
+            x_pulse_type: The type of X-pulse to apply for the pre-check measurements. Either ``"xslow"`` or ``"rx"``.
             include_unmeasured: Whether the qubits that are active but are not terminated by a measurement should
                 also be treated as spectators. If ``True``, a terminal measurement is added on each of them.
             spectator_creg_name: The name of the classical register added for the measurements on the spectator qubits.
