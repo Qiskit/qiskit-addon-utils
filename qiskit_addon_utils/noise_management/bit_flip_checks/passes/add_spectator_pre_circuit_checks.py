@@ -50,6 +50,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
 
       These passes are only supported on Heron QPUs where `fractional gates <http://quantum.cloud.ibm.com/docs/guides/fractional-gates>`__ are supported.
     """
+
     def __init__(
         self,
         coupling_map: CouplingMap | list[tuple[int, int]],
