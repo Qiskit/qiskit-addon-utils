@@ -86,6 +86,9 @@ autodoc_default_options = {
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
 
+# XSlowGate inherits qiskit docstrings that :ref: a narrative label absent from IBM's published objects.inv, which intersphinx can't resolve; suppress that one warning category.
+suppress_warnings = ["ref.ref"]
+
 
 # This adds numbers to the captions for figures, tables,
 # and code blocks.

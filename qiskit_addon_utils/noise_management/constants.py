@@ -1,6 +1,6 @@
 # This code is a Qiskit project.
 #
-# (C) Copyright IBM 2025.
+# (C) Copyright IBM 2026.
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
@@ -21,4 +21,29 @@ The default suffix to append to the names of the classical registers used for po
 DEFAULT_SPECTATOR_CREG_NAME = "spec"
 """
 The default name of the classical register used for measuring spectator qubits.
+"""
+
+# Constants for the ``bit_flip_checks`` sub-package. Both pre- and post-circuit bit-flip
+# checks feed a single post-selection routine; the "pre"/"post" labels below distinguish
+# *where in the circuit* the bit-flip check is inserted (start vs. end), not two different
+# selection techniques.
+
+DEFAULT_POST_CHECK_SUFFIX = "_ps"
+"""
+The default suffix appended to classical registers holding post-circuit bit-flip check measurements.
+"""
+
+DEFAULT_PRE_CHECK_SUFFIX = "_pre"
+"""
+The default suffix appended to classical registers holding pre-circuit bit-flip check measurements.
+"""
+
+DEFAULT_SPECTATOR_PRE_CREG_NAME = "spec_pre"
+"""
+The default name of the classical register used for measuring spectator qubits in pre-circuit bit-flip checks.
+"""
+
+RX_PULSE_COUNT = 20
+"""
+The number of ``rx(pi / RX_PULSE_COUNT)`` gates used to emulate a slow X-pulse when ``x_pulse_type="rx"``.
 """
