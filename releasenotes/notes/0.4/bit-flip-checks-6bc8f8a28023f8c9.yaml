@@ -1,4 +1,4 @@
 ---
 features:
   - |
-    Added the :mod:`qiskit_addon_utils.noise_management.bit_flip_checks` sub-package for detecting samples likely corrupted by non-Markovian noise with bit-flip checks. Postselecting only samples which pass all checks can result in a higher-fidelity distribution of samples from the QPU. See the `guide <https://qiskit.github.io/qiskit-addon-utils/how_tos/postselection_with_bit_flip_checks.html>`__ for more details.
+    Added the :mod:`qiskit_addon_utils.noise_management.bit_flip_checks` sub-package for detecting samples likely corrupted by non-Markovian noise with bit-flip checks. Postselecting only samples which pass all checks can result in a higher-fidelity distribution of samples from the QPU. See the `guide <https://github.com/Qiskit/qiskit-addon-utils/blob/stable/0.4/docs/how_tos/postselection_with_bitflip_checks.ipynb>`__ for more details.
