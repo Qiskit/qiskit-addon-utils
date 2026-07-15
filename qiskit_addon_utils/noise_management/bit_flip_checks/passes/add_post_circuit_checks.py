@@ -25,7 +25,7 @@ from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ...constants import DEFAULT_POST_CHECK_SUFFIX
+from ...constants import DEFAULT_POST_CHECK_SUFFIX, RX_PULSE_COUNT
 from ..xslow_gate import XSlowGate
 from ._utils import validate_op_is_supported
 from .x_pulse_type import XPulseType
@@ -41,7 +41,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
     the fidelity of distributions sampled from the QPU.
 
     The added measurements write to new classical registers that are copies of the DAG's registers,
-    with modified names (by default, appending ``"_pre"`` to the register name).
+    with modified names (by default, appending ``"_ps"`` to the register name).
 
     .. note::
 
@@ -58,7 +58,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
         """Initialize the pass.
 
         Args:
-            x_pulse_type: The type of X-pulse to apply for the post-check measurements. Either "xslow" or "rx".
+            x_pulse_type: The type of X-pulse to apply for the post-check measurements. Either ``"xslow"`` or ``"rx"``.
             post_check_suffix: A fixed suffix to append to the names of the classical registers when copying them.
             ignore_creg_suffixes: A list of suffixes for classical registers that should be ignored (not copied).
                 By default, registers ending with "_pre" are ignored to avoid adding post-check to pre-check registers.
@@ -73,7 +73,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate()]
         else:
-            self.pulse_sequence = [RXGate(np.pi / 20)] * 20
+            self.pulse_sequence = [RXGate(np.pi / RX_PULSE_COUNT)] * RX_PULSE_COUNT
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Find what qubits have a terminal measurement
@@ -141,7 +141,7 @@ class AddPostCircuitBitFlipChecks(TransformationPass):
             # Skip reset operations - they are part of pre-check protocol
             if node.op.name == "reset":
                 continue
-            elif node.is_standard_gate() or (name := node.op.name) in ("xslow", "delay"):
+            elif node.is_standard_gate() or node.op.name in ("xslow", "delay"):
                 for qarg in node.qargs:
                     terminal_measurements[qarg] = None
             elif (name := node.op.name) == "barrier":

@@ -27,7 +27,11 @@ from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ...constants import DEFAULT_POST_CHECK_SUFFIX, DEFAULT_SPECTATOR_CREG_NAME
+from ...constants import (
+    DEFAULT_POST_CHECK_SUFFIX,
+    DEFAULT_SPECTATOR_CREG_NAME,
+    RX_PULSE_COUNT,
+)
 from ..xslow_gate import XSlowGate
 from ._utils import validate_op_is_supported
 from .x_pulse_type import XPulseType
@@ -99,7 +103,7 @@ class AddSpectatorPostCircuitBitFlipChecks(TransformationPass):
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate()]
         else:
-            self.pulse_sequence = [RXGate(np.pi / 20)] * 20
+            self.pulse_sequence = [RXGate(np.pi / RX_PULSE_COUNT)] * RX_PULSE_COUNT
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Coupling-map node ``i`` maps to register qubit ``i``, so the circuit must span the

@@ -27,7 +27,7 @@ from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ...constants import DEFAULT_SPECTATOR_PRE_CREG_NAME
+from ...constants import DEFAULT_SPECTATOR_PRE_CREG_NAME, RX_PULSE_COUNT
 from ..xslow_gate import XSlowGate
 from ._utils import validate_op_is_supported
 from .x_pulse_type import XPulseType
@@ -44,7 +44,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
     ``include_unmeasured``, active qubits that are not terminated by a measurement are also treated as spectators.
 
     The added measurements write to a new classical register with one bit per spectator qubit, named
-    ``spectator_creg_name`` (default ``"spectator_pre"``).
+    ``spectator_creg_name`` (default ``"spec_pre"``).
 
     .. note::
 
@@ -102,7 +102,7 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate(), XGate()]
         else:
-            self.pulse_sequence = [RXGate(np.pi / 20)] * 20 + [XGate()]
+            self.pulse_sequence = [RXGate(np.pi / RX_PULSE_COUNT)] * RX_PULSE_COUNT + [XGate()]
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Coupling-map node ``i`` maps to register qubit ``i``, so the circuit must span the
@@ -307,9 +307,6 @@ class AddSpectatorPreCircuitBitFlipChecks(TransformationPass):
                     )
 
                 terminated_qubits.update(set.intersection(*all_terminated_qubits))
-            elif "xslow" in node.op.name:  # pragma: no cover
-                # Unreachable: caught by the earlier ``continue``; kept in case that skip is loosened.
-                continue
             else:  # pragma: no cover
                 raise TranspilerError(f"``'{node.op.name}'`` is not supported.")
 

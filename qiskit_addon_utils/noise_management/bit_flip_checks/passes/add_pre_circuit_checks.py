@@ -25,7 +25,7 @@ from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 
-from ...constants import DEFAULT_PRE_CHECK_SUFFIX
+from ...constants import DEFAULT_PRE_CHECK_SUFFIX, RX_PULSE_COUNT
 from ..xslow_gate import XSlowGate
 from ._utils import validate_op_is_supported
 from .x_pulse_type import XPulseType
@@ -79,7 +79,7 @@ class AddPreCircuitBitFlipChecks(TransformationPass):
         if self.x_pulse_type == XPulseType.XSLOW:
             self.pulse_sequence = [XSlowGate(), XGate()]
         else:
-            self.pulse_sequence = [RXGate(np.pi / 20)] * 20 + [XGate()]
+            self.pulse_sequence = [RXGate(np.pi / RX_PULSE_COUNT)] * RX_PULSE_COUNT + [XGate()]
 
     def run(self, dag: DAGCircuit):  # noqa: D102
         # Find what qubits are active in the circuit

@@ -153,6 +153,7 @@ def test_node_and_edge_based_checks(mode, strategy):
 
 
 def test_raises():
+    """``compute_mask`` rejects an unknown strategy and inconsistent/missing result arrays."""
     qreg = QuantumRegister(5, "q")
     creg0 = ClassicalRegister(3, "alpha")
     creg0_ps = ClassicalRegister(3, "alpha_ps")
@@ -162,7 +163,7 @@ def test_raises():
 
     post_selector = PostSelector.from_circuit(circuit, [])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="invalid"):
         post_selector.compute_mask({}, strategy="invalid", mode="post")
 
     result = {"alpha": np.zeros((1, 3), dtype=bool), "alpha_ps": np.zeros((2, 3), dtype=bool)}
@@ -175,6 +176,7 @@ def test_raises():
 
 
 def test_combined_pre_and_post_check():
+    """``mode="both"`` keeps only shots passing both pre- and post-checks (logical AND)."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_pre = ClassicalRegister(3, "alpha_pre")
@@ -286,6 +288,7 @@ def test_mode_errors():
 
 
 def test_validation_errors_pre_check():
+    """Malformed pre-check registers are rejected when building the selector/summary."""
     qreg = QuantumRegister(3, "q")
     creg = ClassicalRegister(3, "alpha")
     creg_pre = ClassicalRegister(3, "alpha_pre")

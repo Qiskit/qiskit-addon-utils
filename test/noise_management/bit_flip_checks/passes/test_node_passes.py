@@ -78,7 +78,9 @@ def test_delay_is_supported():
     qc.append(Delay(100), [0])
     qc.measure(0, 0)
     pm = PassManager([AddPostCircuitBitFlipChecks()])
-    pm.run(qc)
+    result = pm.run(qc)
+    # The delay does not block terminal-measurement detection, so a post-check register is added.
+    assert "c_ps" in {creg.name for creg in result.cregs}
 
 
 def test_post_check_skips_user_reset():

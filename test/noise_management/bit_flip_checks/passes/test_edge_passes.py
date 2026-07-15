@@ -27,6 +27,7 @@ from qiskit_addon_utils.noise_management.bit_flip_checks.passes import (
     AddSpectatorPostCircuitBitFlipChecks,
     AddSpectatorPreCircuitBitFlipChecks,
 )
+from qiskit_addon_utils.noise_management.constants import RX_PULSE_COUNT
 
 # Coupling 4-0-1-2-3: active {0,1,2}, spectators (inactive neighbours) {3,4}.
 COUPLING_MAP = [(0, 1), (1, 2), (2, 3), (0, 4)]
@@ -107,7 +108,7 @@ def test_post_sel_with_spectators():
     paired_data = {0, 2}
     unpaired_data = {1}
 
-    post_pulse_tail = ["barrier"] + ["rx"] * 20 + ["barrier", "measure"]
+    post_pulse_tail = ["barrier"] + ["rx"] * RX_PULSE_COUNT + ["barrier", "measure"]
 
     for q in ACTIVE_QUBITS:
         assert _meas_registers(result, q) == ["c", "c_ps"]
@@ -124,7 +125,7 @@ def test_post_sel_with_spectators():
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec", "spec_ps"]
         ops = _ops_for_qubit(result, q)
-        assert ops == ["barrier", "measure", "barrier"] + ["rx"] * 20 + [
+        assert ops == ["barrier", "measure", "barrier"] + ["rx"] * RX_PULSE_COUNT + [
             "barrier",
             "measure",
         ]
@@ -148,7 +149,7 @@ def test_pre_sel_with_spectators():
         assert _meas_registers(result, q) == ["c_pre", "c"]
 
     for q in SPECTATOR_QUBITS:
-        assert _ops_for_qubit(result, q) == ["rx"] * 20 + [
+        assert _ops_for_qubit(result, q) == ["rx"] * RX_PULSE_COUNT + [
             "x",
             "barrier",
             "measure",
@@ -202,7 +203,7 @@ def _assert_full_stack_invariants(result: QuantumCircuit) -> None:
         assert _meas_registers(result, q) == ["spec_pre", "spec", "spec_ps"]
         ops = _ops_for_qubit(result, q)
         expected = (
-            ["rx"] * 20
+            ["rx"] * RX_PULSE_COUNT
             + [
                 "x",
                 "barrier",
@@ -211,7 +212,7 @@ def _assert_full_stack_invariants(result: QuantumCircuit) -> None:
                 "measure",  # spec
                 "barrier",
             ]
-            + ["rx"] * 20
+            + ["rx"] * RX_PULSE_COUNT
             + [
                 "barrier",
                 "measure",  # spec_ps
@@ -347,6 +348,26 @@ def test_spec_pre_include_unmeasured_false():
     assert _creg_map(result)["spec_pre"] == len(SPECTATOR_QUBITS)
     for q in SPECTATOR_QUBITS:
         assert _meas_registers(result, q) == ["spec_pre"]
+
+
+def test_spec_pre_include_unmeasured_true_picks_up_lone_unterminated_qubit():
+    """``include_unmeasured=True`` broadens the spectator set to unterminated active qubits.
+
+    Empty coupling map ⇒ no adjacency spectators, so the only route into the
+    spectator set is the ``include_unmeasured=True`` broadening.
+    """
+    qc = QuantumCircuit(1)
+    qc.h(0)  # active, never measured
+
+    on = PassManager(
+        [AddSpectatorPreCircuitBitFlipChecks(coupling_map=[], include_unmeasured=True)]
+    )
+    off = PassManager(
+        [AddSpectatorPreCircuitBitFlipChecks(coupling_map=[], include_unmeasured=False)]
+    )
+
+    assert "spec_pre" in {c.name for c in on.run(qc).cregs}
+    assert off.run(qc) == qc
 
 
 def test_spec_pre_existing_register_correct_size():

@@ -322,7 +322,7 @@ def _get_measure_maps(
     measure_map_pre: dict[int, tuple[str, int]] = {}
 
     for node in dag.topological_op_nodes():
-        if node.op.name == "measure":  # pragma: no cover
+        if node.op.name == "measure":
             if clbit := clbit_map.get(node.cargs[0]):
                 measure_map[qubit_map[node.qargs[0]]] = clbit
             elif clbit_ps := clbit_map_ps.get(node.cargs[0]):

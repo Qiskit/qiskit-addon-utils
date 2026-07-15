@@ -42,3 +42,8 @@ DEFAULT_SPECTATOR_PRE_CREG_NAME = "spec_pre"
 """
 The default name of the classical register used for measuring spectator qubits in pre-circuit bit-flip checks.
 """
+
+RX_PULSE_COUNT = 20
+"""
+The number of ``rx(pi / RX_PULSE_COUNT)`` gates used to emulate a slow X-pulse when ``x_pulse_type="rx"``.
+"""
