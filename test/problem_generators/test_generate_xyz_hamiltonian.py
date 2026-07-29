@@ -130,3 +130,80 @@ class TestProblemGeneration(unittest.TestCase):
                 "External magnetic field must be specified by a length-3 sequence of floating point values.",
                 e_info.value.args[0],
             )
+        with self.subTest("Uniform scalar coupling and field"):
+            lattice = CouplingMap.from_line(3)
+            ham = generate_xyz_hamiltonian(
+                lattice,
+                coupling_constants=1.0,
+                ext_magnetic_field=0.5,
+            )
+
+            target_obs = SparsePauliOp(
+                [
+                    "XXI",
+                    "YYI",
+                    "ZZI",
+                    "IXX",
+                    "IYY",
+                    "IZZ",
+                    "XII",
+                    "YII",
+                    "ZII",
+                    "IXI",
+                    "IYI",
+                    "IZI",
+                    "IIX",
+                    "IIY",
+                    "IIZ",
+                ],
+                coeffs=[1.0] * 6 + [0.5] * 9,
+            )
+            self.assertEqual(target_obs, ham)
+
+        with self.subTest("Edge-specific coupling_constants dict"):
+            lattice = CouplingMap.from_line(3)
+            ham = generate_xyz_hamiltonian(
+                lattice,
+                coupling_constants={
+                    (0, 1): (0.1, 0.0, 0.0),
+                    (1, 2): (0.0, 0.2, 0.0),
+                },
+                ext_magnetic_field=0.0,
+            )
+
+            target_obs = SparsePauliOp(
+                ["XXI", "IYY"],
+                coeffs=[0.1, 0.2],
+            )
+            self.assertEqual(target_obs, ham)
+
+        with self.subTest("Site-specific ext_magnetic_field dict"):
+            lattice = CouplingMap.from_line(3)
+            ham = generate_xyz_hamiltonian(
+                lattice,
+                coupling_constants=0.0,
+                ext_magnetic_field={
+                    0: (0.3, 0.0, 0.0),
+                    2: (0.0, 0.4, 0.0),
+                },
+            )
+
+            target_obs = SparsePauliOp(
+                ["XII", "IIY"],
+                coeffs=[0.3, 0.4],
+            )
+            self.assertEqual(target_obs, ham)
+
+        with self.subTest("Invalid dict tuple length raises ValueError"):
+            lattice = CouplingMap.from_line(3)
+            with pytest.raises(ValueError):
+                generate_xyz_hamiltonian(
+                    lattice,
+                    coupling_constants={(0, 1): (1.0, 2.0)},
+                )
+
+            with pytest.raises(ValueError):
+                generate_xyz_hamiltonian(
+                    lattice,
+                    ext_magnetic_field={0: (1.0, 2.0)},
+                )
