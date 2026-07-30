@@ -138,10 +138,11 @@ def generate_xyz_hamiltonian(
         ValueError: The external magnetic field must be specified by a length-3 sequence of floating
             point values.
     """
-
+    # Validate inputs
     _validate_xyz_input(coupling_constants, name="Coupling constants")
-    _validate_xyz_input(ext_magnetic_field, name="External magnetic field") 
-    
+    _validate_xyz_input(ext_magnetic_field, name="External magnetic field")
+    _validate_edge_dict_keys(coupling_constants)
+
     if coloring is None:
         # Specify the coupling as an undirected rx.PyGraph so we can color the edges
         undirected_graph = _make_undirected_graph(coupling)
@@ -244,11 +245,22 @@ def _validate_xyz_input(value: float | Sequence[float] | dict, *, name: str) -> 
     if isinstance(value, dict):
         return
 
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        if len(value) != 3:
-            raise ValueError(
-                f"{name} must be specified by a length-3 sequence of floating point values."
-            )
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and len(value) != 3:
+        raise ValueError(
+            f"{name} must be specified by a length-3 sequence of floating point values."
+        )
+
+
+def _validate_edge_dict_keys(
+    coupling_constants: dict[tuple[int, int], float | Sequence[float]],
+) -> None:
+    """Validate that dict-based edge couplings use valid edge keys."""
+    if not isinstance(coupling_constants, dict):
+        return
+
+    for edge in coupling_constants:
+        _normalize_edge_key(edge)
+
 
 def _normalize_xyz_triplet(
     value: float | Sequence[float],
