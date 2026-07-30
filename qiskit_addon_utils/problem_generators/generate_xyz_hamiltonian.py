@@ -138,14 +138,10 @@ def generate_xyz_hamiltonian(
         ValueError: The external magnetic field must be specified by a length-3 sequence of floating
             point values.
     """
-    if len(coupling_constants) != 3:
-        raise ValueError(
-            "Coupling constants must be specified by a length-3 sequence of floating point values."
-        )
-    if len(ext_magnetic_field) != 3:
-        raise ValueError(
-            "External magnetic field must be specified by a length-3 sequence of floating point values."
-        )
+
+    _validate_xyz_input(coupling_constants, name="Coupling constants")
+    _validate_xyz_input(ext_magnetic_field, name="External magnetic field") 
+    
     if coloring is None:
         # Specify the coupling as an undirected rx.PyGraph so we can color the edges
         undirected_graph = _make_undirected_graph(coupling)
@@ -157,6 +153,7 @@ def generate_xyz_hamiltonian(
     # Generate Hamiltonian
     num_qubits = coupling.size() if isinstance(coupling, CouplingMap) else coupling.num_nodes()
 
+    # Normalize the coupling constants and magnetic field values to a per-edge and per-qubit mapping
     edge_couplings = _normalize_coupling_constants(coupling_constants, colored_edges)
     site_fields = _normalize_ext_magnetic_field(ext_magnetic_field, num_qubits)
 
@@ -242,12 +239,24 @@ def _make_undirected_graph(
     return undirected_graph
 
 
+def _validate_xyz_input(value: float | Sequence[float] | dict, *, name: str) -> None:
+    """Validate top-level scalar/sequence inputs before normalization."""
+    if isinstance(value, dict):
+        return
+
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if len(value) != 3:
+            raise ValueError(
+                f"{name} must be specified by a length-3 sequence of floating point values."
+            )
+
 def _normalize_xyz_triplet(
     value: float | Sequence[float],
     *,
     name: str,
 ) -> tuple[float, float, float]:
     """Normalize a scalar or 3-element sequence to a length-3 tuple."""
+    # If the value is a scalar, return a tuple with the same value repeated three times.
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         if len(value) != 3:
             raise ValueError(f"{name} must be a scalar or length-3 sequence of floats.")
@@ -257,6 +266,7 @@ def _normalize_xyz_triplet(
 
 def _normalize_edge_key(edge: tuple[int, int]) -> tuple[int, int]:
     """Canonicalize an undirected edge key so (i, j) and (j, i) match."""
+    # Validate the edge key is a tuple of two integers
     if (
         not isinstance(edge, tuple)
         or len(edge) != 2
@@ -267,17 +277,26 @@ def _normalize_edge_key(edge: tuple[int, int]) -> tuple[int, int]:
 
 
 def _normalize_coupling_constants(
-    coupling_constants: float | Sequence[float] | dict[tuple[int, int], float | Sequence[float]],
-    colored_edges: list[tuple[tuple[int, int], int]],
-) -> dict[tuple[int, int], tuple[float, float, float]]:
-    """Return a per-edge (Jxx, Jyy, Jzz) mapping for every colored edge."""
+    coupling_constants,
+    colored_edges,
+):
     if isinstance(coupling_constants, dict):
-        normalized: dict[tuple[int, int], tuple[float, float, float]] = {}
+        normalized = {}
         for edge, value in coupling_constants.items():
-            normalized[_normalize_edge_key(edge)] = _normalize_xyz_triplet(
-                value, name="coupling_constants"
-            )
-        edge_map: dict[tuple[int, int], tuple[float, float, float]] = {}
+            canonical_edge = _normalize_edge_key(edge)
+            triplet = _normalize_xyz_triplet(value, name="coupling_constants")
+
+            if canonical_edge in normalized:
+                if normalized[canonical_edge] != triplet:
+                    raise ValueError(
+                        f"coupling_constants contains conflicting values for edge {canonical_edge}."
+                    )
+                # same value -> harmless duplicate, keep the existing entry
+                continue
+
+            normalized[canonical_edge] = triplet
+
+        edge_map = {}
         for edge, _ in colored_edges:
             edge_map[edge] = normalized.get(_normalize_edge_key(edge), (0.0, 0.0, 0.0))
         return edge_map

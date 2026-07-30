@@ -140,21 +140,21 @@ class TestProblemGeneration(unittest.TestCase):
 
             target_obs = SparsePauliOp(
                 [
-                    "XXI",
-                    "YYI",
-                    "ZZI",
                     "IXX",
                     "IYY",
                     "IZZ",
-                    "XII",
-                    "YII",
-                    "ZII",
-                    "IXI",
-                    "IYI",
-                    "IZI",
+                    "XXI",
+                    "YYI",
+                    "ZZI",
                     "IIX",
                     "IIY",
                     "IIZ",
+                    "IXI",
+                    "IYI",
+                    "IZI",
+                    "XII",
+                    "YII",
+                    "ZII",
                 ],
                 coeffs=[1.0] * 6 + [0.5] * 9,
             )
@@ -172,7 +172,7 @@ class TestProblemGeneration(unittest.TestCase):
             )
 
             target_obs = SparsePauliOp(
-                ["XXI", "IYY"],
+                ["IXX", "YYI"],
                 coeffs=[0.1, 0.2],
             )
             self.assertEqual(target_obs, ham)
@@ -189,7 +189,7 @@ class TestProblemGeneration(unittest.TestCase):
             )
 
             target_obs = SparsePauliOp(
-                ["XII", "IIY"],
+                ["IIX", "YII"],
                 coeffs=[0.3, 0.4],
             )
             self.assertEqual(target_obs, ham)
@@ -207,3 +207,26 @@ class TestProblemGeneration(unittest.TestCase):
                     lattice,
                     ext_magnetic_field={0: (1.0, 2.0)},
                 )
+
+        with self.subTest("Duplicate edge entries with different coefficients raise ValueError"):
+            lattice = CouplingMap.from_line(3)
+            with pytest.raises(ValueError):
+                generate_xyz_hamiltonian(
+                    lattice,
+                    coupling_constants={(0, 1): 1.0, (1, 0): 2.0},
+                    ext_magnetic_field=0.0,
+                )
+
+        with self.subTest("Duplicate edge entries with same coefficients are allowed"):
+            lattice = CouplingMap.from_line(3)
+            ham = generate_xyz_hamiltonian(
+                lattice,
+                coupling_constants={(0, 1): 1.0, (1, 0): 1.0},
+                ext_magnetic_field=0.0,
+            )
+
+            target_obs = SparsePauliOp(
+                ["IXX", "IYY", "IZZ"],
+                coeffs=[1.0, 1.0, 1.0],
+            )
+            self.assertEqual(target_obs, ham)
