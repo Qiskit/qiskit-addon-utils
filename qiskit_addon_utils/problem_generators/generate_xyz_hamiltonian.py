@@ -133,10 +133,11 @@ def generate_xyz_hamiltonian(
         corresponds to the node in index ``i`` on the coupling map.
 
     Raises:
-        ValueError: The coupling constants must be specified by a length-3 sequence of floating
-            point values.
-        ValueError: The external magnetic field must be specified by a length-3 sequence of floating
-            point values.
+        ValueError: Coupling constants must be a scalar or length-3 sequence of floating point values.
+        ValueError: External magnetic field must be a scalar or length-3 sequence of floating point values.
+        ValueError: Edge keys must be tuples of two integer qubit indices.
+        ValueError: Coupling constants contains conflicting values for an edge.
+        ValueError: Magnetic field keys must be integer qubit indices.
     """
     # Validate inputs
     _validate_xyz_input(coupling_constants, name="Coupling constants")
@@ -247,7 +248,7 @@ def _validate_xyz_input(value: float | Sequence[float] | dict, *, name: str) -> 
 
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and len(value) != 3:
         raise ValueError(
-            f"{name} must be specified by a length-3 sequence of floating point values."
+            f"{name} must be specified by a length-3 sequence of scalar or floating point values."
         )
 
 
@@ -298,7 +299,7 @@ def _normalize_coupling_constants(
             if canonical_edge in normalized:
                 if normalized[canonical_edge] != triplet:
                     raise ValueError(
-                        f"coupling_constants contains conflicting values for edge {canonical_edge}."
+                        f"Coupling_constants contains conflicting values for edge {canonical_edge}."
                     )
                 continue
 
