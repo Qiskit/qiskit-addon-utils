@@ -267,8 +267,12 @@ def _normalize_xyz_triplet(
     value: float | Sequence[float],
 ) -> tuple[float, float, float]:
     """Normalize a scalar or 3-element sequence to a length-3 tuple."""
-    # If the value is a scalar, return a tuple with the same value repeated three times.
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if len(value) != 3:
+            raise ValueError(
+                "Value must be a scalar or length-3 sequence of floating point values."
+            )
+        # If the value is a scalar, return a tuple with the same value repeated three times.
         return (float(value[0]), float(value[1]), float(value[2]))
     return (float(value), float(value), float(value))
 

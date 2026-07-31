@@ -119,7 +119,7 @@ class TestProblemGeneration(unittest.TestCase):
             with pytest.raises(ValueError) as e_info:
                 generate_xyz_hamiltonian(lattice, coupling_constants=(1.0, 1.0))
             self.assertEqual(
-                "Coupling constants must be specified by a length-3 sequence of floating point values.",
+                "Coupling constants must be specified by a length-3 sequence of scalar or floating point values.",
                 e_info.value.args[0],
             )
         with self.subTest("Bad magnetic field"):
@@ -127,7 +127,7 @@ class TestProblemGeneration(unittest.TestCase):
             with pytest.raises(ValueError) as e_info:
                 generate_xyz_hamiltonian(lattice, ext_magnetic_field=(1.0, 1.0))
             self.assertEqual(
-                "External magnetic field must be specified by a length-3 sequence of floating point values.",
+                "External magnetic field must be specified by a length-3 sequence of scalar or floating point values.",
                 e_info.value.args[0],
             )
         with self.subTest("Uniform scalar coupling and field"):
