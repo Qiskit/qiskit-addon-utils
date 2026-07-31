@@ -252,7 +252,7 @@ def _validate_xyz_input(value: float | Sequence[float] | dict, *, name: str) -> 
 
 
 def _validate_edge_dict_keys(
-    coupling_constants: dict[tuple[int, int], float | Sequence[float]],
+    coupling_constants: float | Sequence[float] | dict[tuple[int, int], float | Sequence[float]],
 ) -> None:
     """Validate that dict-based edge couplings use valid edge keys."""
     if not isinstance(coupling_constants, dict):
@@ -264,14 +264,10 @@ def _validate_edge_dict_keys(
 
 def _normalize_xyz_triplet(
     value: float | Sequence[float],
-    *,
-    name: str,
 ) -> tuple[float, float, float]:
     """Normalize a scalar or 3-element sequence to a length-3 tuple."""
     # If the value is a scalar, return a tuple with the same value repeated three times.
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        if len(value) != 3:
-            raise ValueError(f"{name} must be a scalar or length-3 sequence of floats.")
         return (float(value[0]), float(value[1]), float(value[2]))
     return (float(value), float(value), float(value))
 
@@ -289,21 +285,21 @@ def _normalize_edge_key(edge: tuple[int, int]) -> tuple[int, int]:
 
 
 def _normalize_coupling_constants(
-    coupling_constants,
-    colored_edges,
-):
+    coupling_constants: float | Sequence[float] | dict[tuple[int, int], float | Sequence[float]],
+    colored_edges: list[tuple[tuple[int, int], int]],
+) -> dict[tuple[int, int], tuple[float, float, float]]:
+    """Return a per-edge (Jx, Jy, Jz) mapping for every edge."""
     if isinstance(coupling_constants, dict):
-        normalized = {}
+        normalized: dict[tuple[int, int], tuple[float, float, float]] = {}
         for edge, value in coupling_constants.items():
             canonical_edge = _normalize_edge_key(edge)
-            triplet = _normalize_xyz_triplet(value, name="coupling_constants")
+            triplet = _normalize_xyz_triplet(value)
 
             if canonical_edge in normalized:
                 if normalized[canonical_edge] != triplet:
                     raise ValueError(
                         f"coupling_constants contains conflicting values for edge {canonical_edge}."
                     )
-                # same value -> harmless duplicate, keep the existing entry
                 continue
 
             normalized[canonical_edge] = triplet
@@ -313,7 +309,7 @@ def _normalize_coupling_constants(
             edge_map[edge] = normalized.get(_normalize_edge_key(edge), (0.0, 0.0, 0.0))
         return edge_map
 
-    triple = _normalize_xyz_triplet(coupling_constants, name="coupling_constants")
+    triple = _normalize_xyz_triplet(coupling_constants)
     return {edge: triple for edge, _ in colored_edges}
 
 
@@ -327,8 +323,8 @@ def _normalize_ext_magnetic_field(
         for qubit, value in ext_magnetic_field.items():
             if not isinstance(qubit, int):
                 raise ValueError("Magnetic field keys must be integer qubit indices.")
-            normalized[qubit] = _normalize_xyz_triplet(value, name="ext_magnetic_field")
+            normalized[qubit] = _normalize_xyz_triplet(value)
         return {qubit: normalized.get(qubit, (0.0, 0.0, 0.0)) for qubit in range(num_qubits)}
 
-    triple = _normalize_xyz_triplet(ext_magnetic_field, name="ext_magnetic_field")
+    triple = _normalize_xyz_triplet(ext_magnetic_field)
     return {qubit: triple for qubit in range(num_qubits)}
