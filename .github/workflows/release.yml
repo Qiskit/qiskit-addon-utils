@@ -46,22 +46,29 @@ jobs:
     needs:
       - build_sdist
       - build_wheels
+    permissions:
+      contents: write
     steps:
-      - name: Checkout tag
-        uses: actions/checkout@v7
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
           pattern: pkg-*
           path: dist
           merge-multiple: true
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum -- * > checksums.sha256
       - name: Publish release
-        uses: ghalactic/github-release-from-tag@v6
-        with:
-          prerelease: false
-          generateReleaseNotes: "true"
-          assets: |
-            - path: dist/*
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create
+          '${{ github.ref_name }}'
+          --repo '${{ github.repository }}'
+          --title '${{ github.ref_name }}'
+          --generate-notes
+          --verify-tag
+          dist/*
 
   pypi:
     name: Publish to pypi
