@@ -12,6 +12,7 @@ on:
     branches:
       - main
       - 'stable/**'
+  merge_group:
 
 jobs:
   build:
