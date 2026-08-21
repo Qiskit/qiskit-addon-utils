@@ -1,0 +1,5 @@
+---
+other:
+  - |
+    This release adds support for Python 3.14.  No code changes were necessary,
+    so older releases are expected to work on Python 3.14 too.
