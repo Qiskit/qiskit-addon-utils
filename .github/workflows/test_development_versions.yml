@@ -34,14 +34,34 @@ jobs:
       - name: Install tools from pypi
         run: |
           python -m pip install tox build 'extremal-python-dependencies<2'
-      - name: Install Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      - name: Build Qiskit SDK development wheel
+      - name: Clone Qiskit SDK
         run: |
           git clone https://github.com/Qiskit/qiskit
           cd qiskit
           git rev-parse HEAD
-          python -m build --wheel
+      - name: Install Rust
+        # Run from within the Qiskit clone so that the bare `rustup toolchain
+        # install` resolves the toolchain pinned by Qiskit's
+        # rust-toolchain.toml, rather than the runner's default toolchain.
+        #
+        # The preceding uninstall clears any partially-installed copy of that
+        # toolchain left on the runner image.  Without it, rustup tries to
+        # "recover" the partial install while laying down the `clippy`
+        # component that rust-toolchain.toml requests, and aborts with
+        # `detected conflict: 'bin/cargo-clippy'` -- after having already
+        # removed `rustc`, so the build then fails with the rather misleading
+        # `error: can't find Rust compiler`.
+        working-directory: qiskit
+        shell: bash
+        run: |
+          set -euo pipefail
+          channel=$(grep -oP 'channel\s*=\s*"\K[^"]+' rust-toolchain.toml)
+          echo "Qiskit pins Rust channel: ${channel}"
+          rustup toolchain uninstall "${channel}"
+          rustup toolchain install --profile minimal --no-self-update
+      - name: Build Qiskit SDK development wheel
+        working-directory: qiskit
+        run: python -m build --wheel
       - name: Build qiskit-ibm-runtime development wheel
         run: |
           git clone https://github.com/Qiskit/qiskit-ibm-runtime
