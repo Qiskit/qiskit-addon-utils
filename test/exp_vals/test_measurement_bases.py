@@ -30,7 +30,7 @@ class TestGetMeasurementBases(unittest.TestCase):
     def test_single_observable_single_pauli(self):
         """Test with a single observable containing a single Pauli term."""
         obs = SparsePauliOp("ZZZ", 1.0)
-        bases, reverser = get_measurement_bases(obs, bases_in_int_format=True)
+        bases, reverser = get_measurement_bases(obs, bases_format="int")
 
         self.assertEqual(len(bases), 1)
         self.assertEqual(len(reverser), 1)
@@ -45,7 +45,7 @@ class TestGetMeasurementBases(unittest.TestCase):
     def test_single_observable_multiple_paulis(self):
         """Test with a single observable containing multiple Pauli terms."""
         obs = SparsePauliOp(["ZZI", "IZZ", "ZIZ"], [1.0, 2.0, 3.0])
-        bases, _ = get_measurement_bases(obs, bases_in_int_format=True)
+        bases, _ = get_measurement_bases(obs, bases_format="int")
 
         # All Z-type Paulis should commute and be in one basis
         self.assertEqual(len(bases), 1)
@@ -55,7 +55,7 @@ class TestGetMeasurementBases(unittest.TestCase):
         """Test with multiple observables."""
         obs1 = SparsePauliOp("ZZZ", 1.0)
         obs2 = SparsePauliOp("XXX", 2.0)
-        bases, reverser = get_measurement_bases([obs1, obs2], bases_in_int_format=True)
+        bases, reverser = get_measurement_bases([obs1, obs2], bases_format="int")
 
         # Z and X don't commute qubit-wise, so we need 2 bases
         self.assertEqual(len(bases), 2)
@@ -66,18 +66,44 @@ class TestGetMeasurementBases(unittest.TestCase):
             self.assertEqual(len(obs_list), 2)
 
     def test_bases_string_format(self):
-        """Test with bases_in_int_format=False to get string format."""
+        """Test with bases_format="str" to get string format."""
         obs = SparsePauliOp("XYZ", 1.0)
-        bases, _ = get_measurement_bases(obs, bases_in_int_format=False)
+        bases, _ = get_measurement_bases(obs, bases_format="str")
 
         self.assertEqual(len(bases), 1)
         self.assertIsInstance(bases[0], str)
         self.assertEqual(bases[0], "XYZ")
 
+    def test_bases_both_format(self):
+        """Test with bases_format="both" to get both int and string formats."""
+        obs = SparsePauliOp("XYZ", 1.0)
+        bases, reverser = get_measurement_bases(obs, bases_format="both")
+
+        # bases should be a tuple of (int_bases, str_bases)
+        self.assertIsInstance(bases, tuple)
+        self.assertEqual(len(bases), 2)
+
+        bases_int, bases_str = bases
+
+        # Check int format
+        self.assertEqual(len(bases_int), 1)
+        self.assertIsInstance(bases_int[0], np.ndarray)
+        np.testing.assert_array_equal(bases_int[0], np.array([1, 3, 2], dtype=np.uint8))
+
+        # Check string format
+        self.assertEqual(len(bases_str), 1)
+        self.assertIsInstance(bases_str[0], str)
+        self.assertEqual(bases_str[0], "XYZ")
+
+        # Check reverser is still correct
+        self.assertEqual(len(reverser), 1)
+        basis_pauli = next(iter(reverser.keys()))
+        self.assertEqual(basis_pauli, Pauli("XYZ"))
+
     def test_commuting_paulis_grouped(self):
         """Test that commuting Paulis are grouped into the same basis."""
         obs = SparsePauliOp(["ZII", "IZI", "IIZ"], [1.0, 1.0, 1.0])
-        bases, _ = get_measurement_bases(obs, bases_in_int_format=True)
+        bases, _ = get_measurement_bases(obs, bases_format="int")
 
         # All should be in one basis since they commute qubit-wise
         self.assertEqual(len(bases), 1)
@@ -85,7 +111,7 @@ class TestGetMeasurementBases(unittest.TestCase):
     def test_non_commuting_paulis_separate_bases(self):
         """Test that non-commuting Paulis get separate bases."""
         obs = SparsePauliOp(["ZI", "XI"], [1.0, 1.0])
-        bases, _ = get_measurement_bases(obs, bases_in_int_format=True)
+        bases, _ = get_measurement_bases(obs, bases_format="int")
 
         # These don't commute qubit-wise, so need separate bases
         self.assertEqual(len(bases), 2)
@@ -93,7 +119,7 @@ class TestGetMeasurementBases(unittest.TestCase):
     def test_identity_terms(self):
         """Test handling of identity terms."""
         obs = SparsePauliOp(["III", "ZZZ"], [1.0, 2.0])
-        bases, _ = get_measurement_bases(obs, bases_in_int_format=True)
+        bases, _ = get_measurement_bases(obs, bases_format="int")
 
         # Identity commutes with everything
         self.assertGreaterEqual(len(bases), 1)
@@ -103,13 +129,13 @@ class TestGetMeasurementBases(unittest.TestCase):
         # Empty list causes sum() to return 0, which doesn't have .unique() method
         # This is expected behavior - function requires at least one observable
         with pytest.raises(AttributeError):
-            _, _ = get_measurement_bases([], bases_in_int_format=True)
+            _, _ = get_measurement_bases([], bases_format="int")
 
     def test_reverser_none_values(self):
         """Test that reverser contains None for observables without terms in a basis."""
         obs1 = SparsePauliOp("ZZ", 1.0)
         obs2 = SparsePauliOp("XX", 2.0)
-        _, reverser = get_measurement_bases([obs1, obs2], bases_in_int_format=True)
+        _, reverser = get_measurement_bases([obs1, obs2], bases_format="int")
 
         # Each basis should have one observable with terms and one with None
         for _, obs_list in reverser.items():
