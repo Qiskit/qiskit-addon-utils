@@ -122,6 +122,51 @@ class TestAddSpectatorMeasures(unittest.TestCase):
                 f"measure on {measure_node.qargs} is not a direct successor of the shared barrier",
             )
 
+    def test_multiple_terminal_measurements_are_all_synchronized(self):
+        """Same as `test_terminal_and_spectator_measurements_are_synchronized`, but
+        with 4 separate terminated qubits interleaved with non-measurement operations
+        -- exercising the loop over `terminal_measures.items()` in `run()`, not just
+        the single-terminated-qubit case.
+        """
+        circuit = QuantumCircuit(QuantumRegister(self.num_qubits, "q"), ClassicalRegister(4, "c"))
+        circuit.h(7)
+        circuit.cz(7, 17)
+        circuit.cz(17, 27)
+        circuit.cz(27, 28)
+        circuit.measure(7, 0)
+        circuit.measure(17, 1)
+        circuit.measure(27, 2)
+        circuit.measure(28, 3)
+
+        result_dag = circuit_to_dag(self.pm.run(circuit))
+        barrier_nodes = [node for node in result_dag.op_nodes() if node.op.name == "barrier"]
+        self.assertEqual(len(barrier_nodes), 1)
+        barrier_node = barrier_nodes[0]
+
+        measure_nodes = [node for node in result_dag.op_nodes() if node.op.name == "measure"]
+        self.assertEqual(
+            len(measure_nodes), 4 + len(self.coupling_map_spectators_of([7, 17, 27, 28]))
+        )
+        for measure_node in measure_nodes:
+            qubit_predecessor = next(result_dag.quantum_predecessors(measure_node))
+            self.assertEqual(
+                qubit_predecessor,
+                barrier_node,
+                f"measure on {measure_node.qargs} is not a direct successor of the shared barrier",
+            )
+
+    def coupling_map_spectators_of(self, qubits: list) -> set:
+        """The distinct neighbors of ``qubits`` under ``self.coupling_map``, excluding
+        ``qubits`` themselves -- a small helper so tests can assert an exact expected
+        measurement count without hardcoding the neighbor set inline.
+        """
+        from qiskit.transpiler import CouplingMap
+
+        cmap = CouplingMap(couplinglist=self.coupling_map)
+        cmap.make_symmetric()
+        neighbors = {neighbor for qubit in qubits for neighbor in cmap.neighbors(qubit)}
+        return neighbors.difference(qubits)
+
     def test_circuit_with_measurements_in_a_box(self):
         """Test the pass on a circuit with measurements inside a box."""
         circuit_qubits = [7, 17, 27, 28]
@@ -348,6 +393,40 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         pm = PassManager([AddSpectatorMeasures(self.coupling_map, add_barrier=False)])
         self.assertEqual(expected_circuit, pm.run(circuit))
 
+    def test_add_barrier_false_with_measurement_in_a_box(self):
+        """``add_barrier=False`` combined with a box-nested terminal measurement --
+        a combination not covered by `test_add_barrier_false` or
+        `test_circuit_with_measurements_in_a_box` individually. The top-level
+        terminal measurement is popped and re-applied (a no-op here, since there is
+        no barrier to place it after), while the box-nested one is left untouched.
+        """
+        qreg = QuantumRegister(self.num_qubits, "q")
+        creg = ClassicalRegister(2, "c")
+        # Both 7 and 17 are active (17 is terminated but still active), so spectators
+        # are the neighbors of *both* under `self.coupling_map`: 7 -> {6, 8},
+        # 17 -> {12, 30}.
+        spectator_qubits = [6, 8, 12, 30]
+        creg_spec = ClassicalRegister(len(spectator_qubits), "spec")
+
+        circuit = QuantumCircuit(qreg, creg)
+        circuit.h(7)
+        circuit.cz(7, 17)
+        circuit.measure(7, creg[0])
+        with circuit.box():
+            circuit.measure(17, creg[1])
+
+        expected_circuit = QuantumCircuit(qreg, creg, creg_spec)
+        expected_circuit.h(7)
+        expected_circuit.cz(7, 17)
+        expected_circuit.measure(7, creg[0])
+        with expected_circuit.box():
+            expected_circuit.measure(17, creg[1])
+        for idx, spec_qubit in enumerate(spectator_qubits):
+            expected_circuit.measure(spec_qubit, creg_spec[idx])
+
+        pm = PassManager([AddSpectatorMeasures(self.coupling_map, add_barrier=False)])
+        self.assertEqual(expected_circuit, pm.run(circuit))
+
     def test_conflicting_creg(self):
         """Test that an error is raise when the circuit already contains a register named ``spectator_creg_name``."""
         pm = PassManager([AddSpectatorMeasures(coupling_map=[], spectator_creg_name="my_name")])
@@ -361,3 +440,39 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         circuit.reset(0)
         with pytest.raises(TranspilerError, match="``'reset'`` is not supported"):
             pm.run(circuit)
+
+    def test_pop_terminal_measurements_unit(self):
+        """Direct unit test for ``_pop_terminal_measurements``, isolated from the rest
+        of ``run()``: it must remove exactly the top-level terminal measurements of
+        the requested qubits from the dag and return the qubit -> clbit mapping for
+        each, leaving a box-nested one (and any qubit not actually found) alone.
+        """
+        qreg = QuantumRegister(3, "q")
+        creg = ClassicalRegister(3, "c")
+        circuit = QuantumCircuit(qreg, creg)
+        circuit.h(qreg[0])
+        circuit.measure(qreg[0], creg[0])
+        with circuit.box():
+            circuit.measure(qreg[1], creg[1])
+
+        dag = circuit_to_dag(circuit)
+        terminal_measures = AddSpectatorMeasures._pop_terminal_measurements(
+            dag,
+            {qreg[0], qreg[1], qreg[2]},
+        )
+
+        # qreg[0]'s top-level measurement was found and popped.
+        self.assertEqual(terminal_measures, {qreg[0]: creg[0]})
+        remaining_measure_qubits = {
+            node.qargs[0] for node in dag.op_nodes() if node.op.name == "measure"
+        }
+        self.assertNotIn(qreg[0], remaining_measure_qubits)
+
+        # qreg[1]'s measurement is nested in a box and was left alone -- still
+        # present somewhere in the dag, just not returned.
+        self.assertNotIn(qreg[1], terminal_measures)
+        box_nodes = [node for node in dag.op_nodes() if node.op.name == "box"]
+        self.assertEqual(len(box_nodes), 1)
+
+        # qreg[2] has no measurement at all -- absent from the result, not an error.
+        self.assertNotIn(qreg[2], terminal_measures)
