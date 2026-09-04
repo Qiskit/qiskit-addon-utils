@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from qiskit.circuit import ClassicalRegister, ControlFlowOp, Qubit
+from qiskit.circuit import ClassicalRegister, Clbit, ControlFlowOp, Qubit
 from qiskit.circuit.library import Barrier, Measure
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit
@@ -96,15 +96,53 @@ class AddSpectatorMeasures(TransformationPass):
             spectator_qubits_ls = list(spectator_qubits)
             spectator_qubits_ls.sort(key=lambda qubit: qubit_map[qubit])
 
+            # Pop each terminated qubit's existing terminal measurement so it can be
+            # re-applied alongside the new spectator measurements, after a shared
+            # barrier -- otherwise the spectator measurements are not actually
+            # simultaneous with the terminal ones, only sequenced after them. See #158.
+            terminal_measures = self._pop_terminal_measurements(dag, terminated_qubits)
+
             if self.add_barrier is True:
                 qubits = active_qubits.union(spectator_qubits_ls)
                 dag.apply_operation_back(Barrier(len(qubits)), qubits)
+
+            for qubit, clbit in terminal_measures.items():
+                dag.apply_operation_back(Measure(), [qubit], [clbit])
 
             dag.add_creg(new_reg := ClassicalRegister(num_spectators, self.spectator_creg_name))
             for qubit, clbit in zip(spectator_qubits_ls, new_reg):
                 dag.apply_operation_back(Measure(), [qubit], [clbit])
 
         return dag
+
+    @staticmethod
+    def _pop_terminal_measurements(
+        dag: DAGCircuit, terminated_qubits: set[Qubit]
+    ) -> dict[Qubit, Clbit]:
+        """Remove and return each of ``terminated_qubits``'s terminal ``Measure`` node.
+
+        A terminated qubit whose terminal measurement is inside a control-flow block
+        (or a box) is left untouched -- moving it would require restructuring the
+        block itself, which this pass does not support. Its measurement therefore
+        stays wherever it already was, exactly as before this method was introduced.
+
+        Returns:
+            A mapping from qubit to the classical bit its (now-removed) terminal
+            measurement wrote to, so it can be re-applied elsewhere in the circuit.
+            Qubits whose terminal measurement could not be found at the top level
+            of ``dag`` (see above) are absent from the returned mapping.
+        """
+        remaining = set(terminated_qubits)
+        terminal_measures: dict[Qubit, Clbit] = {}
+        for node in reversed(list(dag.topological_op_nodes())):
+            if not remaining:
+                break
+            qubit = node.qargs[0] if node.qargs else None
+            if node.op.name == "measure" and qubit in remaining:
+                terminal_measures[qubit] = node.cargs[0]
+                dag.remove_op_node(node)
+                remaining.discard(qubit)
+        return terminal_measures
 
     def _find_active_and_terminated_qubits(self, dag: DAGCircuit) -> tuple[set[Qubit], set[Qubit]]:
         """Helper function to find the sets of active qubits and of qubits terminated with measurements.

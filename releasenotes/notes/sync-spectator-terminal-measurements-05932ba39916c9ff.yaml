@@ -1,0 +1,13 @@
+---
+fixes:
+  - |
+    Fixed :class:`.AddSpectatorMeasures` so that the spectator measurements it adds
+    are actually simultaneous with the circuit's pre-existing terminal measurements,
+    rather than merely being sequenced after them. Previously, the pass appended the
+    (optional) shared barrier and the spectator measurements *after* the terminal
+    measurements were already present in the circuit, so the terminal measurements
+    were never really synchronized with the spectator ones despite the barrier's
+    intent. Each terminated qubit's terminal measurement that is at the top level of
+    the circuit (i.e. not nested inside a control-flow block or a ``box``) is now
+    popped and re-applied together with the spectator measurements, immediately
+    after the shared barrier.
