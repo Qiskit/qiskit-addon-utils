@@ -15,6 +15,7 @@ import unittest
 
 import pytest
 from qiskit.circuit import ClassicalRegister, QuantumCircuit, QuantumRegister
+from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit.exceptions import DAGCircuitError
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.passmanager import PassManager
@@ -81,13 +82,45 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         expected_circuit.cz(17, 27)
         expected_circuit.barrier(17)
         expected_circuit.cz(27, 28)
+        # The 4 terminal measurements are popped and re-applied *after* the shared
+        # barrier below, so they are actually simultaneous with the spectator
+        # measurements, not merely sequenced before them. See #158.
+        expected_circuit.barrier(circuit_qubits + spectator_qubits)
         for idx, qubit in enumerate(circuit_qubits):
             expected_circuit.measure(qubit, creg[idx])
-        expected_circuit.barrier(circuit_qubits + spectator_qubits)
         for idx, spec_qubit in enumerate(spectator_qubits):
             expected_circuit.measure(spec_qubit, creg_spec[idx])
 
         self.assertEqual(expected_circuit, self.pm.run(circuit))
+
+    def test_terminal_and_spectator_measurements_are_synchronized(self):
+        """Regression test for #158.
+
+        Every terminal measurement and every spectator measurement must be a direct
+        successor of the *same* shared barrier on its qubit's wire -- i.e. they must
+        actually be simultaneous, not merely both present somewhere after the
+        original terminal measurements.
+        """
+        circuit = QuantumCircuit(QuantumRegister(self.num_qubits, "q"), ClassicalRegister(1, "c"))
+        circuit.h(7)
+        circuit.measure(7, 0)
+
+        result_dag = circuit_to_dag(self.pm.run(circuit))
+        barrier_nodes = [node for node in result_dag.op_nodes() if node.op.name == "barrier"]
+        self.assertEqual(len(barrier_nodes), 1)
+        barrier_node = barrier_nodes[0]
+
+        measure_nodes = [node for node in result_dag.op_nodes() if node.op.name == "measure"]
+        self.assertTrue(measure_nodes)
+        for measure_node in measure_nodes:
+            # Check the predecessor on the qubit wire specifically (as opposed to
+            # the classical wire, which the barrier isn't on).
+            qubit_predecessor = next(result_dag.quantum_predecessors(measure_node))
+            self.assertEqual(
+                qubit_predecessor,
+                barrier_node,
+                f"measure on {measure_node.qargs} is not a direct successor of the shared barrier",
+            )
 
     def test_circuit_with_measurements_in_a_box(self):
         """Test the pass on a circuit with measurements inside a box."""
@@ -116,12 +149,15 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         with expected_circuit.box():
             expected_circuit.cz(17, 27)
         expected_circuit.cz(27, 28)
-        expected_circuit.measure(7, creg[0])
-        expected_circuit.measure(17, creg[1])
+        # measure(27)/measure(28) are nested inside a box, so they cannot be popped
+        # and resynchronized -- they are left exactly where they were. Only the
+        # top-level measure(7)/measure(17) are poppable and move after the barrier.
         with expected_circuit.box():
             expected_circuit.measure(27, creg[2])
             expected_circuit.measure(28, creg[3])
         expected_circuit.barrier(circuit_qubits + spectator_qubits)
+        expected_circuit.measure(7, creg[0])
+        expected_circuit.measure(17, creg[1])
         for idx, spec_qubit in enumerate(spectator_qubits):
             expected_circuit.measure(spec_qubit, creg_spec[idx])
 
@@ -139,10 +175,14 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         circuit.measure(7, creg[1])
 
         expected_circuit = QuantumCircuit(qreg, creg, creg_spec)
+        # The first measure(7, creg[0]) is a mid-circuit measurement (qubit 7 is
+        # acted on again afterwards by h(7)), so it is left untouched. Only the
+        # real terminal measure(7, creg[1]) is popped and re-applied after the
+        # barrier, alongside the spectator measurements. See #158.
         expected_circuit.measure(7, creg[0])
         expected_circuit.h(7)
-        expected_circuit.measure(7, creg[1])
         expected_circuit.barrier([7, 6, 8])
+        expected_circuit.measure(7, creg[1])
         expected_circuit.measure(6, creg_spec[0])
         expected_circuit.measure(8, creg_spec[1])
 
@@ -167,7 +207,11 @@ class TestAddSpectatorMeasures(unittest.TestCase):
             circuit.measure(1, creg[1])
 
         expected_circuit = QuantumCircuit(qreg, creg, creg_spec)
-        expected_circuit.measure(0, creg[0])
+        # Qubit 0's measurement is at the top level and nothing else acts on qubit 0
+        # afterwards (the if_test conditions only *read* creg[0], they don't use
+        # qubit 0 as a qarg), so it is terminal and poppable -- it is re-applied
+        # after the shared barrier. Qubit 1's terminal measurements are nested
+        # inside the if/else blocks and are left untouched. See #158.
         with expected_circuit.if_test((creg[0], 0)) as else_:
             expected_circuit.measure(1, creg[1])
         with else_:
@@ -178,6 +222,7 @@ class TestAddSpectatorMeasures(unittest.TestCase):
             expected_circuit.x(1)
             expected_circuit.measure(1, creg[1])
         expected_circuit.barrier([0, 1, 2, 3, 4])
+        expected_circuit.measure(0, creg[0])
         expected_circuit.measure(2, creg_spec[0])
         expected_circuit.measure(3, creg_spec[1])
         expected_circuit.measure(4, creg_spec[2])
@@ -198,11 +243,15 @@ class TestAddSpectatorMeasures(unittest.TestCase):
             circuit.h(7)
 
         expected_circuit_true = QuantumCircuit(qreg, creg, creg_spec)
+        # measure(7, creg[0]) is a mid-circuit measurement (qubit 7 is acted on
+        # again afterwards, inside the box) so it stays put. measure(17, creg[1])
+        # is the real terminal measurement and is popped/re-applied after the
+        # barrier, alongside the new unmeasured-qubit spectator measurement. See #158.
         expected_circuit_true.measure(7, creg[0])
-        expected_circuit_true.measure(17, creg[1])
         with expected_circuit_true.box():
             expected_circuit_true.h(7)
         expected_circuit_true.barrier([7, 17])
+        expected_circuit_true.measure(17, creg[1])
         expected_circuit_true.measure(7, creg_spec[0])
 
         pm = PassManager([AddSpectatorMeasures(coupling_map=[], include_unmeasured=True)])
@@ -253,11 +302,11 @@ class TestAddSpectatorMeasures(unittest.TestCase):
         expected_circuit.cz(7, 17)
         expected_circuit.cz(17, 27)
         expected_circuit.cz(27, 28)
+        expected_circuit.barrier([1, 7, 17, 27, 28, 89, 90])
         expected_circuit.measure(7, creg[0])
         expected_circuit.measure(17, creg[1])
         expected_circuit.measure(27, creg[2])
         expected_circuit.measure(28, creg[3])
-        expected_circuit.barrier([1, 7, 17, 27, 28, 89, 90])
         expected_circuit.measure(spectator_qubits[0], creg_spec[0])
         expected_circuit.measure(spectator_qubits[1], creg_spec[1])
         expected_circuit.measure(spectator_qubits[2], creg_spec[2])
